@@ -12,7 +12,9 @@
 #include <variant>
 #include <type_traits>
 #include <libintl.h>
-#include <memory>
+
+#include "proc_containerfwd.H"
+#include "proc_container_runnerfwd.H"
 
 //! A process container that's not running
 struct state_stopped {
@@ -23,6 +25,9 @@ struct state_stopped {
 
 //! A process container that's starting
 struct state_starting {
+
+	//! Running start process.
+	proc_container_runner starting_runner;
 
 	//! Human readable label.
 	operator std::string() const;
@@ -63,16 +68,6 @@ enum class proc_container_type {
 	loaded,		//!< Loaded process container
 	synthesized	//!< Synthesized, for dependencies.
 };
-
-class proc_containerObj;
-
-/*! A process container
-
-Once constructed, the container object is immutable.
-
-*/
-
-typedef std::shared_ptr<const proc_containerObj> proc_container;
 
 /*! Helper class used by proc_container_set
 
@@ -168,6 +163,9 @@ std::string proc_container_start(const std::string &s);
 //! Attempt to stop a container.
 std::string proc_container_stop(const std::string &s);
 
+//! A running process has finished.
+
+void runner_finished(pid_t pid, int wstatus);
 
 //! Implementation object.
 
@@ -181,6 +179,9 @@ public:
 
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
+
+	//! The container's starting command
+	std::string starting_command;
 
 	//! Constructor
 	proc_containerObj();

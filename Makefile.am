@@ -13,7 +13,10 @@ libvera_a_SOURCES=						\
 	messages.H 						\
 	proc_container.C					\
 	proc_container.H					\
-	proc_containerfwd.H
+	proc_containerfwd.H					\
+	proc_container_runner.C					\
+	proc_container_runner.H					\
+	proc_container_runnerfwd.H
 
 testcontroller_SOURCES=testcontroller.C
 testcontroller_LDADD=libvera.a

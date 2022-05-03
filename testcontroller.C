@@ -6,6 +6,16 @@ std::vector<std::string> logged_state_changes;
 
 #define UNIT_TEST
 #include "log.C"
+#undef UNIT_TEST
+
+static std::vector<std::string> logged_runners;
+static pid_t next_pid=1;
+
+#define UNIT_TEST() (logged_runners.push_back(container->name),	\
+		     logged_runners.push_back(command),		\
+		     next_pid++)
+#include "proc_container_runner.C"
+#undef UNIT_TEST
 
 void test_proc_container_set()
 {
@@ -86,6 +96,75 @@ void test_start_and_stop()
 	}
 }
 
+void test_happy_start()
+{
+	logged_state_changes.clear();
+	logged_runners.clear();
+	next_pid=1;
+
+	proc_container_set pcs;
+
+	auto a=std::make_shared<proc_containerObj>();
+
+	a->name="a";
+	a->starting_command="start";
+
+	pcs.insert(a);
+	proc_containers_install(pcs);
+
+	auto err=proc_container_start("a");
+
+	if (!err.empty())
+		throw "proc_container_start(1): " + err;
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a", "start pending",
+			"a", "starting"
+		})
+	{
+		throw "unexpected state changes when starting";
+	}
+
+	if (logged_runners != std::vector<std::string>{
+			"a", "start"
+		})
+	{
+		throw "did not schedule a start runner";
+	}
+
+	runner_finished(2, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a", "start pending",
+			"a", "starting"
+		})
+	{
+		throw "unexpected action for another terminated process";
+	}
+
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a", "start pending",
+			"a", "starting",
+			"a", "started"
+		})
+	{
+		throw "unexpected state changes after starting";
+	}
+
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a", "start pending",
+			"a", "starting",
+			"a", "started"
+		})
+	{
+		throw "more unexpected state changes after starting";
+	}
+}
+
 int main()
 {
 	std::string test;
@@ -95,6 +174,8 @@ int main()
 		test_proc_container_set();
 		test="test_proc_container_set";
 		test_start_and_stop();
+		test="test_happy_start";
+		test_happy_start();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

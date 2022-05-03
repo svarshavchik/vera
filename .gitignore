@@ -1,5 +1,7 @@
 *.inc.H
 *.a
+*.tar.gz
+*.tar.xz
 m4
 Makefile
 Makefile.in

@@ -4,6 +4,7 @@
 */
 #include "config.h"
 #include "proc_container.H"
+#include "proc_container_runner.H"
 #include "messages.H"
 #include "log.H"
 #include <unordered_map>
@@ -15,6 +16,9 @@ state_stopped::operator std::string() const
 
 state_starting::operator std::string() const
 {
+	if (starting_runner)
+		return _("starting");
+
 	return _("start pending");
 }
 
@@ -38,6 +42,8 @@ proc_containerObj::~proc_containerObj()
 
 //////////////////////////////////////////////////////////////////////////////
 
+//! Information about a container's running state.
+
 struct proc_container_run_info {
 	proc_container_state state;
 
@@ -45,17 +51,38 @@ struct proc_container_run_info {
 	proc_container_run_info(T &&t) : state{std::forward<T>(t)} {}
 };
 
+//! Unordered map for \ref containers "current process containers".
+
 typedef std::unordered_map<proc_container,
 			   proc_container_run_info,
 			   proc_container_hash,
 			   proc_container_equal> current_containers;
 
+//! All current process containers.
+
 static current_containers containers;
+
+//! A current container: encompasses the container and its running state
 
 typedef current_containers::iterator current_container;
 
+//! Unordered map for all current runners.
+
+//! Each runner's handle is owned by its current state, which is stored in
+//! the current containers.
+//!
+//! current_runners is a map of weak pointers, so when the runner's state
+//! no longer cares about the runner (timeout), it gets destroyed.
+
+typedef std::unordered_map<pid_t,
+			   std::weak_ptr<const proc_container_runnerObj>
+			   > current_runners;
+
+static current_runners runners;
+
 static void start(const current_container &);
 static void stop(const current_container &);
+static void remove(const current_container &cc);
 
 static void started(const current_container &);
 static void stopped(const current_container &);
@@ -149,15 +176,71 @@ std::string proc_container_stop(const std::string &name)
 	return ret;
 }
 
+void runner_finished(pid_t pid, int wstatus)
+{
+	auto iter=runners.find(pid);
+
+	if (iter == runners.end())
+		return;
+
+	auto runner=iter->second.lock();
+
+	runners.erase(iter);
+
+	if (!runner)
+		return;
+
+	runner->invoke(wstatus);
+}
+
+static void starting_command_finished(const proc_container &container,
+				      int status);
+
 static void start(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_starting>();
+	auto &starting=run_info.state.emplace<state_starting>();
 
 	log_state_change(pc, run_info.state);
 
+	if (!pc->starting_command.empty())
+	{
+		auto runner=create_runner(
+			pc, pc->starting_command,
+			starting_command_finished
+		);
+
+		if (!runner)
+		{
+			remove(cc);
+			return;
+		}
+
+		runners[runner->pid]=runner;
+		starting.starting_runner=runner;
+		log_state_change(pc, run_info.state);
+		return;
+	}
 	started(cc);
+}
+
+static void starting_command_finished(const proc_container &container,
+				      int status)
+{
+	auto cc=containers.find(container);
+
+	if (cc == containers.end())
+		return;
+
+	if (status == 0)
+	{
+		started(cc);
+	}
+	else
+	{
+		remove(cc);
+	}
 }
 
 static void stop(const current_container &cc)
@@ -168,6 +251,11 @@ static void stop(const current_container &cc)
 
 	log_state_change(pc, run_info.state);
 
+	remove(cc);
+}
+
+static void remove(const current_container &cc)
+{
 	stopped(cc);
 }
 
