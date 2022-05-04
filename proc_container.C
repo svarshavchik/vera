@@ -29,7 +29,28 @@ state_started::operator std::string() const
 
 state_stopping::operator std::string() const
 {
+	return std::visit(
+		[&]
+		(const auto &phase) -> std::string
+		{
+			return phase;
+		}, phase);
+}
+
+
+stop_pending::operator std::string() const
+{
 	return _("stop pending");
+}
+
+stop_running::operator std::string() const
+{
+	return _("stopping");
+}
+
+stop_removing::operator std::string() const
+{
+	return _("removing");
 }
 
 proc_containerObj::proc_containerObj()
@@ -239,6 +260,7 @@ static void starting_command_finished(const proc_container &container,
 	}
 	else
 	{
+		log_container_failed_process(container, status);
 		remove(cc);
 	}
 }
@@ -247,7 +269,9 @@ static void stop(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_stopping>();
+	run_info.state.emplace<state_stopping>(
+		std::in_place_type_t<stop_pending>{}
+	);
 
 	log_state_change(pc, run_info.state);
 
@@ -256,6 +280,12 @@ static void stop(const current_container &cc)
 
 static void remove(const current_container &cc)
 {
+	auto &[pc, run_info] = *cc;
+
+	run_info.state.emplace<state_stopping>(
+		std::in_place_type_t<stop_removing>{}
+	);
+	log_state_change(pc, run_info.state);
 	stopped(cc);
 }
 

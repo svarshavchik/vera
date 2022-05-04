@@ -40,9 +40,60 @@ struct state_started {
 	operator std::string() const;
 };
 
-//! A proess container that's stopping
+//! A \ref state_stopping "state_stopping container" that's waiting to be able to begin stopping
+
+struct stop_pending {
+
+	//! Human readable label.
+	operator std::string() const;
+};
+
+//! A \ref state_stopping "state_stopping container" that's running its stopping process
+
+struct stop_running : proc_container_runner{
+
+	using proc_container_runner::proc_container_runner;
+
+	using proc_container_runner::operator->;
+
+	//! Human readable label.
+	operator std::string() const;
+};
+
+//! A \ref state_stopping "state_stopping container" that's removing its processes
+
+struct stop_removing {
+
+	//! Human readable label.
+	operator std::string() const;
+};
+
+//! The phase of a \ref state_stopping "state_stopping container".
+
+//! stop_pending - waiting for other containers that depend on this container
+//! to stop.
+//!
+//! proc_container_runner - the running stopping process.
+//!
+//! stop_removing - removing processes in the container.
+
+typedef std::variant<stop_pending, stop_running,
+		     stop_removing> stopping_phase;
+
+//! A process container that's stopping
 struct state_stopping {
 
+	//! Its current phase
+	stopping_phase phase;
+
+	template<typename Arg, typename ...Args>
+	state_stopping(Arg &&arg, Args && ...args)
+		: phase{
+				std::forward<Arg>(arg),
+				std::forward<Args>(args)...
+			}
+	{
+	}
 	//! Human readable label.
 	operator std::string() const;
 };

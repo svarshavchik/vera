@@ -17,6 +17,14 @@ static pid_t next_pid=1;
 #include "proc_container_runner.C"
 #undef UNIT_TEST
 
+void test_reset()
+{
+	logged_state_changes.clear();
+	logged_runners.clear();
+	next_pid=1;
+
+}
+
 void test_proc_container_set()
 {
 	proc_container_set pcs;
@@ -45,8 +53,6 @@ void test_proc_container_set()
 
 void test_start_and_stop()
 {
-	logged_state_changes.clear();
-
 	proc_container_set pcs;
 
 	auto a=std::make_shared<proc_containerObj>();
@@ -89,6 +95,7 @@ void test_start_and_stop()
 			"a", "start pending",
 			"a", "started",
 			"a", "stop pending",
+			"a", "removing",
 			"a", "stopped"
 		})
 	{
@@ -98,10 +105,6 @@ void test_start_and_stop()
 
 void test_happy_start()
 {
-	logged_state_changes.clear();
-	logged_runners.clear();
-	next_pid=1;
-
 	proc_container_set pcs;
 
 	auto a=std::make_shared<proc_containerObj>();
@@ -165,17 +168,98 @@ void test_happy_start()
 	}
 }
 
+void test_start_failed_fork()
+{
+	next_pid=(pid_t)-1;
+
+	proc_container_set pcs;
+
+	auto a=std::make_shared<proc_containerObj>();
+
+	a->name="failed_fork";
+	a->starting_command="start";
+
+	pcs.insert(a);
+	proc_containers_install(pcs);
+
+	auto err=proc_container_start("failed_fork");
+
+	if (!err.empty())
+		throw "proc_container_start(1): " + err;
+
+	if (logged_state_changes != std::vector<std::string>{
+			"failed_fork", "start pending",
+			"failed_fork", "removing",
+			"failed_fork", "stopped",
+		})
+	{
+		throw "unexpected state change after failed start";
+	}
+}
+
+void test_start_failed()
+{
+	proc_container_set pcs;
+
+	auto a=std::make_shared<proc_containerObj>();
+
+	a->name="start_failed";
+	a->starting_command="start";
+
+	pcs.insert(a);
+	proc_containers_install(pcs);
+
+	auto err=proc_container_start("start_failed");
+
+	if (!err.empty())
+		throw "proc_container_start(1): " + err;
+
+	if (logged_state_changes != std::vector<std::string>{
+			"start_failed", "start pending",
+			"start_failed", "starting",
+		})
+	{
+		throw "unexpected state change after start";
+	}
+
+	runner_finished(1, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"start_failed", "start pending",
+			"start_failed", "starting",
+			"start_failed", "termination signal: 1",
+			"start_failed", "removing",
+			"start_failed", "stopped",
+		})
+	{
+		throw "more unexpected state changes after starting";
+	}
+}
+
 int main()
 {
 	std::string test;
 
 	try {
+		test_reset();
 		test="test_proc_container_set";
 		test_proc_container_set();
-		test="test_proc_container_set";
+
+		test_reset();
+		test="test_start_and_stop";
 		test_start_and_stop();
+
+		test_reset();
 		test="test_happy_start";
 		test_happy_start();
+
+		test_reset();
+		test="test_start_failed_fork";
+		test_start_failed_fork();
+
+		test_reset();
+		test="test_start_failed";
+		test_start_failed();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";
