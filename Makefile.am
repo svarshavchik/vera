@@ -16,7 +16,10 @@ libvera_a_SOURCES=						\
 	proc_containerfwd.H					\
 	proc_container_runner.C					\
 	proc_container_runner.H					\
-	proc_container_runnerfwd.H
+	proc_container_runnerfwd.H				\
+	proc_container_timer.C					\
+	proc_container_timer.H					\
+	proc_container_timerfwd.H
 
 testcontroller_SOURCES=testcontroller.C
 testcontroller_LDADD=libvera.a

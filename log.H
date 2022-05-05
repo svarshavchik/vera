@@ -6,6 +6,8 @@
 #define log_h
 
 #include <string>
+#include <time.h>
+
 #include "proc_container.H"
 
 void log_state_change(const proc_container &,
@@ -14,5 +16,11 @@ void log_state_change(const proc_container &,
 void log_container_failed_process(const proc_container &, int);
 
 void log_container_error(const proc_container &, const std::string &);
+
+time_t log_current_time();
+
+//! Timeout for SIGTERM to do its work
+
+#define SIGTERM_TIMEOUT 10
 
 #endif

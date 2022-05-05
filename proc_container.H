@@ -15,6 +15,7 @@
 
 #include "proc_containerfwd.H"
 #include "proc_container_runnerfwd.H"
+#include "proc_container_timerfwd.H"
 
 //! A process container that's not running
 struct state_stopped {
@@ -63,6 +64,14 @@ struct stop_running : proc_container_runner{
 //! A \ref state_stopping "state_stopping container" that's removing its processes
 
 struct stop_removing {
+
+	//! Timer after SIGTERM gets sent.
+
+	//! SIGKILL gets sent when it expires.
+	proc_container_timer sigkill_timer;
+
+	//! Whether SIGKILL has been sent.
+	bool sigkill_sent;
 
 	//! Human readable label.
 	operator std::string() const;
@@ -213,6 +222,9 @@ std::string proc_container_start(const std::string &s);
 
 //! Attempt to stop a container.
 std::string proc_container_stop(const std::string &s);
+
+//! All processes in the container have exited.
+void proc_container_stopped(const std::string &s);
 
 //! A running process has finished.
 

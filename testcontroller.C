@@ -1,8 +1,11 @@
 #include "config.h"
 #include "proc_container.H"
+#include "proc_container_timer.H"
 #include <iostream>
 
 std::vector<std::string> logged_state_changes;
+
+time_t fake_time;
 
 #define UNIT_TEST
 #include "log.C"
@@ -22,7 +25,13 @@ void test_reset()
 	logged_state_changes.clear();
 	logged_runners.clear();
 	next_pid=1;
+	fake_time=1;
+}
 
+void test_advance(time_t interval)
+{
+	fake_time += interval;
+	run_timers();
 }
 
 void test_proc_container_set()
@@ -86,16 +95,29 @@ void test_start_and_stop()
 	if (!err.empty())
 		throw "proc_constainer_stop(1): " + err;
 
+	if (logged_state_changes != std::vector<std::string>{
+			"a", "start pending",
+			"a", "started",
+			"a", "stop pending",
+			"a", "removing",
+		})
+	{
+		throw "unexppected state changes after stop";
+	}
+
+	logged_state_changes.clear();
+
+	test_advance(SIGTERM_TIMEOUT);
+
+	proc_container_stopped("a");
+
 	err=proc_container_stop("a");
 
 	if (err.empty())
 		throw "proc_container_stop didn't fail for a stopped unit";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"a", "start pending",
-			"a", "started",
-			"a", "stop pending",
-			"a", "removing",
+			"a", "force-removing",
 			"a", "stopped"
 		})
 	{
@@ -187,6 +209,8 @@ void test_start_failed_fork()
 	if (!err.empty())
 		throw "proc_container_start(1): " + err;
 
+	proc_container_stopped("nonexistent");
+	proc_container_stopped("failed_fork");
 	if (logged_state_changes != std::vector<std::string>{
 			"failed_fork", "start pending",
 			"failed_fork", "removing",
@@ -223,6 +247,7 @@ void test_start_failed()
 	}
 
 	runner_finished(1, 1);
+	proc_container_stopped("start_failed");
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_failed", "start pending",

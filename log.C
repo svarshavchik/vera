@@ -50,3 +50,10 @@ void log_container_error(const proc_container &pc, const std::string &msg)
 	std::cout << pc->name << ": " << msg << "\n";
 #endif
 }
+
+#ifdef UNIT_TEST
+time_t log_current_time()
+{
+	return fake_time;
+}
+#endif

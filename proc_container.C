@@ -5,6 +5,7 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_container_runner.H"
+#include "proc_container_timer.H"
 #include "messages.H"
 #include "log.H"
 #include <unordered_map>
@@ -50,6 +51,9 @@ stop_running::operator std::string() const
 
 stop_removing::operator std::string() const
 {
+	if (sigkill_sent)
+		return _("force-removing");
+
 	return _("removing");
 }
 
@@ -106,7 +110,6 @@ static void stop(const current_container &);
 static void remove(const current_container &cc);
 
 static void started(const current_container &);
-static void stopped(const current_container &);
 
 void get_proc_containers(const std::function<void (const proc_container &,
 						   const proc_container_state &)
@@ -278,15 +281,49 @@ static void stop(const current_container &cc)
 	remove(cc);
 }
 
+static void send_sigkill(const current_container &cc);
+
+static proc_container_timer create_sigkill_timer(
+	const proc_container &pc
+)
+{
+	return create_timer(
+		pc,
+		SIGTERM_TIMEOUT,
+		[]
+		(const proc_container &pc)
+		{
+			auto cc=containers.find(pc);
+
+			if (cc == containers.end())
+				return;
+
+			send_sigkill(cc);
+		});
+}
+
 static void remove(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
 	run_info.state.emplace<state_stopping>(
-		std::in_place_type_t<stop_removing>{}
+		std::in_place_type_t<stop_removing>{},
+		create_sigkill_timer(pc),
+		false
 	);
 	log_state_change(pc, run_info.state);
-	stopped(cc);
+}
+
+static void send_sigkill(const current_container &cc)
+{
+	auto &[pc, run_info] = *cc;
+
+	run_info.state.emplace<state_stopping>(
+		std::in_place_type_t<stop_removing>{},
+		create_sigkill_timer(pc),
+		true
+	);
+	log_state_change(pc, run_info.state);
 }
 
 static void started(const current_container &cc)
@@ -298,8 +335,13 @@ static void started(const current_container &cc)
 	log_state_change(pc, run_info.state);
 }
 
-static void stopped(const current_container &cc)
+void proc_container_stopped(const std::string &s)
 {
+	auto cc=containers.find(s);
+
+	if (cc == containers.end())
+		return;
+
 	auto &[pc, run_info] = *cc;
 
 	run_info.state.emplace<state_stopped>();
