@@ -83,13 +83,49 @@ typedef std::unordered_map<proc_container,
 			   proc_container_hash,
 			   proc_container_equal> current_containers;
 
-//! All current process containers.
-
-static current_containers containers;
-
 //! A current container: encompasses the container and its running state
 
 typedef current_containers::iterator current_container;
+
+//! The process containers singleton.
+
+//! A single static instance of this exists. Public methods document the API.
+//!
+//! Stuff that depends on the singleton are closure that capture [this].
+
+class current_containers_info {
+
+	current_containers containers;
+
+	void do_start(const current_container &);
+	void do_stop(const current_container &);
+	void do_remove(const current_container &);
+	void starting_command_finished(const proc_container &container,
+				       int status);
+	proc_container_timer create_sigkill_timer(
+		const proc_container &pc
+	);
+	void send_sigkill(const current_container &cc);
+
+public:
+
+	void get(const std::function<void (const proc_container &,
+					   const proc_container_state &)> &cb);
+
+	void install(const proc_container_set &new_containers);
+
+	std::string start(const std::string &name);
+
+	std::string stop(const std::string &name);
+
+	void finished(pid_t pid, int wstatus);
+
+	void stopped(const std::string &s);
+};
+
+//! All current process containers.
+
+static current_containers_info containers_info;
 
 //! Unordered map for all current runners.
 
@@ -105,15 +141,18 @@ typedef std::unordered_map<pid_t,
 
 static current_runners runners;
 
-static void start(const current_container &);
-static void stop(const current_container &);
-static void remove(const current_container &cc);
-
 static void started(const current_container &);
 
-void get_proc_containers(const std::function<void (const proc_container &,
-						   const proc_container_state &)
-			 > &cb)
+void get_proc_containers(
+	const std::function<void (const proc_container &,
+				  const proc_container_state &)> &cb)
+{
+	containers_info.get(cb);
+}
+
+void current_containers_info::get(
+	const std::function<void (const proc_container &,
+				  const proc_container_state &)> &cb)
 {
 	for (const auto &[c, run_info] : containers)
 	{
@@ -122,6 +161,11 @@ void get_proc_containers(const std::function<void (const proc_container &,
 }
 
 void proc_containers_install(const proc_container_set &new_containers)
+{
+	containers_info.install(new_containers);
+}
+
+void current_containers_info::install(const proc_container_set &new_containers)
 {
 	current_containers new_current_containers;
 
@@ -137,6 +181,11 @@ void proc_containers_install(const proc_container_set &new_containers)
 }
 
 std::string proc_container_start(const std::string &name)
+{
+	return containers_info.start(name);
+}
+
+std::string current_containers_info::start(const std::string &name)
 {
 	auto iter=containers.find(name);
 
@@ -155,7 +204,7 @@ std::string proc_container_start(const std::string &name)
 
 			if constexpr(std::is_same_v<cur_state, state_stopped>)
 			{
-				start(iter);
+				do_start(iter);
 			}
 			else
 			{
@@ -169,6 +218,11 @@ std::string proc_container_start(const std::string &name)
 }
 
 std::string proc_container_stop(const std::string &name)
+{
+	return containers_info.stop(name);
+}
+
+std::string current_containers_info::stop(const std::string &name)
 {
 	auto iter=containers.find(name);
 
@@ -187,7 +241,7 @@ std::string proc_container_stop(const std::string &name)
 
 			if constexpr(std::is_same_v<cur_state, state_started>)
 			{
-				stop(iter);
+				do_stop(iter);
 			}
 			else
 			{
@@ -201,6 +255,11 @@ std::string proc_container_stop(const std::string &name)
 }
 
 void runner_finished(pid_t pid, int wstatus)
+{
+	containers_info.finished(pid, wstatus);
+}
+
+void current_containers_info::finished(pid_t pid, int wstatus)
 {
 	auto iter=runners.find(pid);
 
@@ -217,10 +276,7 @@ void runner_finished(pid_t pid, int wstatus)
 	runner->invoke(wstatus);
 }
 
-static void starting_command_finished(const proc_container &container,
-				      int status);
-
-static void start(const current_container &cc)
+void current_containers_info::do_start(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -234,12 +290,18 @@ static void start(const current_container &cc)
 
 		auto runner=create_runner(
 			pc, pc->starting_command,
-			starting_command_finished
+			[this]
+			(const proc_container &container,
+			 int status
+			)
+			{
+				starting_command_finished(container, status);
+			}
 		);
 
 		if (!runner)
 		{
-			remove(cc);
+			do_remove(cc);
 			return;
 		}
 
@@ -253,7 +315,7 @@ static void start(const current_container &cc)
 			starting.starting_runner_timeout=create_timer(
 				pc,
 				pc->starting_timeout,
-				[]
+				[this]
 				(const proc_container &c)
 				{
 
@@ -269,7 +331,7 @@ static void start(const current_container &cc)
 						pc,
 						"start process timed out"
 					);
-					remove(cc);
+					do_remove(cc);
 				}
 			);
 		}
@@ -279,8 +341,9 @@ static void start(const current_container &cc)
 	started(cc);
 }
 
-static void starting_command_finished(const proc_container &container,
-				      int status)
+void current_containers_info::starting_command_finished(
+	const proc_container &container,
+	int status)
 {
 	auto cc=containers.find(container);
 
@@ -294,11 +357,11 @@ static void starting_command_finished(const proc_container &container,
 	else
 	{
 		log_container_failed_process(cc->first, status);
-		remove(cc);
+		do_remove(cc);
 	}
 }
 
-static void stop(const current_container &cc)
+void current_containers_info::do_stop(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -310,7 +373,7 @@ static void stop(const current_container &cc)
 
 	if (pc->stopping_command.empty())
 	{
-		remove(cc);
+		do_remove(cc);
 		return;
 	}
 
@@ -318,7 +381,7 @@ static void stop(const current_container &cc)
 
 	auto runner=create_runner(
 		pc, pc->stopping_command,
-		[]
+		[this]
 		(const proc_container &c,
 		 int status)
 		{
@@ -335,13 +398,13 @@ static void stop(const current_container &cc)
 			{
 				log_container_failed_process(cc->first, status);
 			}
-			remove(cc);
+			do_remove(cc);
 		}
 	);
 
 	if (!runner)
 	{
-		remove(cc);
+		do_remove(cc);
 		return;
 	}
 
@@ -353,7 +416,7 @@ static void stop(const current_container &cc)
 		create_timer(
 			pc,
 			pc->stopping_timeout,
-			[]
+			[this]
 			(const proc_container &c)
 			{
 				auto cc=containers.find(c);
@@ -368,7 +431,7 @@ static void stop(const current_container &cc)
 					pc,
 					"stop process timed out"
 				);
-				remove(cc);
+				do_remove(cc);
 			}
 		)
 	);
@@ -376,16 +439,14 @@ static void stop(const current_container &cc)
 	log_state_change(pc, run_info.state);
 }
 
-static void send_sigkill(const current_container &cc);
-
-static proc_container_timer create_sigkill_timer(
+proc_container_timer current_containers_info::create_sigkill_timer(
 	const proc_container &pc
 )
 {
 	return create_timer(
 		pc,
 		SIGTERM_TIMEOUT,
-		[]
+		[this]
 		(const proc_container &pc)
 		{
 			auto cc=containers.find(pc);
@@ -397,7 +458,7 @@ static proc_container_timer create_sigkill_timer(
 		});
 }
 
-static void remove(const current_container &cc)
+void current_containers_info::do_remove(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -409,7 +470,7 @@ static void remove(const current_container &cc)
 	log_state_change(pc, run_info.state);
 }
 
-static void send_sigkill(const current_container &cc)
+void current_containers_info::send_sigkill(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -431,6 +492,11 @@ static void started(const current_container &cc)
 }
 
 void proc_container_stopped(const std::string &s)
+{
+	containers_info.stopped(s);
+}
+
+void current_containers_info::stopped(const std::string &s)
 {
 	auto cc=containers.find(s);
 
