@@ -5,7 +5,7 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_container_runner.H"
-#include <iostream>
+#include "log.H"
 
 proc_container_runnerObj::proc_container_runnerObj(
 	pid_t pid,
@@ -39,7 +39,7 @@ proc_container_runner create_runner(
 
 	if (p == -1)
 	{
-		std::cerr << "fork() failed\n";
+		log_container_error(container, "fork() failed");
 		return {};
 	}
 

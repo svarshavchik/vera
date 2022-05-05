@@ -293,7 +293,7 @@ static void starting_command_finished(const proc_container &container,
 	}
 	else
 	{
-		log_container_failed_process(container, status);
+		log_container_failed_process(cc->first, status);
 		remove(cc);
 	}
 }
@@ -308,7 +308,72 @@ static void stop(const current_container &cc)
 
 	log_state_change(pc, run_info.state);
 
-	remove(cc);
+	if (pc->stopping_command.empty())
+	{
+		remove(cc);
+		return;
+	}
+
+	// There's a stop command. Start it.
+
+	auto runner=create_runner(
+		pc, pc->stopping_command,
+		[]
+		(const proc_container &c,
+		 int status)
+		{
+			// Stop command finished. Whatever exit code it
+			// ended up produce it, it doesn't matter, but log
+			// it if it's an error.
+
+			auto cc=containers.find(c);
+
+			if (cc == containers.end())
+				return;
+
+			if (status != 0)
+			{
+				log_container_failed_process(cc->first, status);
+			}
+			remove(cc);
+		}
+	);
+
+	if (!runner)
+	{
+		remove(cc);
+		return;
+	}
+
+	runners[runner->pid]=runner;
+
+	run_info.state.emplace<state_stopping>(
+		std::in_place_type_t<stop_running>{},
+		runner,
+		create_timer(
+			pc,
+			pc->stopping_timeout,
+			[]
+			(const proc_container &c)
+			{
+				auto cc=containers.find(c);
+
+				if (cc == containers.end())
+					return;
+
+				// Timeout expired
+
+				auto &[pc, run_info] = *cc;
+				log_container_error(
+					pc,
+					"stop process timed out"
+				);
+				remove(cc);
+			}
+		)
+	);
+
+	log_state_change(pc, run_info.state);
 }
 
 static void send_sigkill(const current_container &cc);

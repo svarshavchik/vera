@@ -54,11 +54,13 @@ struct stop_pending {
 
 //! A \ref state_stopping "state_stopping container" that's running its stopping process
 
-struct stop_running : proc_container_runner{
+struct stop_running {
 
-	using proc_container_runner::proc_container_runner;
+	//! Running stop process
+	proc_container_runner stopping_runner;
 
-	using proc_container_runner::operator->;
+	//! Running stop process timeout
+	proc_container_timer stopping_runner_timeout;
 
 	//! Human readable label.
 	operator std::string() const;
@@ -235,6 +237,8 @@ void runner_finished(pid_t pid, int wstatus);
 
 #define DEFAULT_STARTING_TIMEOUT 60
 
+#define DEFAULT_STOPPING_TIMEOUT 60
+
 //! Implementation object.
 
 //! \see proc_container
@@ -255,6 +259,13 @@ public:
 
 	//! A timeout of 0 is infinite.
 	time_t starting_timeout=DEFAULT_STARTING_TIMEOUT;
+
+	//! The container's stopping command
+	std::string stopping_command;
+
+	//! The timeout for the container's stopping command.
+
+	time_t stopping_timeout=DEFAULT_STOPPING_TIMEOUT;
 
 	//! Constructor
 	proc_containerObj();
