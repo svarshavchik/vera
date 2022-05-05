@@ -30,6 +30,9 @@ struct state_starting {
 	//! Running start process.
 	proc_container_runner starting_runner;
 
+	//! Running start process's timeout
+	proc_container_timer starting_runner_timeout;
+
 	//! Human readable label.
 	operator std::string() const;
 };
@@ -230,6 +233,8 @@ void proc_container_stopped(const std::string &s);
 
 void runner_finished(pid_t pid, int wstatus);
 
+#define DEFAULT_STARTING_TIMEOUT 60
+
 //! Implementation object.
 
 //! \see proc_container
@@ -245,6 +250,11 @@ public:
 
 	//! The container's starting command
 	std::string starting_command;
+
+	//! The timeout for the container's starting command.
+
+	//! A timeout of 0 is infinite.
+	time_t starting_timeout=DEFAULT_STARTING_TIMEOUT;
 
 	//! Constructor
 	proc_containerObj();

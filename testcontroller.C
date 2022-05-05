@@ -133,6 +133,7 @@ void test_happy_start()
 
 	a->name="a";
 	a->starting_command="start";
+	a->starting_timeout=0;
 
 	pcs.insert(a);
 	proc_containers_install(pcs);
@@ -156,6 +157,8 @@ void test_happy_start()
 	{
 		throw "did not schedule a start runner";
 	}
+
+	test_advance(DEFAULT_STARTING_TIMEOUT);
 
 	runner_finished(2, 0);
 
@@ -261,6 +264,54 @@ void test_start_failed()
 	}
 }
 
+void test_start_timeout()
+{
+	proc_container_set pcs;
+
+	auto a=std::make_shared<proc_containerObj>();
+
+	a->name="start_timeout";
+	a->starting_command="start";
+
+	pcs.insert(a);
+	proc_containers_install(pcs);
+
+	auto err=proc_container_start("start_timeout");
+
+	if (!err.empty())
+		throw "proc_container_start(1): " + err;
+
+	if (logged_state_changes != std::vector<std::string>{
+			"start_timeout", "start pending",
+			"start_timeout", "starting",
+		})
+	{
+		throw "unexpected state change after start";
+	}
+
+	test_advance(a->starting_timeout);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"start_timeout", "start pending",
+			"start_timeout", "starting",
+			"start_timeout", "start process timed out",
+			"start_timeout", "removing",
+		})
+	{
+		throw "unexpected state change after timeout";
+	}
+
+	logged_state_changes.clear();
+
+	proc_container_stopped("start_timeout");
+	if (logged_state_changes != std::vector<std::string>{
+			"start_timeout", "stopped",
+		})
+	{
+		throw "unexpected state change after stopping";
+	}
+}
+
 int main()
 {
 	std::string test;
@@ -285,6 +336,10 @@ int main()
 		test_reset();
 		test="test_start_failed";
 		test_start_failed();
+
+		test_reset();
+		test="test_start_timeout";
+		test_start_timeout();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

@@ -230,6 +230,8 @@ static void start(const current_container &cc)
 
 	if (!pc->starting_command.empty())
 	{
+		// There's a start command. Start it.
+
 		auto runner=create_runner(
 			pc, pc->starting_command,
 			starting_command_finished
@@ -243,6 +245,34 @@ static void start(const current_container &cc)
 
 		runners[runner->pid]=runner;
 		starting.starting_runner=runner;
+
+		if (pc->starting_timeout > 0)
+		{
+			// Set a timeout
+
+			starting.starting_runner_timeout=create_timer(
+				pc,
+				pc->starting_timeout,
+				[]
+				(const proc_container &c)
+				{
+
+					auto cc=containers.find(c);
+
+					if (cc == containers.end())
+						return;
+
+					// Timeout expired
+
+					auto &[pc, run_info] = *cc;
+					log_container_error(
+						pc,
+						"start process timed out"
+					);
+					remove(cc);
+				}
+			);
+		}
 		log_state_change(pc, run_info.state);
 		return;
 	}
