@@ -9,6 +9,7 @@
 #include "messages.H"
 #include "log.H"
 #include <unordered_map>
+#include <unordered_set>
 
 state_stopped::operator std::string() const
 {
@@ -97,6 +98,96 @@ class current_containers_info {
 
 	current_containers containers;
 
+public:
+	//! All direct and indirect dependencies of a container.
+
+	//! Just a set of other containers.
+	typedef std::unordered_set<proc_container,
+				   proc_container_hash,
+				   proc_container_equal> all_dependencies;
+
+	//! Dependency information calculated by install()
+
+	struct dependency_info {
+
+		//! All process containers this process container requires.
+		all_dependencies all_requires;
+
+		//! All process containers that require this container.
+		all_dependencies all_required_by;
+	};
+
+	typedef std::unordered_map<proc_container,
+				   dependency_info,
+				   proc_container_hash,
+				   proc_container_equal
+				   > all_dependency_info_t;
+
+	/*!
+	  "a" requires "b", what does this mean? It means:
+
+	  1) Assuming that both "a" and "b" enumerate everything that
+	  both "a" and "b" require and everything that requires "a" and "b",
+	  transitively, then:
+
+	  2) "a" now requires that everything "b" requires.
+
+	  3) "b" is now required by everything that's now required by "a".
+
+	  4) Everything that requires "a" now requires everything that "b"
+	     requires.
+
+	  5) Everything that "b" requires is now required by everything
+             that requires "a".
+	*/
+
+	static void install_requires_dependency(
+		all_dependency_info_t &all_dependency_info,
+		const proc_container &a,
+		const proc_container &b)
+	{
+		auto &a_dep=all_dependency_info[a];
+		auto &b_dep=all_dependency_info[b];
+
+		a_dep.all_requires.insert(b);
+		b_dep.all_required_by.insert(a);
+
+		// 2)
+
+		a_dep.all_requires.insert(b_dep.all_requires.begin(),
+					  b_dep.all_requires.end());
+
+		// 3)
+		b_dep.all_required_by.insert(a_dep.all_required_by.begin(),
+					     a_dep.all_required_by.end());
+
+		// 4)
+
+		for (const auto &by_a:a_dep.all_required_by)
+		{
+			auto &what_requires_a=all_dependency_info[by_a];
+
+			what_requires_a.all_requires.insert(
+				a_dep.all_requires.begin(),
+				a_dep.all_requires.end()
+			);
+		}
+
+		// 5)
+
+		for (const auto &all_b:b_dep.all_requires)
+		{
+			auto &what_b_requires=all_dependency_info[all_b];
+
+			what_b_requires.all_required_by.insert(
+				b_dep.all_required_by.begin(),
+				b_dep.all_required_by.end()
+			);
+		}
+	}
+private:
+	all_dependency_info_t all_dependency_info;
+
 	void do_start(const current_container &);
 	void do_stop(const current_container &);
 	void do_remove(const current_container &);
@@ -168,6 +259,7 @@ void proc_containers_install(const proc_container_set &new_containers)
 void current_containers_info::install(const proc_container_set &new_containers)
 {
 	current_containers new_current_containers;
+	all_dependency_info_t new_all_dependency_info;
 
 	for (const auto &c:new_containers)
 	{
@@ -177,7 +269,85 @@ void current_containers_info::install(const proc_container_set &new_containers)
 		);
 	}
 
+	// Merge dep_requires and dep_required_by container declarations.
+
+	// First, iterate over each container
+
+	for (const auto &c:new_containers)
+	{
+		// Make two passes:
+		//
+		// - First pass is over dep_requires. The second pass
+		//   is over dep_required_by.
+		//
+		// - During the pass, set this_proc_container to point to c,
+		//   and other_proc_container to point to the container from
+		//   dep_requires or dep_required_by.
+		//
+		// - On the first pass, "this_proc_container" is the requiring
+		//   and "other_proc_container" is the required container.
+		//   On the second pass "other_proc_container" is the requiring
+		//   and "this_proc_container" is the requiring container.
+		//
+		// - At this point we declare: "requiring_ptr" requires
+		//   the "requirement_ptr.
+
+		const proc_container *this_proc_container=&c;
+		const proc_container *other_proc_container;
+
+		for (const auto &[requiring_ptr, requirement_ptr,
+				  dependency_list]
+			     : std::array< std::tuple<const proc_container **,
+			     const proc_container **,
+			     const std::unordered_set<std::string>
+			     proc_containerObj::*>, 2>{{
+				     { &this_proc_container,
+				       &other_proc_container,
+				       &proc_containerObj::dep_requires},
+				     { &other_proc_container,
+				       &this_proc_container,
+				       &proc_containerObj::dep_required_by}
+			     }})
+		{
+			for (const auto &dep:(*c).*(dependency_list))
+			{
+				// Look up the dependency container. If it
+				// does not exist we create a "synthesized"
+				// container.
+
+				auto iter=new_current_containers.find(dep);
+
+				if (iter == new_current_containers.end())
+				{
+					auto newc=std::make_shared<
+						proc_containerObj>();
+
+					newc->name=dep;
+					newc->type=
+						proc_container_type::synthesized
+						;
+					iter=new_current_containers.emplace(
+						std::move(newc),
+						std::in_place_type_t<
+						state_stopped>{}
+					).first;
+				}
+
+				other_proc_container=&iter->first;
+
+				auto &requiring= **requiring_ptr;
+				auto &requirement= **requirement_ptr;
+
+				install_requires_dependency(
+					new_all_dependency_info,
+					requiring,
+					requirement);
+			}
+		}
+	}
+
 	containers=std::move(new_current_containers);
+	all_dependency_info=std::move(new_all_dependency_info);
 }
 
 std::string proc_container_start(const std::string &name)

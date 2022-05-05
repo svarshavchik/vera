@@ -1,3 +1,8 @@
+/*
+** Copyright 2022 Double Precision, Inc.
+** See COPYING for distribution information.
+*/
+
 #include "config.h"
 #include "proc_container.H"
 #include "proc_container_timer.H"

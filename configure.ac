@@ -12,6 +12,14 @@ AM_GNU_GETTEXT([external])
 AC_PROG_CXX
 AC_PROG_RANLIB
 
+AC_PATH_PROGS(VALGRIND, valgrind)
+
+if test "$VALGRIND" != ""
+then
+	VALGRIND="valgrind --tool=memcheck --leak-check=yes"
+fi
+AC_SUBST(VALGRIND)
+
 # Checks for libraries.
 
 # Checks for header files.

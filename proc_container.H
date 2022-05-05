@@ -188,6 +188,23 @@ struct proc_container_equal {
 	}
 };
 
+//! Transparent comparator for proc_container objects.
+
+struct proc_container_less_than {
+
+	typedef void is_transparent;
+
+	template<typename T, typename U>
+	bool operator()(T &&t, U &&u) const noexcept
+	{
+		return get_name_for_comparator<T>::name(
+			std::forward<T>(t)
+		) < get_name_for_comparator<U>::name(
+			std::forward<U>(u)
+		);
+	}
+};
+
 //! Transparent hash function for for proc_container objects.
 
 struct proc_container_hash {
@@ -266,6 +283,12 @@ public:
 	//! The timeout for the container's stopping command.
 
 	time_t stopping_timeout=DEFAULT_STOPPING_TIMEOUT;
+
+	//! What other process containers this one requires
+	std::unordered_set<std::string> dep_requires;
+
+	//! What other process containers require this one.
+	std::unordered_set<std::string> dep_required_by;
 
 	//! Constructor
 	proc_containerObj();
