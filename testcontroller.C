@@ -19,9 +19,9 @@ time_t fake_time;
 static std::vector<std::string> logged_runners;
 static pid_t next_pid=1;
 
-#define UNIT_TEST() (logged_runners.push_back(container->name),	\
-		     logged_runners.push_back(command),		\
-		     next_pid++)
+#define UNIT_TEST() (							\
+		logged_runners.push_back(container->name + ": " + command), \
+		next_pid++)
 #include "proc_container_runner.C"
 #undef UNIT_TEST
 
@@ -101,10 +101,10 @@ void test_start_and_stop()
 		throw "proc_constainer_stop(1): " + err;
 
 	if (logged_state_changes != std::vector<std::string>{
-			"a", "start pending",
-			"a", "started",
-			"a", "stop pending",
-			"a", "removing",
+			"a: start pending",
+			"a: started",
+			"a: stop pending",
+			"a: removing",
 		})
 	{
 		throw "unexppected state changes after stop";
@@ -122,8 +122,8 @@ void test_start_and_stop()
 		throw "proc_container_stop didn't fail for a stopped unit";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"a", "force-removing",
-			"a", "stopped"
+			"a: force-removing",
+			"a: stopped"
 		})
 	{
 		throw "unexpected state changes";
@@ -150,15 +150,15 @@ void test_happy_start_stop_common(const std::string &name)
 		throw "proc_container_start(1): " + err;
 
 	if (logged_state_changes != std::vector<std::string>{
-			name, "start pending",
-			name, "starting"
+			name + ": start pending",
+			name + ": starting"
 		})
 	{
 		throw "unexpected state changes when starting";
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			name, "start"
+			name + ": start"
 		})
 	{
 		throw "did not schedule a start runner";
@@ -169,8 +169,8 @@ void test_happy_start_stop_common(const std::string &name)
 	runner_finished(2, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			name, "start pending",
-			name, "starting"
+			name + ": start pending",
+			name + ": starting"
 		})
 	{
 		throw "unexpected action for another terminated process";
@@ -179,9 +179,9 @@ void test_happy_start_stop_common(const std::string &name)
 	runner_finished(1, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			name, "start pending",
-			name, "starting",
-			name, "started"
+			name + ": start pending",
+			name + ": starting",
+			name + ": started"
 		})
 	{
 		throw "unexpected state changes after starting";
@@ -190,9 +190,9 @@ void test_happy_start_stop_common(const std::string &name)
 	runner_finished(1, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			name, "start pending",
-			name, "starting",
-			name, "started"
+			name + ": start pending",
+			name + ": starting",
+			name + ": started"
 		})
 	{
 		throw "more unexpected state changes after starting";
@@ -212,15 +212,15 @@ void test_happy_start()
 		throw "proc_container_stop(1): " + err;
 
 	if (logged_state_changes != std::vector<std::string>{
-			"happy_start", "stop pending",
-			"happy_start", "stopping",
+			"happy_start: stop pending",
+			"happy_start: stopping",
 		})
 	{
 		throw "unexpected state changes when stopping";
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"happy_start", "stop"
+			"happy_start: stop"
 		})
 	{
 		throw "did not schedule a stop runner";
@@ -229,8 +229,8 @@ void test_happy_start()
 	runner_finished(3, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"happy_start", "stop pending",
-			"happy_start", "stopping",
+			"happy_start: stop pending",
+			"happy_start: stopping",
 		})
 	{
 		throw "unexpected action for another terminated process";
@@ -239,9 +239,9 @@ void test_happy_start()
 	runner_finished(2, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"happy_start", "stop pending",
-			"happy_start", "stopping",
-			"happy_start", "removing",
+			"happy_start: stop pending",
+			"happy_start: stopping",
+			"happy_start: removing",
 		})
 	{
 		throw "unexpected state changes after stopping";
@@ -250,9 +250,9 @@ void test_happy_start()
 	runner_finished(2, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"happy_start", "stop pending",
-			"happy_start", "stopping",
-			"happy_start", "removing",
+			"happy_start: stop pending",
+			"happy_start: stopping",
+			"happy_start: removing",
 		})
 	{
 		throw "more unexpected state changes after stopping";
@@ -260,10 +260,10 @@ void test_happy_start()
 	proc_container_stopped("happy_start");
 
 	if (logged_state_changes != std::vector<std::string>{
-			"happy_start", "stop pending",
-			"happy_start", "stopping",
-			"happy_start", "removing",
-			"happy_start", "stopped",
+			"happy_start: stop pending",
+			"happy_start: stopping",
+			"happy_start: removing",
+			"happy_start: stopped",
 		})
 	{
 		throw "Unexpected state changes after stopped";
@@ -292,10 +292,10 @@ void test_start_failed_fork()
 	proc_container_stopped("nonexistent");
 	proc_container_stopped("failed_fork");
 	if (logged_state_changes != std::vector<std::string>{
-			"failed_fork", "start pending",
-			"failed_fork", "fork() failed",
-			"failed_fork", "removing",
-			"failed_fork", "stopped",
+			"failed_fork: start pending",
+			"failed_fork: fork() failed",
+			"failed_fork: removing",
+			"failed_fork: stopped",
 		})
 	{
 		throw "unexpected state change after failed start";
@@ -320,8 +320,8 @@ void test_start_failed()
 		throw "proc_container_start(1): " + err;
 
 	if (logged_state_changes != std::vector<std::string>{
-			"start_failed", "start pending",
-			"start_failed", "starting",
+			"start_failed: start pending",
+			"start_failed: starting",
 		})
 	{
 		throw "unexpected state change after start";
@@ -331,11 +331,11 @@ void test_start_failed()
 	proc_container_stopped("start_failed");
 
 	if (logged_state_changes != std::vector<std::string>{
-			"start_failed", "start pending",
-			"start_failed", "starting",
-			"start_failed", "termination signal: 1",
-			"start_failed", "removing",
-			"start_failed", "stopped",
+			"start_failed: start pending",
+			"start_failed: starting",
+			"start_failed: termination signal: 1",
+			"start_failed: removing",
+			"start_failed: stopped",
 		})
 	{
 		throw "more unexpected state changes after starting";
@@ -360,8 +360,8 @@ void test_start_timeout()
 		throw "proc_container_start(1): " + err;
 
 	if (logged_state_changes != std::vector<std::string>{
-			"start_timeout", "start pending",
-			"start_timeout", "starting",
+			"start_timeout: start pending",
+			"start_timeout: starting",
 		})
 	{
 		throw "unexpected state change after start";
@@ -370,10 +370,10 @@ void test_start_timeout()
 	test_advance(a->starting_timeout);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"start_timeout", "start pending",
-			"start_timeout", "starting",
-			"start_timeout", "start process timed out",
-			"start_timeout", "removing",
+			"start_timeout: start pending",
+			"start_timeout: starting",
+			"start_timeout: start process timed out",
+			"start_timeout: removing",
 		})
 	{
 		throw "unexpected state change after timeout";
@@ -383,7 +383,7 @@ void test_start_timeout()
 
 	proc_container_stopped("start_timeout");
 	if (logged_state_changes != std::vector<std::string>{
-			"start_timeout", "stopped",
+			"start_timeout: stopped",
 		})
 	{
 		throw "unexpected state change after stopping";
@@ -402,9 +402,9 @@ void test_stop_failed_fork()
 		throw "proc_container_stop(1): " + err;
 
 	if (logged_state_changes != std::vector<std::string>{
-			"stop_failed_fork", "stop pending",
-			"stop_failed_fork", "fork() failed",
-			"stop_failed_fork", "removing",
+			"stop_failed_fork: stop pending",
+			"stop_failed_fork: fork() failed",
+			"stop_failed_fork: removing",
 		})
 	{
 		throw "unexpected state change after failed stop fork";
@@ -423,10 +423,10 @@ void test_stop_failed()
 	runner_finished(2, 1);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"stop_failed", "stop pending",
-			"stop_failed", "stopping",
-			"stop_failed", "termination signal: 1",
-			"stop_failed", "removing",
+			"stop_failed: stop pending",
+			"stop_failed: stopping",
+			"stop_failed: termination signal: 1",
+			"stop_failed: removing",
 		})
 	{
 		throw "unexpected state change after failed stop process";
@@ -445,18 +445,93 @@ void test_stop_timeout()
 	test_advance(DEFAULT_STOPPING_TIMEOUT);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"stop_timeout", "stop pending",
-			"stop_timeout", "stopping",
-			"stop_timeout", "stop process timed out",
-			"stop_timeout", "removing",
+			"stop_timeout: stop pending",
+			"stop_timeout: stopping",
+			"stop_timeout: stop process timed out",
+			"stop_timeout: removing",
 		})
 	{
 		throw "unexpected state change after timed out stop process";
 	}
 }
 
+void test_requires1()
+{
+	proc_container_set pcs;
+
+	auto a=std::make_shared<proc_containerObj>();
+	auto b=std::make_shared<proc_containerObj>();
+	auto c=std::make_shared<proc_containerObj>();
+
+	a->name="requires1a";
+	a->dep_requires.insert("requires1b");
+	a->starting_command="start_a";
+	pcs.insert(a);
+
+	b->name="requires1b";
+	b->dep_requires.insert("requires1c");
+	b->starting_command="start_b";
+	pcs.insert(b);
+
+	c->name="requires1c";
+	c->starting_command="start_c";
+	pcs.insert(c);
+
+	proc_containers_install(pcs);
+
+	auto err=proc_container_start("requires1a");
+
+	if (!err.empty())
+		throw "proc_container_start failed";
+
+	logged_state_changes.resize(5);
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.begin()+3);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1a: start pending",
+			"requires1b: start pending",
+			"requires1c: start pending",
+			"requires1c: starting",
+			""
+		})
+	{
+		throw "unexpected first start sequence";
+	}
+	logged_state_changes.clear();
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1c: started",
+			"requires1b: starting",
+		})
+	{
+		throw "unexpected second start sequence";
+	}
+	logged_state_changes.clear();
+	runner_finished(2, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1b: started",
+			"requires1a: starting",
+		})
+	{
+		throw "unexpected third start sequence";
+	}
+	logged_state_changes.clear();
+	runner_finished(3, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1a: started",
+		})
+	{
+		throw "unexpected final start sequence";
+	}
+}
+
 int main()
 {
+	alarm(60);
 	std::string test;
 
 	try {
@@ -495,6 +570,10 @@ int main()
 		test_reset();
 		test="test_stop_timeout";
 		test_stop_timeout();
+
+		test_reset();
+		test="test_requires1";
+		test_requires1();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

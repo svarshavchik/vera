@@ -75,6 +75,56 @@ struct proc_container_run_info {
 
 	template<typename T>
 	proc_container_run_info(T &&t) : state{std::forward<T>(t)} {}
+
+	//! Do something if the process container is in a specific state.
+
+	//! If so, invoke the passed-in callable object with the state as
+	//! a parameter.
+
+	template<typename T, typename Callable>
+	void run_if(Callable &&callable)
+	{
+		std::visit([&]
+			   (auto &current_state)
+		{
+			typedef std::remove_cvref_t<decltype(current_state)
+						    > current_state_t;
+
+			if constexpr(std::is_same_v<
+				     current_state_t,
+				     T>) {
+				callable(current_state);
+			}
+		}, state);
+	}
+
+	//! Do something if the process container is in a specific state.
+
+	//! If so, invoke the 1st callable object with the state as
+	//! a parameter.
+	//!
+	//! Invoke the 2nd callable if the container is in some other state.
+
+	template<typename T, typename Callable1, typename Callable2>
+	void run_if(Callable1 &&callable1, Callable2 && callable2)
+	{
+		std::visit([&]
+			   (auto &current_state)
+		{
+			typedef std::remove_cvref_t<decltype(current_state)
+						    > current_state_t;
+
+			if constexpr(std::is_same_v<
+				     current_state_t,
+				     T>) {
+				callable1(current_state);
+			}
+			else
+			{
+				callable2();
+			}
+		}, state);
+	}
 };
 
 //! Unordered map for \ref containers "current process containers".
@@ -188,7 +238,89 @@ public:
 private:
 	all_dependency_info_t all_dependency_info;
 
-	void do_start(const current_container &);
+	//! Retrieve all required dependencies of a process container
+	void all_required_dependencies(
+		const proc_container &c,
+		const std::function<void (const current_container &)> &f)
+	{
+		all_required_or_required_by_dependencies(
+			c, f,
+			&dependency_info::all_requires
+		);
+	}
+
+	//! Retrieve all required-by dependencies of a process container
+	void all_required_by_dependencies(
+		const proc_container &c,
+		const std::function<void (const current_container &)> &f)
+	{
+		all_required_or_required_by_dependencies(
+			c, f,
+			&dependency_info::all_required_by
+		);
+	}
+
+	//! Retrieve required or required by dependencies helper.
+
+	void all_required_or_required_by_dependencies(
+		const proc_container &pc,
+		const std::function<void (const current_container &)> &f,
+		all_dependencies dependency_info::*which_dependencies)
+	{
+		auto dep_info=all_dependency_info.find(pc);
+
+		if (dep_info == all_dependency_info.end())
+			return;
+
+		for (const auto &requirement:
+			     dep_info->second.*which_dependencies)
+		{
+			auto iter=containers.find(requirement);
+
+			// Ignore synthesized containers
+			if (iter == containers.end() ||
+			    iter->first->type != proc_container_type::loaded)
+				continue;
+
+			f(iter);
+		}
+	}
+
+	//! All dependencies in specific state.
+
+	//! Passed as a parameter to all_required_dependencies or
+	//! all_required_by_dependencies.
+
+	template<typename state_type>
+	struct all_dependencies_in_state {
+		std::function<void (const current_container &iter,
+				    state_type &)> callback;
+
+		template<typename callable_object>
+		all_dependencies_in_state(callable_object &&object)
+			: callback{std::forward<callable_object>(object)}
+		{
+		}
+
+		void operator()(const current_container &iter)
+		{
+			auto &[pc, run_info] = *iter;
+
+			run_info.run_if<state_type>(
+				[&, this]
+				(auto &current_state)
+				{
+					callback(iter, current_state);
+				}
+			);
+		}
+	};
+
+	void find_start_or_stop_to_do();
+	bool do_start(const current_container &,
+		      std::unordered_set<proc_container, proc_container_hash,
+		      proc_container_equal> &);
+	void do_start_runner(const current_container &);
 	void do_stop(const current_container &);
 	void do_remove(const current_container &);
 	void starting_command_finished(const proc_container &container,
@@ -234,6 +366,10 @@ static current_runners runners;
 
 static void started(const current_container &);
 
+///////////////////////////////////////////////////////////////////////////
+//
+// Enumerate current process containers
+
 void get_proc_containers(
 	const std::function<void (const proc_container &,
 				  const proc_container_state &)> &cb)
@@ -250,6 +386,10 @@ void current_containers_info::get(
 		cb(c, run_info.state);
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+//
+// Install/update process containers
 
 void proc_containers_install(const proc_container_set &new_containers)
 {
@@ -350,6 +490,11 @@ void current_containers_info::install(const proc_container_set &new_containers)
 	all_dependency_info=std::move(new_all_dependency_info);
 }
 
+//////////////////////////////////////////////////////////////////////////
+//
+// Attempt to start a process container. It must be a loaded container,
+// not a synthesized one.
+
 std::string proc_container_start(const std::string &name)
 {
 	return containers_info.start(name);
@@ -365,26 +510,35 @@ std::string current_containers_info::start(const std::string &name)
 		return name + _(": unknown unit");
 	}
 
-	std::string ret;
+	auto &[pc, run_info] = *iter;
 
-	std::visit(
-		[&](const auto &s)
-		{
-			typedef std::remove_cvref_t<decltype(s)> cur_state;
+	if (!std::holds_alternative<state_stopped>(run_info.state))
+	{
+		return name + _(": cannot start "
+				"because it's not stopped");
+	}
 
-			if constexpr(std::is_same_v<cur_state, state_stopped>)
+	run_info.state.emplace<state_starting>();
+
+	log_state_change(pc, run_info.state);
+
+	// Check all requirements. If any are in a stopped state move them
+	// into the starting state, too.
+
+	all_required_dependencies(
+		pc,
+		all_dependencies_in_state<state_stopped>{
+			[&](const current_container &iter, state_stopped &state)
 			{
-				do_start(iter);
+				iter->second.state.emplace<state_starting>();
+				log_state_change(iter->first,
+						 iter->second.state);
 			}
-			else
-			{
-				ret=name + _(": cannot start "
-					     "because it's not stopped"
-				);
-			}
-		}, iter->second.state);
+		}
+	);
 
-	return ret;
+	find_start_or_stop_to_do(); // We should find something now.
+	return "";
 }
 
 std::string proc_container_stop(const std::string &name)
@@ -392,6 +546,11 @@ std::string proc_container_stop(const std::string &name)
 	return containers_info.stop(name);
 }
 
+//////////////////////////////////////////////////////////////////////////
+//
+// Attempt to stop a process container. It must be a loaded container,
+// not a synthesized one.
+//
 std::string current_containers_info::stop(const std::string &name)
 {
 	auto iter=containers.find(name);
@@ -404,25 +563,26 @@ std::string current_containers_info::stop(const std::string &name)
 
 	std::string ret;
 
-	std::visit(
-		[&](const auto &s)
+	iter->second.run_if<state_started>(
+		[&]
+		(auto &)
 		{
-			typedef std::remove_cvref_t<decltype(s)> cur_state;
+			do_stop(iter);
+		},
+		[&]
+		{
+			ret=name + _(": cannot start "
+				     "because it's not stopped");
+		});
 
-			if constexpr(std::is_same_v<cur_state, state_started>)
-			{
-				do_stop(iter);
-			}
-			else
-			{
-				ret=name + _(": cannot start "
-					     "because it's not stopped"
-				);
-			}
-		}, iter->second.state);
-
+	find_start_or_stop_to_do(); // We might find something to do.
 	return ret;
 }
+
+///////////////////////////////////////////////////////////////////////////
+//
+// Some running process finished. Figure out what it is, and take appropriate
+// action.
 
 void runner_finished(pid_t pid, int wstatus)
 {
@@ -431,28 +591,281 @@ void runner_finished(pid_t pid, int wstatus)
 
 void current_containers_info::finished(pid_t pid, int wstatus)
 {
+	// Do we know this runner?
+
 	auto iter=runners.find(pid);
 
 	if (iter == runners.end())
 		return;
 
+	// Retrieve the runner's handler.
+
 	auto runner=iter->second.lock();
 
 	runners.erase(iter);
+
+	// A destroyed handler gets ignored, otherwise it gets invoked.
 
 	if (!runner)
 		return;
 
 	runner->invoke(wstatus);
+
+	find_start_or_stop_to_do(); // We might find something to do.
 }
 
-void current_containers_info::do_start(const current_container &cc)
+//////////////////////////////////////////////////////////////////////
+
+void current_containers_info::find_start_or_stop_to_do()
+{
+	bool did_something=true;
+
+	while (did_something)
+	{
+		did_something=false;
+
+		// Keep track of every visited process container, so we don't
+		// redo a bunch of work.
+
+		std::unordered_set<proc_container, proc_container_hash,
+				   proc_container_equal> processed_containers;
+
+		for (auto b=containers.begin(), e=containers.end(); b != e; ++b)
+		{
+			auto &[pc, run_info]= *b;
+
+			if (processed_containers.find(pc) !=
+			    processed_containers.end())
+				continue; // Already did this one.
+
+			run_info.run_if<state_starting>(
+				[&]
+				(auto &current_state)
+				{
+					if (do_start(b, processed_containers))
+						did_something=true;
+				});
+		}
+	}
+}
+
+
+//
+// Given one container in a \c state_starting find all other \c state_starting
+// it requires or all other \c state_containers that require it. Make sure
+// to add them to the process_contaner list, as we'll evaluate their
+// dependencies.
+//
+// If there are any of them that have a runner going we don't need to do
+// anything for now, otherwise find all \c state_starting containers that
+// do not have any dependencies on the other \c state_starting containers and
+// start their runners.
+//
+// Return a flag indicating whether we started something.
+//
+
+bool current_containers_info::do_start(
+	const current_container &cc,
+	std::unordered_set<proc_container, proc_container_hash,
+	proc_container_equal> &processed_containers
+)
+{
+	std::unordered_map<proc_container,
+			   current_container,
+			   proc_container_hash,
+			   proc_container_equal
+			   > starting_containers;
+
+	// Well, we have one right here.
+	starting_containers.emplace(cc->first, cc);
+
+	all_required_dependencies(
+		cc->first,
+		all_dependencies_in_state<state_starting>{
+			[&](const current_container &iter, state_starting &info)
+			{
+				starting_containers.emplace(
+					iter->first, iter
+				);
+			}}
+	);
+
+	all_required_by_dependencies(
+		cc->first,
+		all_dependencies_in_state<state_starting>{
+			[&](const current_container &iter, state_starting &info)
+			{
+				starting_containers.emplace(
+					iter->first, iter
+				);
+			}}
+	);
+
+	// Take care of this book-keeping, first.
+
+	for (const auto &[pc, iter] : starting_containers)
+	{
+		processed_containers.insert(pc);
+	}
+
+	// Note if we actually started something, here.
+	bool did_something=false;
+
+	// We will make a pass over the starting_containers. If we end up
+	// doing something, we'll make another pass.
+	bool keepgoing=true;
+
+	// If we made a pass and concluded that we have a circular dependency:
+	// set this flag and make another pass, and just pick the first
+	// starting container, to break the circule.
+	bool circular_dependency=false;
+
+	while (keepgoing)
+	{
+		keepgoing=false;
+
+		// The state of containers can change. Even those we have
+		// a starting_containers that started out in starting_state
+		// if we don't find a starting_state container on the pass
+		// we'll stop.
+
+		bool found_starting_container=false;
+
+		// If a starting_state container is running a start process
+		// we need to know about it, we won't proclaim a circular
+		// dependency if we so a running starting process.
+
+		bool found_runner=false;
+
+		for (auto iter=starting_containers.begin();
+		     iter != starting_containers.end(); ++iter)
+		{
+			auto &[pc, run_info]= *iter->second;
+
+			// Ok, now look at this container state.
+			//
+			// - set "found_starting_container" if we see a
+			//   starting_state, no matter what everything else.
+			//
+			// - if this starting_state container has a running
+			//   starting process, or if this is not a
+			//   starting_state container we stop, and move to the
+			//   next starting_container.
+
+			bool skip=true;
+
+			run_info.run_if<state_starting>(
+				[&]
+				(auto &state)
+				{
+					found_starting_container=true;
+
+					if (state.starting_runner)
+						found_runner=true;
+					else
+						skip=false;
+				});
+
+			if (skip)
+				continue;
+
+			// At this point we have a starting_state container
+			// that does not have a running starting process.
+			//
+			// Check to see if any of this container's
+			// all_required_dependencies are in a
+			// starting_state.
+
+			bool waiting=false;
+
+			all_required_dependencies(
+				pc,
+				all_dependencies_in_state<state_starting>{
+					[&](const current_container &iter,
+					    state_starting &info)
+					{
+						// We shouldn't need this
+						// sanity check, we should
+						// only, possibly, see just
+						// the state_starting containers
+						// that are already in the
+						// containers_list, but let's
+						// be tidy and don't ass-ume
+						// this.
+
+						if (starting_containers.find(
+							    iter->first)
+						    == starting_containers.end()
+						)
+						{
+							return;
+						}
+
+						waiting=true;
+					}}
+			);
+
+			// If we're in this pass and the circular_dependency
+			// flag is already set: forget all this work, and
+			// use this container to break the circular
+			// dependency.
+
+			if (circular_dependency)
+			{
+				waiting=false;
+
+				log_container_error(
+					cc->first,
+					_("detected a circular dependency"
+					  " requirement"));
+				circular_dependency=false;
+			}
+
+			// This container is waiting for other container(s)
+			// to start.
+			if (waiting)
+				continue;
+
+			// We're about to do something.
+			keepgoing=true;
+
+			do_start_runner(iter->second);
+			did_something=true;
+		}
+
+		if (!found_starting_container)
+			// We did not see anything in a starting_state
+			// any more/
+			break;
+
+		// We did not start anything? Everything is waiting for
+		// something else to start? And there are no running
+		// starting processes?
+
+		if (!keepgoing && !found_runner)
+		{
+			// This must be a circular dependency.
+			//
+			// We'll give this another try, and this time set
+			// the flag to break this circular dependency.
+
+			circular_dependency=true;
+			keepgoing=true;
+		}
+	}
+
+	return did_something;
+}
+
+void current_containers_info::do_start_runner(
+	const current_container &cc
+)
 {
 	auto &[pc, run_info] = *cc;
 
 	auto &starting=run_info.state.emplace<state_starting>();
 
-	log_state_change(pc, run_info.state);
+	// If there's a non-empty starting command: run it.
 
 	if (!pc->starting_command.empty())
 	{
@@ -474,6 +887,8 @@ void current_containers_info::do_start(const current_container &cc)
 			do_remove(cc);
 			return;
 		}
+
+		// Log the runner.
 
 		runners[runner->pid]=runner;
 		starting.starting_runner=runner;
@@ -499,17 +914,27 @@ void current_containers_info::do_start(const current_container &cc)
 					auto &[pc, run_info] = *cc;
 					log_container_error(
 						pc,
-						"start process timed out"
+						_("start process timed out")
 					);
 					do_remove(cc);
+
+					find_start_or_stop_to_do();
+					// We might find something to do.
 				}
 			);
 		}
 		log_state_change(pc, run_info.state);
 		return;
 	}
+
+	// No starting process, move directly into the started state.
 	started(cc);
+	return;
 }
+
+// A container's starting command has finished
+//
+// Check its exit status.
 
 void current_containers_info::starting_command_finished(
 	const proc_container &container,
@@ -531,6 +956,11 @@ void current_containers_info::starting_command_finished(
 	}
 }
 
+/////////////////////////////////////////////////////////////////////////
+//
+// Start the process of stopping a process container. All error checking
+// has been completed.
+
 void current_containers_info::do_stop(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
@@ -540,6 +970,9 @@ void current_containers_info::do_stop(const current_container &cc)
 	);
 
 	log_state_change(pc, run_info.state);
+
+	// If the no stopping command, immediately begin the process of
+	// removing this container.
 
 	if (pc->stopping_command.empty())
 	{
@@ -599,15 +1032,19 @@ void current_containers_info::do_stop(const current_container &cc)
 				auto &[pc, run_info] = *cc;
 				log_container_error(
 					pc,
-					"stop process timed out"
+					_("stop process timed out")
 				);
 				do_remove(cc);
+				find_start_or_stop_to_do();
+				// We might find something to do.
 			}
 		)
 	);
 
 	log_state_change(pc, run_info.state);
 }
+
+// Create a timeout for force-killing a process container.
 
 proc_container_timer current_containers_info::create_sigkill_timer(
 	const proc_container &pc
@@ -625,8 +1062,15 @@ proc_container_timer current_containers_info::create_sigkill_timer(
 				return;
 
 			send_sigkill(cc);
+			find_start_or_stop_to_do();
+			// We might find something to do.
 		});
 }
+
+///////////////////////////////////////////////////////////////////////////
+//
+// Start removing the container by sending sigterm to it, and setting a
+// sigkill timer.
 
 void current_containers_info::do_remove(const current_container &cc)
 {
@@ -640,6 +1084,8 @@ void current_containers_info::do_remove(const current_container &cc)
 	log_state_change(pc, run_info.state);
 }
 
+// Timer to send sigkill has expired.
+
 void current_containers_info::send_sigkill(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
@@ -652,6 +1098,8 @@ void current_containers_info::send_sigkill(const current_container &cc)
 	log_state_change(pc, run_info.state);
 }
 
+// The container has started.
+
 static void started(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
@@ -660,6 +1108,10 @@ static void started(const current_container &cc)
 
 	log_state_change(pc, run_info.state);
 }
+
+/////////////////////////////////////////////////////////////////////////
+//
+// The container completely stopped, it has no more processes.
 
 void proc_container_stopped(const std::string &s)
 {
@@ -678,4 +1130,6 @@ void current_containers_info::stopped(const std::string &s)
 	run_info.state.emplace<state_stopped>();
 
 	log_state_change(pc, run_info.state);
+
+	find_start_or_stop_to_do(); // We might find something to do.
 }
