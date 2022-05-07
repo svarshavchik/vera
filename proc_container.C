@@ -321,6 +321,12 @@ private:
 		      std::unordered_set<proc_container, proc_container_hash,
 		      proc_container_equal> &);
 	void do_start_runner(const current_container &);
+
+	void initiate_stopping(
+		const current_container &,
+		const std::function<state_stopping &(proc_container_state &)> &
+	);
+
 	void do_stop(const current_container &);
 	void do_remove(const current_container &);
 	void starting_command_finished(const proc_container &container,
@@ -956,6 +962,23 @@ void current_containers_info::starting_command_finished(
 	}
 }
 
+//! Move a container into a stopping state
+
+//! Calls the supplied closure to formally set the proc_container_state
+//! to stopping state, then log it.
+
+void current_containers_info::initiate_stopping(
+	const current_container &cc,
+	const std::function<state_stopping &(proc_container_state &)
+	> &set_to_stop
+)
+{
+	auto &[pc, run_info] = *cc;
+
+	set_to_stop(run_info.state);
+	log_state_change(pc, run_info.state);
+}
+
 /////////////////////////////////////////////////////////////////////////
 //
 // Start the process of stopping a process container. All error checking
@@ -965,11 +988,15 @@ void current_containers_info::do_stop(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_stopping>(
-		std::in_place_type_t<stop_pending>{}
-	);
-
-	log_state_change(pc, run_info.state);
+	initiate_stopping(cc,
+			  []
+			  (proc_container_state &state)
+			  ->state_stopping &
+			  {
+				  return state.emplace<state_stopping>(
+					  std::in_place_type_t<stop_pending>{}
+				  );
+			  });
 
 	// If the no stopping command, immediately begin the process of
 	// removing this container.
@@ -1013,35 +1040,41 @@ void current_containers_info::do_stop(const current_container &cc)
 
 	runners[runner->pid]=runner;
 
-	run_info.state.emplace<state_stopping>(
-		std::in_place_type_t<stop_running>{},
-		runner,
-		create_timer(
-			pc,
-			pc->stopping_timeout,
-			[this]
-			(const proc_container &c)
-			{
-				auto cc=containers.find(c);
-
-				if (cc == containers.end())
-					return;
-
-				// Timeout expired
-
-				auto &[pc, run_info] = *cc;
-				log_container_error(
+	initiate_stopping(
+		cc,
+		[&]
+		(proc_container_state &state) -> state_stopping &
+		{
+			return state.emplace<state_stopping>(
+				std::in_place_type_t<stop_running>{},
+				runner,
+				create_timer(
 					pc,
-					_("stop process timed out")
-				);
-				do_remove(cc);
-				find_start_or_stop_to_do();
-				// We might find something to do.
-			}
-		)
-	);
+					pc->stopping_timeout,
+					[this]
+					(const proc_container &c)
+					{
+						auto cc=containers.find(c);
 
-	log_state_change(pc, run_info.state);
+						if (cc == containers.end())
+							return;
+
+						// Timeout expired
+
+						auto &[pc, run_info] = *cc;
+						log_container_error(
+							pc,
+							_("stop process "
+							  "timed out")
+						);
+						do_remove(cc);
+						find_start_or_stop_to_do();
+						// We might find something
+						// to do.
+					}
+				)
+			);
+		});
 }
 
 // Create a timeout for force-killing a process container.
@@ -1076,12 +1109,17 @@ void current_containers_info::do_remove(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_stopping>(
-		std::in_place_type_t<stop_removing>{},
-		create_sigkill_timer(pc),
-		false
-	);
-	log_state_change(pc, run_info.state);
+	initiate_stopping(
+		cc,
+		[&]
+		(proc_container_state &state) -> state_stopping &
+		{
+			return state.emplace<state_stopping>(
+				std::in_place_type_t<stop_removing>{},
+				create_sigkill_timer(pc),
+				false
+			);
+		});
 }
 
 // Timer to send sigkill has expired.
@@ -1090,12 +1128,17 @@ void current_containers_info::send_sigkill(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_stopping>(
-		std::in_place_type_t<stop_removing>{},
-		create_sigkill_timer(pc),
-		true
-	);
-	log_state_change(pc, run_info.state);
+	initiate_stopping(
+		cc,
+		[&]
+		(proc_container_state &state) -> state_stopping &
+		{
+			return state.emplace<state_stopping>(
+				std::in_place_type_t<stop_removing>{},
+				create_sigkill_timer(pc),
+				true
+			);
+		});
 }
 
 // The container has started.
