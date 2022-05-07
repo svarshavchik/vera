@@ -107,7 +107,7 @@ void test_start_and_stop()
 			"a: removing",
 		})
 	{
-		throw "unexppected state changes after stop";
+		throw "unexpected state changes after stop";
 	}
 
 	logged_state_changes.clear();
@@ -504,9 +504,9 @@ void test_requires1()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"requires1a: start pending",
-			"requires1b: start pending",
-			"requires1c: start pending",
-			"requires1c: starting",
+			"requires1b: start pending (dependency)",
+			"requires1c: start pending (dependency)",
+			"requires1c: starting (dependency)",
 			""
 		})
 	{
@@ -516,8 +516,8 @@ void test_requires1()
 	runner_finished(1, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"requires1c: started",
-			"requires1b: starting",
+			"requires1c: started (dependency)",
+			"requires1b: starting (dependency)",
 		})
 	{
 		throw "unexpected second start sequence";
@@ -526,7 +526,7 @@ void test_requires1()
 	runner_finished(2, 0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"requires1b: started",
+			"requires1b: started (dependency)",
 			"requires1a: starting",
 		})
 	{
@@ -676,8 +676,8 @@ void test_requires2()
 
 	if (states != std::vector<std::string>{
 			"requires2a: start pending",
-			"requires2b: starting",
-			"requires2c: started",
+			"requires2b: starting (dependency)",
+			"requires2c: started (dependency)",
 			"requires2d: stopped",
 			"requires2e: stopped"
 		})

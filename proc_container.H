@@ -27,6 +27,12 @@ struct state_stopped {
 //! A process container that's starting
 struct state_starting {
 
+	//! Starting this container because it is a dependency.
+
+	bool dependency;
+
+	state_starting(bool dependency) : dependency{dependency} {}
+
 	//! Running start process.
 	proc_container_runner starting_runner;
 
@@ -39,6 +45,10 @@ struct state_starting {
 
 //! A process container that's started
 struct state_started {
+
+	bool dependency;
+
+	state_started(bool dependency) : dependency{dependency} {}
 
 	//! Human readable label.
 	operator std::string() const;

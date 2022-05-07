@@ -22,14 +22,18 @@ state_stopped::operator std::string() const
 state_starting::operator std::string() const
 {
 	if (starting_runner)
-		return _("starting");
+	{
+		return dependency ? _("starting (dependency)")
+			: _("starting");
+	}
 
-	return _("start pending");
+	return dependency ? _("start pending (dependency)")
+		: _("start pending");
 }
 
 state_started::operator std::string() const
 {
-	return _("started");
+	return dependency ? _("started (dependency)") : _("started");
 }
 
 state_stopping::operator std::string() const
@@ -380,7 +384,8 @@ private:
 	void do_stop_runner(const current_container &);
 	void do_remove(const current_container &);
 	void starting_command_finished(const proc_container &container,
-				       int status);
+				       int status,
+				       bool for_dependency);
 	proc_container_timer create_sigkill_timer(
 		const proc_container &pc
 	);
@@ -424,7 +429,7 @@ typedef std::unordered_map<pid_t,
 
 static current_runners runners;
 
-static void started(const current_container &);
+static void started(const current_container &, bool);
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -582,12 +587,18 @@ struct current_containers_info::start_eligibility {
 
 	std::set<std::string> not_stopped_containers;
 
-	void operator()(state_started &)
+	bool is_dependency=false;
+
+	void operator()(state_started &state)
 	{
+		if (!is_dependency)
+			state.dependency=false;
 	}
 
-	void operator()(state_starting &)
+	void operator()(state_starting &state)
 	{
+		if (!is_dependency)
+			state.dependency=false;
 	}
 
 	void operator()(state_stopped &)
@@ -628,6 +639,8 @@ std::string current_containers_info::start(const std::string &name)
 
 	if (eligibility.containers.empty())
 		return ""; // Already in progress
+
+	eligibility.is_dependency=true;
 
 	// Check all requirements. If any are in a stopped state move them
 	// into the starting state, too.
@@ -670,7 +683,7 @@ std::string current_containers_info::start(const std::string &name)
 	// then take it out of the eligibility.containers, then start and log
 	// the rest of them.
 
-	run_info.state.emplace<state_starting>();
+	run_info.state.emplace<state_starting>(false);
 
 	log_state_change(pc, run_info.state);
 
@@ -680,7 +693,7 @@ std::string current_containers_info::start(const std::string &name)
 	{
 		auto &[pc, run_info] = *iter;
 
-		run_info.state.emplace<state_starting>();
+		run_info.state.emplace<state_starting>(true);
 
 		log_state_change(pc, run_info.state);
 	}
@@ -1215,7 +1228,33 @@ void current_containers_info::do_start_runner(
 {
 	auto &[pc, run_info] = *cc;
 
-	auto &starting=run_info.state.emplace<state_starting>();
+	// We should be in a starting state. If things go sideways, we'll
+	// bitch and moan, but don't kill the entire process.
+
+	state_starting *starting_ptr=nullptr;
+
+	std::visit(
+		[&]
+		(auto &current_state)
+		{
+			if constexpr(std::is_same_v<std::remove_cvref_t<
+				     decltype(current_state)>,
+				     state_starting>) {
+				starting_ptr= &current_state;
+			}
+		}, run_info.state);
+
+	if (!starting_ptr)
+	{
+		log_container_error(
+			cc->first,
+			_("attempting to start a container that's not in a "
+			  "pending start state"));
+		do_remove(cc);
+		return;
+	}
+
+	auto &starting= *starting_ptr;
 
 	// If there's a non-empty starting command: run it.
 
@@ -1225,12 +1264,13 @@ void current_containers_info::do_start_runner(
 
 		auto runner=create_runner(
 			pc, pc->starting_command,
-			[this]
+			[this, dependency=starting.dependency]
 			(const proc_container &container,
 			 int status
 			)
 			{
-				starting_command_finished(container, status);
+				starting_command_finished(container, status,
+							  dependency);
 			}
 		);
 
@@ -1280,7 +1320,7 @@ void current_containers_info::do_start_runner(
 	}
 
 	// No starting process, move directly into the started state.
-	started(cc);
+	started(cc, starting.dependency);
 	return;
 }
 
@@ -1290,7 +1330,8 @@ void current_containers_info::do_start_runner(
 
 void current_containers_info::starting_command_finished(
 	const proc_container &container,
-	int status)
+	int status,
+	bool for_dependency)
 {
 	auto cc=containers.find(container);
 
@@ -1299,7 +1340,7 @@ void current_containers_info::starting_command_finished(
 
 	if (status == 0)
 	{
-		started(cc);
+		started(cc, for_dependency);
 	}
 	else
 	{
@@ -1589,11 +1630,11 @@ void current_containers_info::send_sigkill(const current_container &cc)
 
 // The container has started.
 
-static void started(const current_container &cc)
+static void started(const current_container &cc, bool for_dependency)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_started>();
+	run_info.state.emplace<state_started>(for_dependency);
 
 	log_state_change(pc, run_info.state);
 }
