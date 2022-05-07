@@ -790,6 +790,176 @@ std::string current_containers_info::stop(const std::string &name)
 		}
 	);
 
+	// To determine whether a started dependency can be removed we
+	// start by looking at the started dependency's required_by
+	// dependencies and verify to make sure that they're stopped,
+	// stopping, or is already on the list of containers to be stopped.
+	//
+	// If so, then the start dependency can be stopped automatically.
+
+	struct dependency_not_needed_check {
+		current_containers_info &me;
+		stop_eligibility &eligibility;
+
+		// Additional started dependencies that can be removed get
+		// collected here, and they get merged into
+		// eligibility.containers only after making a pass over
+		// its existing contents. This is because inserting them as
+		// we go will invalidates all existing iterators.
+
+		current_container_lookup_t removable_requirements;
+
+		// So we need a method to check both containers.
+
+		bool scheduled_to_be_stopped(const proc_container &c)
+		{
+			return eligibility.containers.find(c) !=
+				eligibility.containers.end() ||
+				removable_requirements.find(c) !=
+				removable_requirements.end();
+		}
+
+		// We optimistically say yes, until proven otherwise.
+
+		bool can_be_stopped;
+
+		operator bool() const { return can_be_stopped; }
+
+		// Here's what requires this dependency.
+		void verify(const current_container &required_by)
+		{
+			if (!can_be_stopped)
+				return; // No need to waste any more time.
+
+			if (scheduled_to_be_stopped(required_by->first))
+			{
+				// This one will be stopped already.
+
+				return;
+			}
+
+			// Inspect the requiree's state.
+			std::visit([&, this](auto &state)
+			{
+				check_state(state);
+			}, required_by->second.state);
+		}
+
+		// If the dependency's requirement is stopped or stopping,
+		// then this dependency can be stopped.
+		//
+		// A started or starting state means that this dependency
+		// cannot be stopped.
+
+		void check_state(state_stopped &)
+		{
+		}
+
+		void check_state(state_stopping &)
+		{
+		}
+
+		void check_state(state_starting &)
+		{
+			can_be_stopped=false;
+		}
+
+		void check_state(state_started &)
+		{
+			can_be_stopped=false;
+		}
+
+	};
+
+	// Moving up the ladder, we now have a required started dependency
+
+	struct check_required_started_dependency
+		: dependency_not_needed_check {
+
+		void do_check(const current_container &iter,
+			      state_started &state)
+		{
+			// If this wasn't started as a dependency, we can
+			// ignore it.
+
+			if (!state.dependency)
+				return;
+
+			// It's already scheduled to be stopped, so no need
+			// to bother.
+			if (scheduled_to_be_stopped(iter->first))
+				return;
+
+			// Assume dependency can be stopped until told
+			// otherwise.
+
+			can_be_stopped=true;
+
+			me.all_required_by_dependencies(
+				iter->first,
+				[this]
+				(const current_container &c)
+				{
+					verify(c);
+				});
+
+			// If we were not told otherwise, then this one's a
+			// go.
+
+			if (can_be_stopped)
+			{
+				removable_requirements.emplace(
+					iter->first,
+					iter
+				);
+			}
+		}
+	};
+
+	check_required_started_dependency check_required_dependencies{
+		*this,
+		eligibility
+	};
+
+	// So now we take the containers we're stopping, and check all of
+	// their required dependencies.
+
+	do
+	{
+		// Multiple passes can be done here. After pulling in some
+		// started dependencies it's possible that this will make
+		// additional started dependencies eligible to be stopped.
+		//
+		// At the beginning of each pass we take all the new
+		// removable required dependencies and merge them
+		// into the eligible containers list.
+
+		eligibility.containers.merge(
+			check_required_dependencies.removable_requirements
+		);
+
+		for (const auto &[pc, run_info] : eligibility.containers)
+		{
+			// Retrieve all required dependencies in a started
+			// state, anddo_ check them.
+
+			all_required_dependencies(
+				pc,
+				all_dependencies_in_state<state_started>{
+					[&, this](const current_container &iter,
+						  state_started &state)
+					{
+						check_required_dependencies.
+							do_check(
+								iter,
+								state
+							);
+					}}
+			);
+		}
+
+	} while (!check_required_dependencies.removable_requirements.empty());
+
 	// Ok, we're good. Put everything into a stopping state.
 	//
 	// To avoid confusing logging we'll log the original container first,

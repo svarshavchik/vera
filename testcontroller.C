@@ -613,6 +613,32 @@ void test_requires1()
 	}
 }
 
+void verify_container_state(
+	const std::vector<std::string> &expected_states,
+	const char *reason)
+{
+	std::vector<std::string> states;
+
+	get_proc_containers(
+		[&]
+		(const proc_container &pc,
+		 const proc_container_state &s)
+		{
+			states.push_back(
+				pc->name + ": " +
+				std::visit([]
+					   (auto &ss) -> std::string
+				{
+					return ss;
+				}, s));
+		});
+
+	std::sort(states.begin(), states.end());
+
+	if (states != expected_states)
+		throw reason;
+}
+
 void test_requires2()
 {
 	auto pcs=test_requires_common("requires2");
@@ -656,34 +682,15 @@ void test_requires2()
 		throw "proc_container_start failed";
 	runner_finished(1, 0);
 
-	std::vector<std::string> states;
-
-	get_proc_containers(
-		[&]
-		(const proc_container &pc,
-		 const proc_container_state &s)
+	verify_container_state(
 		{
-			states.push_back(
-				pc->name + ": " +
-				std::visit([]
-					   (auto &ss) -> std::string
-				{
-					return ss;
-				}, s));
-		});
-
-	std::sort(states.begin(), states.end());
-
-	if (states != std::vector<std::string>{
 			"requires2a: start pending",
 			"requires2b: starting (dependency)",
 			"requires2c: started (dependency)",
 			"requires2d: stopped",
 			"requires2e: stopped"
-		})
-	{
-		throw "unexpected container state after starting";
-	}
+		},
+		"unexpected container state after starting");
 
 	logged_state_changes.clear();
 	err=proc_container_stop("requires2c");
@@ -706,6 +713,301 @@ void test_requires2()
 
 	if (err.empty())
 		throw "proc_container_start should not fail";
+}
+
+void test_requires_common2(std::string name)
+{
+	auto a=std::make_shared<proc_containerObj>();
+	auto b=std::make_shared<proc_containerObj>();
+	auto c=std::make_shared<proc_containerObj>();
+	auto d=std::make_shared<proc_containerObj>();
+	auto e=std::make_shared<proc_containerObj>();
+
+	a->name=name + "a";
+	b->name=name + "b";
+	c->name=name + "c";
+	d->name=name + "d";
+	e->name=name + "e";
+
+	e->dep_required_by.insert(name + "d");
+	e->dep_required_by.insert(name + "c");
+
+	d->dep_required_by.insert(name + "a");
+	c->dep_required_by.insert(name + "b");
+
+	proc_containers_install({a, b, c, d, e});
+
+	auto err=proc_container_start(name + "b");
+
+	if (!err.empty())
+		throw "unexpected proc_container_start error(1)";
+
+	if (logged_state_changes.size() > 3)
+		std::sort(&logged_state_changes[1], &logged_state_changes[3]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			name + "b: start pending",
+			name + "c: start pending (dependency)",
+			name + "e: start pending (dependency)",
+			name + "e: started (dependency)",
+			name + "c: started (dependency)",
+			name + "b: started"
+		})
+	{
+		throw "unexpected starting series of events (1)";
+	}
+
+	logged_state_changes.clear();
+	err=proc_container_start(name + "a");
+
+	if (!err.empty())
+		throw "unexpected proc_container_start error(2)";
+
+	if (logged_state_changes != std::vector<std::string>{
+			name + "a: start pending",
+			name + "d: start pending (dependency)",
+			name + "d: started (dependency)",
+			name + "a: started"
+		})
+	{
+		throw "unexpected starting series of events (2)";
+	}
+}
+
+void test_requires3()
+{
+	test_requires_common2("requires3");
+
+	verify_container_state(
+		{
+			"requires3a: started",
+			"requires3b: started",
+			"requires3c: started (dependency)",
+			"requires3d: started (dependency)",
+			"requires3e: started (dependency)",
+		},"unexpected state after starting all containers");
+
+	logged_state_changes.clear();
+	auto err=proc_container_stop("requires3a");
+	if (!err.empty())
+		throw "Unexpected error stopping requires3a";
+
+	proc_container_stopped("requires3a");
+	proc_container_stopped("requires3d");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires3a: stop pending",
+			"requires3d: stop pending",
+			"requires3a: removing",
+			"requires3a: stopped",
+			"requires3d: removing",
+			"requires3d: stopped"
+		})
+	{
+		throw "unexpected stopping series of events (1)";
+	}
+
+	verify_container_state(
+		{
+			"requires3a: stopped",
+			"requires3b: started",
+			"requires3c: started (dependency)",
+			"requires3d: stopped",
+			"requires3e: started (dependency)",
+		},"unexpected container state after starting");
+
+	logged_state_changes.clear();
+	err=proc_container_stop("requires3b");
+	if (!err.empty())
+		throw "Unexpected error stopping requires3b";
+	proc_container_stopped("requires3b");
+	proc_container_stopped("requires3c");
+	proc_container_stopped("requires3e");
+
+	if (logged_state_changes.size() > 3)
+		std::sort(&logged_state_changes[0], &logged_state_changes[3]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires3b: stop pending",
+			"requires3c: stop pending",
+			"requires3e: stop pending",
+			"requires3b: removing",
+			"requires3b: stopped",
+			"requires3c: removing",
+			"requires3c: stopped",
+			"requires3e: removing",
+			"requires3e: stopped",
+		})
+	{
+		throw "unexpected stopping series of events (2)";
+	}
+
+	verify_container_state(
+		{
+			"requires3a: stopped",
+			"requires3b: stopped",
+			"requires3c: stopped",
+			"requires3d: stopped",
+			"requires3e: stopped",
+		},"unexpected container state after stopping");
+}
+
+void test_requires4()
+{
+	test_requires_common2("requires4");
+
+	logged_state_changes.clear();
+	auto err=proc_container_start("requires4c");
+
+	if (!err.empty())
+		throw "unexpected proc_container_start error(3)";
+
+	verify_container_state(
+		{
+			"requires4a: started",
+			"requires4b: started",
+			"requires4c: started",
+			"requires4d: started (dependency)",
+			"requires4e: started (dependency)",
+		},"unexpected state after starting all containers");
+
+	err=proc_container_stop("requires4b");
+	if (!err.empty())
+		throw "Unexpected error stopping requires4b";
+
+	proc_container_stopped("requires4b");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires4b: stop pending",
+			"requires4b: removing",
+			"requires4b: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 4b";
+	}
+
+	logged_state_changes.clear();
+	err=proc_container_stop("requires4a");
+	if (!err.empty())
+		throw "Unexpected error stopping requires4a";
+
+	if (logged_state_changes.size() > 2)
+		std::sort(&logged_state_changes[0], &logged_state_changes[2]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires4a: stop pending",
+			"requires4d: stop pending",
+			"requires4a: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 4a (1)";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("requires4a");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires4a: stopped",
+			"requires4d: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 4a (2)";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("requires4d");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires4d: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 4a (3)";
+	}
+	verify_container_state(
+		{
+			"requires4a: stopped",
+			"requires4b: stopped",
+			"requires4c: started",
+			"requires4d: stopped",
+			"requires4e: started (dependency)",
+		},"unexpected state after stopping containers");
+}
+
+void test_requires5()
+{
+	test_requires_common2("requires5");
+
+	logged_state_changes.clear();
+	auto err=proc_container_start("requires5c");
+
+	if (!err.empty())
+		throw "unexpected proc_container_start error(3)";
+
+	verify_container_state(
+		{
+			"requires5a: started",
+			"requires5b: started",
+			"requires5c: started",
+			"requires5d: started (dependency)",
+			"requires5e: started (dependency)",
+		},"unexpected state after starting all containers");
+
+	proc_container_stopped("requires5a");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5a: stopped",
+			"requires5d: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5a (2)";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("requires5d");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5d: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5a (3)";
+	}
+
+	err=proc_container_stop("requires5b");
+	if (!err.empty())
+		throw "Unexpected error stopping requires5b";
+
+	proc_container_stopped("requires5b");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5b: stop pending",
+			"requires5b: removing",
+			"requires5b: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5b";
+	}
+
+	logged_state_changes.clear();
+	err=proc_container_stop("requires5a");
+	if (!err.empty())
+		throw "Unexpected error stopping requires5a";
+
+	if (logged_state_changes.size() > 2)
+		std::sort(&logged_state_changes[0], &logged_state_changes[2]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5a: stop pending",
+			"requires5d: stop pending",
+			"requires5a: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5a (1)";
+	}
+
+	logged_state_changes.clear();
+
+	verify_container_state(
+		{
+			"requires5a: stopped",
+			"requires5b: stopped",
+			"requires5c: started",
+			"requires5d: stopped",
+			"requires5e: started (dependency)",
+		},"unexpected state after stopping containers");
 }
 
 int main()
@@ -757,6 +1059,18 @@ int main()
 		test_reset();
 		test="test_requires2";
 		test_requires2();
+
+		test_reset();
+		test="test_requires3";
+		test_requires3();
+
+		test_reset();
+		test="test_requires4";
+		test_requires4();
+
+		test_reset();
+		test="test_requires5";
+		test_requires5();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";
