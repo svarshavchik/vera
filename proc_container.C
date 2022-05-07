@@ -10,7 +10,9 @@
 #include "log.H"
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 #include <type_traits>
+#include <iostream>
 
 state_stopped::operator std::string() const
 {
@@ -300,7 +302,8 @@ private:
 		{
 			auto iter=containers.find(requirement);
 
-			// Ignore synthesized containers
+			// Ignore synthesized, and other kinds of containers
+			// except the real, loaded, ones.
 			if (iter == containers.end() ||
 			    iter->first->type != proc_container_type::loaded)
 				continue;
@@ -368,7 +371,13 @@ private:
 		const std::function<state_stopping &(proc_container_state &)> &
 	);
 
-	void do_stop(const current_container &);
+	struct stop_or_terminate_helper;
+
+	void do_stop_or_terminate(const current_container &);
+	bool do_stop(const current_container &,
+		     std::unordered_set<proc_container, proc_container_hash,
+		     proc_container_equal> &);
+	void do_stop_runner(const current_container &);
 	void do_remove(const current_container &);
 	void starting_command_finished(const proc_container &container,
 				       int status);
@@ -386,6 +395,10 @@ public:
 
 	std::string start(const std::string &name);
 
+private:
+	struct start_eligibility;
+	struct stop_eligibility;
+public:
 	std::string stop(const std::string &name);
 
 	void finished(pid_t pid, int wstatus);
@@ -540,12 +553,56 @@ void current_containers_info::install(const proc_container_set &new_containers)
 //////////////////////////////////////////////////////////////////////////
 //
 // Attempt to start a process container. It must be a loaded container,
-// not a synthesized one.
+// not any other kind.
 
 std::string proc_container_start(const std::string &name)
 {
 	return containers_info.start(name);
 }
+
+//! Determine eligibility of containers for starting them
+
+//! This is used to std::visit() a container's and all of its required
+//! dependencies' run state. \c next_visited_container gets initialized
+//! first, then its run state gets visited here.
+//!
+//! A started or starting container gets quietly ignored. We're there already.
+//!
+//! A stopped container gets added to the containers list. This will be
+//! a list of all containers to start.
+//!
+//! A stopping container's name gets added to not_stopped_containers. This
+//! will result in a failure.
+
+struct current_containers_info::start_eligibility {
+
+	current_container next_visited_container;
+
+	current_container_lookup_t containers;
+
+	std::set<std::string> not_stopped_containers;
+
+	void operator()(state_started &)
+	{
+	}
+
+	void operator()(state_starting &)
+	{
+	}
+
+	void operator()(state_stopped &)
+	{
+		containers.emplace(next_visited_container->first,
+				   next_visited_container);
+	}
+
+	void operator()(state_stopping &)
+	{
+		not_stopped_containers.insert(
+			next_visited_container->first->name
+		);
+	}
+};
 
 std::string current_containers_info::start(const std::string &name)
 {
@@ -559,30 +616,74 @@ std::string current_containers_info::start(const std::string &name)
 
 	auto &[pc, run_info] = *iter;
 
-	if (!std::holds_alternative<state_stopped>(run_info.state))
-	{
-		return name + _(": cannot start "
-				"because it's not stopped");
-	}
+	//! Check the eligibility of the specified container, first.
 
-	run_info.state.emplace<state_starting>();
+	start_eligibility eligibility{iter};
 
-	log_state_change(pc, run_info.state);
+	std::visit(eligibility, iter->second.state);
+
+	if (!eligibility.not_stopped_containers.empty())
+		return pc->name + _(": cannot start "
+				    "because it's not stopped");
+
+	if (eligibility.containers.empty())
+		return ""; // Already in progress
 
 	// Check all requirements. If any are in a stopped state move them
 	// into the starting state, too.
 
 	all_required_dependencies(
 		pc,
-		all_dependencies_in_state<state_stopped>{
-			[&](const current_container &iter, state_stopped &state)
-			{
-				iter->second.state.emplace<state_starting>();
-				log_state_change(iter->first,
-						 iter->second.state);
-			}
+		[&]
+		(const current_container &c)
+		{
+			eligibility.next_visited_container=c;
+
+			std::visit(eligibility,
+				   c->second.state);
 		}
 	);
+
+	if (!eligibility.not_stopped_containers.empty())
+	{
+		std::string error_message;
+		std::string prefix{
+			pc->name +
+			_(": cannot start "
+			  "because the following dependencies are not stopped: "
+			)
+		};
+
+		for (const auto &name:eligibility.not_stopped_containers)
+		{
+			error_message += prefix;
+			prefix = ", ";
+			error_message += name;
+		}
+
+		return error_message;
+	}
+
+	// Ok, we're good. Put everything into a starting state.
+	//
+	// To avoid confusing logging we'll log the original container first,
+	// then take it out of the eligibility.containers, then start and log
+	// the rest of them.
+
+	run_info.state.emplace<state_starting>();
+
+	log_state_change(pc, run_info.state);
+
+	eligibility.containers.erase(pc);
+
+	for (auto &[ignore, iter] : eligibility.containers)
+	{
+		auto &[pc, run_info] = *iter;
+
+		run_info.state.emplace<state_starting>();
+
+		log_state_change(pc, run_info.state);
+	}
 
 	find_start_or_stop_to_do(); // We should find something now.
 	return "";
@@ -596,8 +697,50 @@ std::string proc_container_stop(const std::string &name)
 //////////////////////////////////////////////////////////////////////////
 //
 // Attempt to stop a process container. It must be a loaded container,
-// not a synthesized one.
-//
+// not any other kind.
+
+//! Determine eligibility of containers for stopping them
+
+//! This is used to std::visit() a container's and all of its required
+//! dependencies' run state. \c next_visited_container gets initialized
+//! first, then its run state gets visited here.
+//!
+//! A stopped or stopping container gets quietly ignored. We're there already.
+//!
+//! A started container gets added to the containers list. This will be
+//! a list of all containers to stop.
+//!
+//! A starting container's name gets added to not_started_containers. This
+//! will result in a failure.
+
+struct current_containers_info::stop_eligibility {
+
+	current_container next_visited_container;
+
+	current_container_lookup_t containers;
+
+	void operator()(state_stopped &)
+	{
+	}
+
+	void operator()(state_stopping &)
+	{
+	}
+
+	void operator()(state_started &)
+	{
+		containers.emplace(next_visited_container->first,
+				   next_visited_container);
+	}
+
+	void operator()(state_starting &)
+	{
+		containers.emplace(next_visited_container->first,
+				   next_visited_container);
+	}
+};
+
+
 std::string current_containers_info::stop(const std::string &name)
 {
 	auto iter=containers.find(name);
@@ -608,22 +751,46 @@ std::string current_containers_info::stop(const std::string &name)
 		return name + _(": unknown unit");
 	}
 
-	std::string ret;
+	auto &[pc, run_info] = *iter;
 
-	iter->second.run_if<state_started>(
-		[&]
-		(auto &)
-		{
-			do_stop(iter);
-		},
-		[&]
-		{
-			ret=name + _(": cannot start "
-				     "because it's not stopped");
-		});
+	//! Check the eligibility of the specified container, first.
 
-	find_start_or_stop_to_do(); // We might find something to do.
-	return ret;
+	stop_eligibility eligibility{iter};
+
+	std::visit(eligibility, iter->second.state);
+
+	if (eligibility.containers.empty())
+		return ""; // Already in progress.
+
+	// Check all requirements. If any are in a started state move them
+	// into the stopping state, too.
+
+	all_required_by_dependencies(
+		pc,
+		[&]
+		(const current_container &c)
+		{
+			eligibility.next_visited_container=c;
+
+			std::visit(eligibility,
+				   c->second.state);
+		}
+	);
+
+	// Ok, we're good. Put everything into a stopping state.
+	//
+	// To avoid confusing logging we'll log the original container first,
+	// then take it out of the eligibility.containers, then start and log
+	// the rest of them.
+
+	do_stop_or_terminate(iter);
+	eligibility.containers.erase(pc);
+
+	for (auto &[ignore, iter] : eligibility.containers)
+		do_stop_or_terminate(iter);
+
+	find_start_or_stop_to_do(); // We should find something now.
+	return "";
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -667,6 +834,38 @@ void current_containers_info::find_start_or_stop_to_do()
 {
 	bool did_something=true;
 
+	// Call do_start() for a state_starting container
+
+	// Call do_stop() for a state_stopping container
+
+	struct process_what_to_do {
+
+		current_containers_info		&me;
+		proc_container_set		&processed_containers;
+		current_containers::iterator	&iter;
+		bool				&did_something;
+
+		void operator()(state_stopped &)
+		{
+		}
+
+		void operator()(state_started &)
+		{
+		}
+
+		void operator()(state_starting &)
+		{
+			if (me.do_start(iter, processed_containers))
+				did_something=true;
+		}
+
+		void operator()(state_stopping &)
+		{
+			if (me.do_stop(iter, processed_containers))
+				did_something=false;
+		}
+	};
+
 	while (did_something)
 	{
 		did_something=false;
@@ -684,13 +883,10 @@ void current_containers_info::find_start_or_stop_to_do()
 			    processed_containers.end())
 				continue; // Already did this one.
 
-			run_info.run_if<state_starting>(
-				[&]
-				(auto &current_state)
-				{
-					if (do_start(b, processed_containers))
-						did_something=true;
-				});
+			process_what_to_do do_it{*this, processed_containers,
+				b, did_something};
+
+			std::visit(do_it, run_info.state);
 		}
 	}
 }
@@ -1133,20 +1329,120 @@ void current_containers_info::initiate_stopping(
 //
 // Start the process of stopping a process container. All error checking
 // has been completed.
+//
+// The process is either started or starting. If it's started, then
+// initiate_stopping() into the initial stop_pending phase.
+//
+// If this is a state_starting container we can't put both the starting
+// and the stopping process into the Thunderdome, so might as well call
+// do_remove() directly.
 
-void current_containers_info::do_stop(const current_container &cc)
+struct current_containers_info::stop_or_terminate_helper {
+	current_containers_info &me;
+	const current_container &cc;
+
+	void operator()(state_started &) const;
+
+	template<typename T> void operator()(T &) const
+	{
+		me.do_remove(cc);
+	}
+};
+
+void current_containers_info::stop_or_terminate_helper::operator()(
+	state_started &) const
+{
+	me.initiate_stopping(
+		cc,
+		[]
+		(proc_container_state &state) ->state_stopping &
+		{
+			return state.emplace<state_stopping>(
+				std::in_place_type_t<
+				stop_pending>{}
+			);
+		});
+}
+
+void current_containers_info::do_stop_or_terminate(const current_container &cc)
+{
+	std::visit( stop_or_terminate_helper{*this, cc},
+		    cc->second.state );
+}
+
+
+bool current_containers_info::do_stop(
+	const current_container &cc,
+	proc_container_set &processed_containers
+)
+{
+	all_starting_or_stopping_containers starting{
+		*this, cc, processed_containers,
+		std::type_identity<state_stopping>{}
+	};
+
+	return do_dependencies(
+		starting.containers,
+		[]
+		(const proc_container_run_info &run_info)
+		{
+			// Determines the qualifications for stopping
+			// this container, irrespective of all dependencies.
+			//
+			// We're looking for state_stopping containers,
+			// and determine if they have a running stopping
+			// process.
+			blocking_dependency status=
+				blocking_dependency::na;
+
+			run_info.run_if<state_stopping>(
+				[&]
+				(const state_stopping &state)
+				{
+					status=std::holds_alternative<
+						stop_pending
+						>(state.phase)
+						? blocking_dependency::no
+						: blocking_dependency::yes;
+				});
+
+			return status;
+		},
+		[&]
+		(const proc_container &pc)
+		{
+			// At this point we have a stopping_state container
+			// that does not have a running stopping process.
+			//
+			// Check to see if any of this container's
+			// all_required_by_dependencies are in a
+			// stopping_state.
+
+			bool notready=false;
+
+			all_required_by_dependencies(
+				pc,
+				all_dependencies_in_state<state_stopping>{
+					[&](const current_container &iter,
+					    state_stopping &info)
+					{
+						notready=true;
+					}}
+			);
+
+			return notready;
+		},
+		[this]
+		(const current_container &cc)
+		{
+			do_stop_runner(cc);
+		}
+	);
+}
+
+void current_containers_info::do_stop_runner(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
-
-	initiate_stopping(cc,
-			  []
-			  (proc_container_state &state)
-			  ->state_stopping &
-			  {
-				  return state.emplace<state_stopping>(
-					  std::in_place_type_t<stop_pending>{}
-				  );
-			  });
 
 	// If the no stopping command, immediately begin the process of
 	// removing this container.

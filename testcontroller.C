@@ -92,8 +92,8 @@ void test_start_and_stop()
 
 	err=proc_container_start("a");
 
-	if (err.empty())
-		throw "proc_container_start didn't fail for a started unit";
+	if (!err.empty())
+		throw "proc_container_start(2): " + err;
 
 	err=proc_container_stop("a");
 
@@ -112,14 +112,20 @@ void test_start_and_stop()
 
 	logged_state_changes.clear();
 
+	err=proc_container_start("a");
+
+	if (err.empty())
+		throw "proc_container_start didn't fail for a stopping unit";
+
 	test_advance(SIGTERM_TIMEOUT);
 
 	proc_container_stopped("a");
 
 	err=proc_container_stop("a");
 
-	if (err.empty())
-		throw "proc_container_stop didn't fail for a stopped unit";
+	if (!err.empty())
+		throw "proc_container_stop failed for a stopped unit: "
+			+ err;
 
 	if (logged_state_changes != std::vector<std::string>{
 			"a: force-removing",
@@ -455,7 +461,7 @@ void test_stop_timeout()
 	}
 }
 
-void test_requires1()
+proc_container_set test_requires_common(std::string prefix)
 {
 	proc_container_set pcs;
 
@@ -463,21 +469,29 @@ void test_requires1()
 	auto b=std::make_shared<proc_containerObj>();
 	auto c=std::make_shared<proc_containerObj>();
 
-	a->name="requires1a";
-	a->dep_requires.insert("requires1b");
+	a->name=prefix + "a";
+	a->dep_requires.insert(prefix + "b");
 	a->starting_command="start_a";
+	a->stopping_command="stop_a";
 	pcs.insert(a);
 
-	b->name="requires1b";
-	b->dep_requires.insert("requires1c");
+	b->name=prefix + "b";
+	b->dep_requires.insert(prefix + "c");
 	b->starting_command="start_b";
+	a->stopping_command="stop_b";
 	pcs.insert(b);
 
-	c->name="requires1c";
+	c->name=prefix + "c";
 	c->starting_command="start_c";
+	a->stopping_command="stop_c";
 	pcs.insert(c);
 
-	proc_containers_install(pcs);
+	return pcs;
+}
+
+void test_requires1()
+{
+	proc_containers_install(test_requires_common("requires1"));
 
 	auto err=proc_container_start("requires1a");
 
@@ -527,6 +541,171 @@ void test_requires1()
 	{
 		throw "unexpected final start sequence";
 	}
+
+	logged_state_changes.clear();
+
+	err=proc_container_stop("requires1c");
+
+	if (!err.empty())
+		throw "proc_container_start failed";
+
+	logged_state_changes.resize(5);
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.begin()+3);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1a: stop pending",
+			"requires1b: stop pending",
+			"requires1c: stop pending",
+			"requires1a: stopping",
+			""
+		})
+	{
+		throw "unexpected first stop sequence";
+	}
+
+	logged_state_changes.clear();
+	test_advance(DEFAULT_STOPPING_TIMEOUT);
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1a: stop process timed out",
+			"requires1a: removing"
+		})
+	{
+		throw "unexpected 1st timeout test";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("requires1a");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1a: stopped",
+			"requires1b: removing"
+		})
+	{
+		throw "unexpected second stop sequence";
+	}
+
+	logged_state_changes.clear();
+	test_advance(DEFAULT_STOPPING_TIMEOUT);
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1b: force-removing"
+		})
+	{
+		throw "unexpected 2nd timeout test";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("requires1b");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1b: stopped",
+			"requires1c: removing"
+		})
+	{
+		throw "unexpected third stop sequence";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("requires1c");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1c: stopped",
+		})
+	{
+		throw "unexpected final stop sequence";
+	}
+}
+
+void test_requires2()
+{
+	auto pcs=test_requires_common("requires2");
+
+	auto d=std::make_shared<proc_containerObj>();
+
+	d->name="requires2d";
+	d->dep_requires.insert("requires2a");
+	d->dep_requires.insert("requires2e");
+	d->starting_command="start_d";
+	d->stopping_command="stop_d";
+	pcs.insert(d);
+
+	proc_containers_install(pcs);
+
+	std::unordered_map<std::string, proc_container_type> containers;
+
+	get_proc_containers(
+		[&]
+		(const proc_container &pc,
+		 const proc_container_state &)
+		{
+			containers.emplace(pc->name, pc->type);
+		});
+
+	if (containers != std::unordered_map<std::string, proc_container_type>{
+			{"requires2a", proc_container_type::loaded},
+			{"requires2b", proc_container_type::loaded},
+			{"requires2c", proc_container_type::loaded},
+			{"requires2d", proc_container_type::loaded},
+			{"requires2e", proc_container_type::synthesized},
+		})
+	{
+		throw "Did not see expected set of loaded and synthesized "
+			"containers";
+	}
+
+	auto err=proc_container_start("requires2a");
+
+	if (!err.empty())
+		throw "proc_container_start failed";
+	runner_finished(1, 0);
+
+	std::vector<std::string> states;
+
+	get_proc_containers(
+		[&]
+		(const proc_container &pc,
+		 const proc_container_state &s)
+		{
+			states.push_back(
+				pc->name + ": " +
+				std::visit([]
+					   (auto &ss) -> std::string
+				{
+					return ss;
+				}, s));
+		});
+
+	std::sort(states.begin(), states.end());
+
+	if (states != std::vector<std::string>{
+			"requires2a: start pending",
+			"requires2b: starting",
+			"requires2c: started",
+			"requires2d: stopped",
+			"requires2e: stopped"
+		})
+	{
+		throw "unexpected container state after starting";
+	}
+
+	logged_state_changes.clear();
+	err=proc_container_stop("requires2c");
+
+	if (!err.empty())
+		throw "proc_container_stop failed for a starting unit.";
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires2a: removing",
+			"requires2b: removing",
+			"requires2c: stop pending"
+		})
+	{
+		throw "unexpected container state after stopping";
+	}
+
+	err=proc_container_start("requires2d");
+
+	if (err.empty())
+		throw "proc_container_start should not fail";
 }
 
 int main()
@@ -574,6 +753,10 @@ int main()
 		test_reset();
 		test="test_requires1";
 		test_requires1();
+
+		test_reset();
+		test="test_requires2";
+		test_requires2();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";
