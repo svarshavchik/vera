@@ -22,6 +22,8 @@ struct sort_test_dependencies {
 	}
 };
 
+typedef current_containers_info::dependency_info dependency_info;
+
 void test_deps()
 {
 	std::shared_ptr<proc_containerObj> tests[5]={
@@ -59,6 +61,8 @@ void test_deps()
 
 			current_containers_info::install_requires_dependency(
 				all_dependency_info,
+				&dependency_info::all_requires,
+				&dependency_info::all_required_by,
 				a, b
 			);
 		}
@@ -162,6 +166,8 @@ void test_deps2()
 
 			current_containers_info::install_requires_dependency(
 				all_dependency_info,
+				&dependency_info::all_requires,
+				&dependency_info::all_required_by,
 				a, b
 			);
 		}

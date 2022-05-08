@@ -236,7 +236,15 @@ public:
 	*/
 
 	static void install_requires_dependency(
+
+		//! Where to record dependencies
 		all_dependency_info_t &all_dependency_info,
+
+		//! The forward dependency, the "required" dependency
+		all_dependencies dependency_info::*forward_dependency,
+
+		//! The backward dependency, the "required-by" dependency
+		all_dependencies dependency_info::*backward_dependency,
 		const proc_container &a,
 		const proc_container &b)
 	{
@@ -252,39 +260,45 @@ public:
 			return;
 		}
 
-		a_dep.all_requires.insert(b);
-		b_dep.all_required_by.insert(a);
+		auto &a_dep_forward = a_dep.*forward_dependency;
+		auto &a_dep_backward= a_dep.*backward_dependency;
+
+		auto &b_dep_forward = b_dep.*forward_dependency;
+		auto &b_dep_backward = b_dep.*backward_dependency;
+
+		a_dep_forward.insert(b);
+		b_dep_backward.insert(a);
 
 		// 2)
 
-		a_dep.all_requires.insert(b_dep.all_requires.begin(),
-					  b_dep.all_requires.end());
+		a_dep_forward.insert(b_dep_forward.begin(),
+				     b_dep_forward.end());
 
 		// 3)
-		b_dep.all_required_by.insert(a_dep.all_required_by.begin(),
-					     a_dep.all_required_by.end());
+		b_dep_backward.insert(a_dep_backward.begin(),
+						  a_dep_backward.end());
 
 		// 4)
 
-		for (const auto &by_a:a_dep.all_required_by)
+		for (const auto &by_a:a_dep_backward)
 		{
 			auto &what_requires_a=all_dependency_info[by_a];
 
-			what_requires_a.all_requires.insert(
-				a_dep.all_requires.begin(),
-				a_dep.all_requires.end()
+			(what_requires_a.*forward_dependency).insert(
+				a_dep_forward.begin(),
+				a_dep_forward.end()
 			);
 		}
 
 		// 5)
 
-		for (const auto &all_b:b_dep.all_requires)
+		for (const auto &all_b:b_dep_forward)
 		{
 			auto &what_b_requires=all_dependency_info[all_b];
 
-			what_b_requires.all_required_by.insert(
-				b_dep.all_required_by.begin(),
-				b_dep.all_required_by.end()
+			(what_b_requires.*backward_dependency).insert(
+				b_dep_backward.begin(),
+				b_dep_backward.end()
 			);
 		}
 	}
@@ -529,19 +543,30 @@ void current_containers_info::install(const proc_container_set &new_containers)
 		const proc_container *other_proc_container;
 
 		for (const auto &[requiring_ptr, requirement_ptr,
+				  forward_dependency, backward_dependency,
 				  dependency_list]
 			     : std::array< std::tuple<const proc_container **,
 			     const proc_container **,
+			     all_dependencies dependency_info::*,
+			     all_dependencies dependency_info::*,
 			     const std::unordered_set<std::string>
 			     proc_containerObj::*>, 2>{{
 				     { &this_proc_container,
 						     &other_proc_container,
+						     &dependency_info
+						     ::all_requires,
+						     &dependency_info
+						     ::all_required_by,
 						     &proc_containerObj
 						     ::dep_requires},
 				     { &other_proc_container,
 						     &this_proc_container,
+						     &dependency_info
+						     ::all_requires,
+						     &dependency_info
+						     ::all_required_by,
 						     &proc_containerObj
-						     ::dep_required_by}
+						     ::dep_required_by},
 			     }})
 		{
 			for (const auto &dep:(*c).*(dependency_list))
@@ -574,6 +599,8 @@ void current_containers_info::install(const proc_container_set &new_containers)
 
 				install_requires_dependency(
 					new_all_dependency_info,
+					forward_dependency,
+					backward_dependency,
 					requiring,
 					requirement
 				);
@@ -1263,7 +1290,7 @@ void current_containers_info::find_start_or_stop_to_do()
 	{
 		did_something=false;
 
-		bool doing_something;
+		bool doing_something=false;
 
 		// Keep track of every visited process container, so we don't
 		// redo a bunch of work.
