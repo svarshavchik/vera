@@ -146,6 +146,7 @@ typedef std::variant<state_stopped,
 
 enum class proc_container_type {
 	loaded,		//!< Loaded process container
+	runlevel,	//!< Entry for a run
 	synthesized	//!< Synthesized, for dependencies.
 };
 
@@ -245,6 +246,9 @@ typedef std::unordered_set<proc_container, proc_container_hash,
 //! Install process containers
 
 void proc_containers_install(const proc_container_set &new_containers);
+
+//! Switch run levels
+std::string proc_container_runlevel(const std::string &new_runlevel);
 
 //! Expose the currently installed process containers.
 

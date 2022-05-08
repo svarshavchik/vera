@@ -4,6 +4,7 @@
 */
 
 #include "config.h"
+#include "unit_test.H"
 #include "proc_container.C"
 #include <iostream>
 #include <algorithm>
@@ -46,7 +47,7 @@ void test_deps()
 
 	do
 	{
-		std::cout << "test:";
+		std::cout << "test 1:";
 
 		current_containers_info
 			::all_dependency_info_t all_dependency_info;
@@ -127,9 +128,109 @@ void test_deps()
 				       sort_test_dependencies{}));
 }
 
+void test_deps2()
+{
+	auto runlevel=std::make_shared<proc_containerObj>("0");
+	auto a=std::make_shared<proc_containerObj>("a");
+	auto b=std::make_shared<proc_containerObj>("b");
+	auto c=std::make_shared<proc_containerObj>("c");
+
+	runlevel->type=proc_container_type::runlevel;
+
+	std::vector dependencies{
+		std::tuple{c, runlevel},
+		std::tuple{runlevel, a},
+		std::tuple{a, b},
+	};
+
+	std::sort(dependencies.begin(), dependencies.end(),
+		  sort_test_dependencies{});
+
+	std::vector<proc_container> containers{{runlevel, a, b, c}};
+
+	do
+	{
+		std::cout << "test 2:";
+
+		current_containers_info
+			::all_dependency_info_t all_dependency_info;
+
+		for (auto &[a, b] : dependencies)
+		{
+			std::cout << " " << a->name << "->"
+				  << b->name;
+
+			current_containers_info::install_requires_dependency(
+				all_dependency_info,
+				a, b
+			);
+		}
+		std::cout << "\n";
+
+		for (auto &c:containers)
+		{
+			std::cout << "  " << c->name << ":\n"
+				  << "       requires:    ";
+
+			std::vector<proc_container> req{
+				all_dependency_info[c].all_requires.begin(),
+				all_dependency_info[c].all_requires.end()
+			};
+
+			std::sort(req.begin(), req.end(),
+				  proc_container_less_than{});
+
+			int cnt=0;
+
+			for (const auto &c2:req)
+			{
+				std::cout << " " << c2->name;
+
+				if (c2->name == "c" ||
+				    c2->name <= c->name)
+				{
+					std::cout << "\n";
+					exit(1);
+				}
+				++cnt;
+			}
+
+			std::cout << "\n";
+
+			std::cout << "       required_by: ";
+
+			std::vector<proc_container> reqby{
+				all_dependency_info[c].all_required_by.begin(),
+				all_dependency_info[c].all_required_by.end()
+			};
+			std::sort(reqby.begin(), reqby.end(),
+				  proc_container_less_than{});
+
+			for (const auto &c2:reqby)
+			{
+				std::cout << " " << c2->name;
+				if (c2->name == "c" ||
+				    c2-> name >= c->name)
+				{
+					std::cout << "\n";
+					exit(1);
+				}
+				++cnt;
+			}
+			std::cout << "\n";
+
+			if (cnt != (c->name == "c" ? 0:2))
+				exit(1);
+		}
+	} while (std::next_permutation(dependencies.begin(),
+				       dependencies.end(),
+				       sort_test_dependencies{}));
+}
+
 int main()
 {
 	test_deps();
+	test_deps2();
 
 	return 0;
 }

@@ -49,6 +49,14 @@ void log_container_error(const proc_container &pc, const std::string &msg)
 #endif
 }
 
+void log_message(const std::string &msg)
+{
+#ifdef UNIT_TEST
+	std::cout << msg << "\n";
+	logged_state_changes.push_back(msg);
+#endif
+}
+
 #ifdef UNIT_TEST
 time_t log_current_time()
 {

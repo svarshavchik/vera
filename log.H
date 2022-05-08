@@ -17,6 +17,8 @@ void log_container_failed_process(const proc_container &, int);
 
 void log_container_error(const proc_container &, const std::string &);
 
+void log_message(const std::string &);
+
 time_t log_current_time();
 
 //! Timeout for SIGTERM to do its work

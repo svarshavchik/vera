@@ -6,24 +6,8 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_container_timer.H"
-#include <iostream>
 
-std::vector<std::string> logged_state_changes;
-
-time_t fake_time;
-
-#define UNIT_TEST
-#include "log.C"
-#undef UNIT_TEST
-
-static std::vector<std::string> logged_runners;
-static pid_t next_pid=1;
-
-#define UNIT_TEST() (							\
-		logged_runners.push_back(container->name + ": " + command), \
-		next_pid++)
-#include "proc_container_runner.C"
-#undef UNIT_TEST
+#include "unit_test.H"
 
 void test_reset()
 {
@@ -1110,7 +1094,7 @@ void test_circular()
 	err=proc_container_stop("circularb");
 
 	if (!err.empty())
-		throw "proc_container_start failed";
+		throw "proc_container_stop failed";
 
 	for (int i=0; i<3; ++i)
 	{
@@ -1158,6 +1142,78 @@ void test_circular()
 			{"circularc", true},
 		})
 		throw "unexpected controller state after starting";
+}
+
+void test_runlevels()
+{
+	auto a=std::make_shared<proc_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_containerObj>("runlevel2");
+	auto c=std::make_shared<proc_containerObj>("runlevel1prog");
+	auto d=std::make_shared<proc_containerObj>("runlevel12prog");
+	auto e=std::make_shared<proc_containerObj>("runlevel2prog");
+	auto f=std::make_shared<proc_containerObj>("otherprog");
+
+	a->type=proc_container_type::runlevel;
+	b->type=proc_container_type::runlevel;
+
+	c->dep_required_by.insert("runlevel1");
+	d->dep_required_by.insert("runlevel1");
+	d->dep_required_by.insert("runlevel2");
+	e->dep_required_by.insert("runlevel2");
+
+	proc_containers_install({
+			a, b, c, d, e, f
+		});
+
+	if (proc_container_runlevel("runlevel1prog").empty() ||
+	    !logged_state_changes.empty())
+		throw "Unexpected success of referencing something other than "
+			"a runlevel container";
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	std::sort(logged_state_changes.begin(),
+		  logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"runlevel12prog: start pending (dependency)",
+			"runlevel12prog: started (dependency)",
+			"runlevel1prog: start pending (dependency)",
+			"runlevel1prog: started (dependency)",
+		})
+		throw "Unexpected state changes switching to runlevel1";
+
+	logged_state_changes.clear();
+
+	if (!proc_container_start("otherprog").empty())
+		throw "proc_container_start failed";
+	if (logged_state_changes != std::vector<std::string>{
+			"otherprog: start pending",
+			"otherprog: started"
+		})
+		throw "Unexpected state changes after proc_container_start";
+
+	logged_state_changes.clear();
+	if (!proc_container_runlevel("runlevel2").empty())
+		throw "Unexpected error starting runlevel2";
+	if (logged_state_changes != std::vector<std::string>{
+			"Stopping run level: runlevel1",
+			"runlevel1prog: stop pending",
+			"runlevel1prog: removing",
+		})
+		throw "Unexpected state changes for runlevel2 (1)";
+
+	logged_state_changes.clear();
+	proc_container_stopped("runlevel1prog");
+	if (logged_state_changes != std::vector<std::string>{
+			"runlevel1prog: stopped",
+			"Starting run level: runlevel2",
+			"runlevel2prog: start pending (dependency)",
+			"runlevel2prog: started (dependency)",
+		})
+		throw "Unexpected state changes for runlevel2 (2)";
 }
 
 int main()
@@ -1229,6 +1285,10 @@ int main()
 		test_reset();
 		test="test_circular";
 		test_circular();
+
+		test_reset();
+		test="test_runlevels";
+		test_runlevels();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

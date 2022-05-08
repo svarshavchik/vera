@@ -184,6 +184,9 @@ class current_containers_info {
 
 	current_containers containers;
 
+	proc_container current_runlevel;
+	proc_container new_runlevel;
+
 public:
 	//! All direct and indirect dependencies of a container.
 
@@ -239,6 +242,15 @@ public:
 	{
 		auto &a_dep=all_dependency_info[a];
 		auto &b_dep=all_dependency_info[b];
+
+		if (b->type == proc_container_type::runlevel &&
+		    a->type != proc_container_type::runlevel)
+		{
+			log_message(_("Non run-level unit cannot require a "
+				      "run level unit: ")
+				    + a->name + _(" requires ") + b->name);
+			return;
+		}
 
 		a_dep.all_requires.insert(b);
 		b_dep.all_required_by.insert(a);
@@ -408,6 +420,8 @@ public:
 
 	void install(const proc_container_set &new_containers);
 
+	std::string runlevel(const std::string &new_runlevel);
+
 	std::string start(const std::string &name);
 
 private:
@@ -521,11 +535,13 @@ void current_containers_info::install(const proc_container_set &new_containers)
 			     const std::unordered_set<std::string>
 			     proc_containerObj::*>, 2>{{
 				     { &this_proc_container,
-				       &other_proc_container,
-				       &proc_containerObj::dep_requires},
+						     &other_proc_container,
+						     &proc_containerObj
+						     ::dep_requires},
 				     { &other_proc_container,
-				       &this_proc_container,
-				       &proc_containerObj::dep_required_by}
+						     &this_proc_container,
+						     &proc_containerObj
+						     ::dep_required_by}
 			     }})
 		{
 			for (const auto &dep:(*c).*(dependency_list))
@@ -559,7 +575,8 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				install_requires_dependency(
 					new_all_dependency_info,
 					requiring,
-					requirement);
+					requirement
+				);
 			}
 		}
 	}
@@ -601,7 +618,75 @@ void current_containers_info::install(const proc_container_set &new_containers)
 
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(new_all_dependency_info);
+
+	/////////////////////////////////////////////////////////////
+	//
+	// Update the current_runlevel and new_runlevel objects to
+	// reference the reloaded container objects.
+
+	if (current_runlevel)
+	{
+		auto iter=containers.find(current_runlevel->name);
+
+		if (iter == containers.end() ||
+		    iter->first->type != proc_container_type::runlevel)
+		{
+			log_message(_("Removed current run level!"));
+			current_runlevel=nullptr;
+		}
+		else
+		{
+			current_runlevel=iter->first;
+		}
+	}
+
+	if (!current_runlevel)
+	{
+		if (new_runlevel)
+		{
+			log_message(_("No longer switching run levels!"));
+			new_runlevel=nullptr;
+		}
+	}
+
+	if (new_runlevel)
+	{
+		auto iter=containers.find(new_runlevel->name);
+
+		if (iter == containers.end() ||
+		    iter->first->type != proc_container_type::runlevel)
+		{
+			log_message(_("Removed new run level!"));
+			new_runlevel=nullptr;
+		}
+		else
+		{
+			new_runlevel=iter->first;
+		}
+	}
 	find_start_or_stop_to_do();
+}
+
+std::string proc_container_runlevel(const std::string &new_runlevel)
+{
+	return containers_info.runlevel(new_runlevel);
+}
+
+std::string current_containers_info::runlevel(const std::string &runlevel)
+{
+	auto iter=containers.find(runlevel);
+
+	if (iter == containers.end() ||
+	    iter->first->type != proc_container_type::runlevel)
+	{
+		return _("No such run level: ") + runlevel;
+	}
+
+	new_runlevel=iter->first;
+
+	find_start_or_stop_to_do();
+
+	return "";
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1076,6 +1161,7 @@ void current_containers_info::find_start_or_stop_to_do()
 		proc_container_set		&processed_containers;
 		current_containers::iterator	&iter;
 		bool				&did_something;
+		bool                            &doing_something;
 
 		void operator()(state_stopped &)
 		{
@@ -1087,20 +1173,97 @@ void current_containers_info::find_start_or_stop_to_do()
 
 		void operator()(state_starting &)
 		{
+			doing_something=true;
 			if (me.do_start(iter, processed_containers))
 				did_something=true;
 		}
 
 		void operator()(state_stopping &)
 		{
+			doing_something=true;
 			if (me.do_stop(iter, processed_containers))
 				did_something=false;
 		}
 	};
 
+	// Compute which containers to stop when switching run levels.
+
+	struct stop_current_runlevel {
+
+		proc_container_set containers_to_stop;
+
+		stop_current_runlevel(current_containers_info &me,
+				      const proc_container &current_runlevel,
+				      const proc_container &new_runlevel)
+		{
+			// Retrieve the containers required by the new run
+			// level.
+
+			proc_container_set new_runlevel_containers;
+
+			me.all_required_dependencies(
+				new_runlevel,
+				[&]
+				(const current_container &dep)
+				{
+					new_runlevel_containers.insert(
+						dep->first
+					);
+				});
+
+			// Now, retrieve the containers required by the
+			// current run level. If they don't exist in the
+			// new run level: they are the containers to stop.
+
+			me.all_required_dependencies(
+				current_runlevel,
+				[&, this]
+				(const current_container &dep)
+				{
+					if (new_runlevel_containers.find(
+						    dep->first
+					    ) != new_runlevel_containers.end())
+						return;
+
+					containers_to_stop.insert(dep->first);
+					new_runlevel_containers.insert(
+						dep->first
+					);
+				});
+		}
+
+		bool operator()(const proc_container &s,
+				state_started &state)
+		{
+			return containers_to_stop.find(s) !=
+				containers_to_stop.end();
+		}
+
+		bool operator()(const proc_container &s,
+				state_starting &state)
+		{
+			return false;
+		}
+
+		bool operator()(const proc_container &s,
+				state_stopped &)
+		{
+			return false;
+		}
+
+		bool operator()(const proc_container &s,
+				state_stopping &)
+		{
+			return false;
+		}
+
+	};
+
 	while (did_something)
 	{
 		did_something=false;
+
+		bool doing_something;
 
 		// Keep track of every visited process container, so we don't
 		// redo a bunch of work.
@@ -1116,10 +1279,80 @@ void current_containers_info::find_start_or_stop_to_do()
 				continue; // Already did this one.
 
 			process_what_to_do do_it{*this, processed_containers,
-				b, did_something};
+				b, did_something, doing_something};
 
 			std::visit(do_it, run_info.state);
 		}
+
+		// If we didn't start or stop anything, the last thing to
+		// check would be whether we're switching run levels.
+
+		if (doing_something)
+			continue; // Don't bother
+
+		if (!new_runlevel)
+			continue; // Not switching run levels.
+
+		// Is there a current run level to stop?
+
+		if (current_runlevel)
+		{
+			// Compare everything that the new run level
+			// requires that the current run level does
+			// not require.
+
+			stop_current_runlevel should_stop{
+				*this, current_runlevel, new_runlevel
+			};
+
+			log_message(_("Stopping run level: ")
+				    + current_runlevel->name);
+			for (auto b=containers.begin(),
+				     e=containers.end(); b != e; ++b)
+			{
+				if (std::visit(
+					    [&]
+					    (auto &s)
+					    {
+						    return should_stop(
+							    b->first,
+							    s);
+					    },
+					    b->second.state))
+				{
+					do_stop_or_terminate(b);
+				}
+			}
+
+			did_something=true;
+			current_runlevel = nullptr;
+			continue;
+		}
+
+		// The current run level has stopped, time to start the new
+		// run level.
+
+		current_runlevel=new_runlevel;
+		new_runlevel=nullptr;
+		log_message(_("Starting run level: ") + current_runlevel->name);
+
+		all_required_dependencies(
+			current_runlevel,
+			[&, this]
+			(const current_container &dep)
+			{
+				auto &[pc, run_info] = *dep;
+
+				if (!std::holds_alternative<state_stopped>(
+					    run_info.state
+				    ))
+					return;
+
+				run_info.state.emplace<state_starting>(true);
+				log_state_change(pc, run_info.state);
+			}
+		);
+		did_something=true;
 	}
 }
 
