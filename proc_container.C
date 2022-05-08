@@ -78,9 +78,21 @@ proc_containerObj::~proc_containerObj()
 //! Information about a container's running state.
 
 struct proc_container_run_info {
+	//! The actual state
 	proc_container_state state;
 
-	template<typename T>
+	//! This container has been completely removed
+
+	//! From the system configuration, that is. We need to wait until
+	//! all processes are stopped, that the actual container gets removed
+	//! and this object gets deleted.
+	bool autoremove=false;
+
+	//! Non-default non-copy constructor gets forwarded to state's.
+	template<typename T,
+		 typename=std::enable_if_t<!std::is_same_v<
+						   std::remove_cvref_t<T>,
+						   proc_container_run_info>>>
 	proc_container_run_info(T &&t) : state{std::forward<T>(t)} {}
 
 	//! Do something if the process container is in a specific state.
@@ -392,9 +404,7 @@ private:
 	void send_sigkill(const current_container &cc);
 
 public:
-
-	void get(const std::function<void (const proc_container &,
-					   const proc_container_state &)> &cb);
+	std::vector<std::tuple<proc_container, proc_container_state>> get();
 
 	void install(const proc_container_set &new_containers);
 
@@ -435,21 +445,25 @@ static void started(const current_container &, bool);
 //
 // Enumerate current process containers
 
-void get_proc_containers(
-	const std::function<void (const proc_container &,
-				  const proc_container_state &)> &cb)
+std::vector<std::tuple<proc_container, proc_container_state>
+	    > get_proc_containers()
 {
-	containers_info.get(cb);
+	return containers_info.get();
 }
 
-void current_containers_info::get(
-	const std::function<void (const proc_container &,
-				  const proc_container_state &)> &cb)
+std::vector<std::tuple<proc_container, proc_container_state>
+	    >  current_containers_info::get()
 {
+	std::vector<std::tuple<proc_container, proc_container_state>> snapshot;
+
+	snapshot.reserve(containers.size());
+
 	for (const auto &[c, run_info] : containers)
 	{
-		cb(c, run_info.state);
+		snapshot.emplace_back(c, run_info.state);
 	}
+
+	return snapshot;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -550,8 +564,44 @@ void current_containers_info::install(const proc_container_set &new_containers)
 		}
 	}
 
+	// We now take the existing containers we have, and copy over their
+	// current running state.
+
+	for (auto b=containers.begin(), e=containers.end(); b != e; ++b)
+	{
+		auto iter=new_current_containers.find(b->first);
+
+		if (iter != new_current_containers.end())
+		{
+			// Still exists, preserve the running state,
+			// but clear the autoremove flag.
+			iter->second=b->second;
+			iter->second.autoremove=false;
+			continue;
+		}
+
+		// If the existing container is stopped, nothing needs to
+		// be done.
+		if (std::holds_alternative<state_stopped>(b->second.state))
+			continue;
+
+		// Kill the removed container immediately, then set its
+		// autoremove flag, and keep it.
+
+		send_sigkill(b);
+
+		b->second.autoremove=true;
+
+		// This is getting added after all the dependency work.
+		// As such, any containers with the autoremove flag get
+		// added without any dependenies, guaranteed.
+
+		new_current_containers.emplace(b->first, b->second);
+	}
+
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(new_all_dependency_info);
+	find_start_or_stop_to_do();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1829,6 +1879,13 @@ void current_containers_info::stopped(const std::string &s)
 	run_info.state.emplace<state_stopped>();
 
 	log_state_change(pc, run_info.state);
+
+	if (run_info.autoremove)
+	{
+		// This container was removed from the configuration.
+
+		containers.erase(cc);
+	}
 
 	find_start_or_stop_to_do(); // We might find something to do.
 }

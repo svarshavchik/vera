@@ -27,6 +27,11 @@ static pid_t next_pid=1;
 
 void test_reset()
 {
+	proc_containers_install({});
+
+	for (const auto &[pc, ignore] : get_proc_containers())
+		proc_container_stopped(pc->name);
+
 	logged_state_changes.clear();
 	logged_runners.clear();
 	next_pid=1;
@@ -608,19 +613,14 @@ void verify_container_state(
 {
 	std::vector<std::string> states;
 
-	get_proc_containers(
-		[&]
-		(const proc_container &pc,
-		 const proc_container_state &s)
-		{
-			states.push_back(
-				pc->name + ": " +
-				std::visit([]
-					   (auto &ss) -> std::string
-				{
-					return ss;
-				}, s));
-		});
+	for (const auto &[pc, s] : get_proc_containers())
+		states.push_back(
+			pc->name + ": " +
+			std::visit([]
+				   (auto &ss) -> std::string
+			{
+				return ss;
+			}, s));
 
 	std::sort(states.begin(), states.end());
 
@@ -644,13 +644,8 @@ void test_requires2()
 
 	std::unordered_map<std::string, proc_container_type> containers;
 
-	get_proc_containers(
-		[&]
-		(const proc_container &pc,
-		 const proc_container_state &)
-		{
-			containers.emplace(pc->name, pc->type);
-		});
+	for (const auto &[pc, ignore] : get_proc_containers())
+		containers.emplace(pc->name, pc->type);
 
 	if (containers != std::unordered_map<std::string, proc_container_type>{
 			{"requires2a", proc_container_type::loaded},
@@ -992,6 +987,65 @@ void test_requires5()
 		},"unexpected state after stopping containers");
 }
 
+void test_install()
+{
+	proc_containers_install({
+			std::make_shared<proc_containerObj>("installa"),
+			std::make_shared<proc_containerObj>("installb"),
+			std::make_shared<proc_containerObj>("installc"),
+		});
+
+	auto err=proc_container_start("installb");
+
+	if (!err.empty())
+		throw "proc_container_start (installb) failed";
+
+	err=proc_container_start("installc");
+
+	if (!err.empty())
+		throw "proc_container_start (installc) failed";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"installb: start pending",
+			"installb: started",
+			"installc: start pending",
+			"installc: started",
+		})
+	{
+		throw "unexpected state changes";
+	}
+
+	verify_container_state(
+		{
+			"installa: stopped",
+			"installb: started",
+			"installc: started"
+		}, "unexpected state after starting containers");
+
+	proc_containers_install({
+			std::make_shared<proc_containerObj>("installa"),
+			std::make_shared<proc_containerObj>("installc"),
+			std::make_shared<proc_containerObj>("installd"),
+		});
+
+	verify_container_state(
+		{
+			"installa: stopped",
+			"installb: force-removing",
+			"installc: started",
+			"installd: stopped",
+		}, "unexpected state after replacing containers (1)");
+
+	proc_container_stopped("installb");
+
+	verify_container_state(
+		{
+			"installa: stopped",
+			"installc: started",
+			"installd: stopped",
+		}, "unexpected state after replacing containers (2)");
+}
+
 int main()
 {
 	alarm(60);
@@ -1053,6 +1107,10 @@ int main()
 		test_reset();
 		test="test_requires5";
 		test_requires5();
+
+		test_reset();
+		test="test_install";
+		test_install();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

@@ -110,7 +110,12 @@ struct state_stopping {
 	//! Its current phase
 	stopping_phase phase;
 
-	template<typename Arg, typename ...Args>
+	//! Non default, non-copy constructor forwards to phase's constructor.
+
+	template<typename Arg, typename ...Args,
+		 typename=std::enable_if_t<!std::is_same_v<std::remove_cvref_t<
+								   Arg>,
+							   state_stopping>>>
 	state_stopping(Arg &&arg, Args && ...args)
 		: phase{
 				std::forward<Arg>(arg),
@@ -243,9 +248,8 @@ void proc_containers_install(const proc_container_set &new_containers);
 
 //! Expose the currently installed process containers.
 
-void get_proc_containers(const std::function<void (const proc_container &,
-						   const proc_container_state &)
-			 > &cb);
+std::vector<std::tuple<proc_container, proc_container_state>
+	    > get_proc_containers();
 
 proc_container_set current_proc_containers();
 
