@@ -274,7 +274,7 @@ class proc_containerObj {
 
 public:
 	//! The container's name
-	std::string name;
+	const std::string name;
 
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
@@ -301,7 +301,7 @@ public:
 	std::unordered_set<std::string> dep_required_by;
 
 	//! Constructor
-	proc_containerObj();
+	proc_containerObj(const std::string &name);
 
 	//! Destructor
 	~proc_containerObj();

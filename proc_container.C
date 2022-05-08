@@ -65,7 +65,7 @@ stop_removing::operator std::string() const
 	return _("removing");
 }
 
-proc_containerObj::proc_containerObj()
+proc_containerObj::proc_containerObj(const std::string &name) : name{name}
 {
 }
 
@@ -525,9 +525,8 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				if (iter == new_current_containers.end())
 				{
 					auto newc=std::make_shared<
-						proc_containerObj>();
+						proc_containerObj>(dep);
 
-					newc->name=dep;
 					newc->type=
 						proc_container_type::synthesized
 						;

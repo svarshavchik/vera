@@ -43,11 +43,8 @@ void test_proc_container_set()
 {
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
-	auto b=std::make_shared<proc_containerObj>();
-
-	a->name="a";
-	b->name="b";
+	auto a=std::make_shared<proc_containerObj>("a");
+	auto b=std::make_shared<proc_containerObj>("b");
 
 	pcs.insert(a);
 
@@ -69,9 +66,8 @@ void test_start_and_stop()
 {
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
+	auto a=std::make_shared<proc_containerObj>("a");
 
-	a->name="a";
 	pcs.insert(a);
 	proc_containers_install(pcs);
 
@@ -140,9 +136,8 @@ void test_happy_start_stop_common(const std::string &name)
 {
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
+	auto a=std::make_shared<proc_containerObj>(name);
 
-	a->name=name;
 	a->starting_command="start";
 	a->starting_timeout=0;
 	a->stopping_command="stop";
@@ -282,9 +277,8 @@ void test_start_failed_fork()
 
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
+	auto a=std::make_shared<proc_containerObj>("failed_fork");
 
-	a->name="failed_fork";
 	a->starting_command="start";
 
 	pcs.insert(a);
@@ -312,9 +306,8 @@ void test_start_failed()
 {
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
+	auto a=std::make_shared<proc_containerObj>("start_failed");
 
-	a->name="start_failed";
 	a->starting_command="start";
 
 	pcs.insert(a);
@@ -352,9 +345,8 @@ void test_start_timeout()
 {
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
+	auto a=std::make_shared<proc_containerObj>("start_timeout");
 
-	a->name="start_timeout";
 	a->starting_command="start";
 
 	pcs.insert(a);
@@ -465,23 +457,20 @@ proc_container_set test_requires_common(std::string prefix)
 {
 	proc_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>();
-	auto b=std::make_shared<proc_containerObj>();
-	auto c=std::make_shared<proc_containerObj>();
+	auto a=std::make_shared<proc_containerObj>(prefix + "a");
+	auto b=std::make_shared<proc_containerObj>(prefix + "b");
+	auto c=std::make_shared<proc_containerObj>(prefix + "c");
 
-	a->name=prefix + "a";
 	a->dep_requires.insert(prefix + "b");
 	a->starting_command="start_a";
 	a->stopping_command="stop_a";
 	pcs.insert(a);
 
-	b->name=prefix + "b";
 	b->dep_requires.insert(prefix + "c");
 	b->starting_command="start_b";
 	a->stopping_command="stop_b";
 	pcs.insert(b);
 
-	c->name=prefix + "c";
 	c->starting_command="start_c";
 	a->stopping_command="stop_c";
 	pcs.insert(c);
@@ -643,9 +632,8 @@ void test_requires2()
 {
 	auto pcs=test_requires_common("requires2");
 
-	auto d=std::make_shared<proc_containerObj>();
+	auto d=std::make_shared<proc_containerObj>("requires2d");
 
-	d->name="requires2d";
 	d->dep_requires.insert("requires2a");
 	d->dep_requires.insert("requires2e");
 	d->starting_command="start_d";
@@ -717,17 +705,11 @@ void test_requires2()
 
 void test_requires_common2(std::string name)
 {
-	auto a=std::make_shared<proc_containerObj>();
-	auto b=std::make_shared<proc_containerObj>();
-	auto c=std::make_shared<proc_containerObj>();
-	auto d=std::make_shared<proc_containerObj>();
-	auto e=std::make_shared<proc_containerObj>();
-
-	a->name=name + "a";
-	b->name=name + "b";
-	c->name=name + "c";
-	d->name=name + "d";
-	e->name=name + "e";
+	auto a=std::make_shared<proc_containerObj>(name + "a");
+	auto b=std::make_shared<proc_containerObj>(name + "b");
+	auto c=std::make_shared<proc_containerObj>(name + "c");
+	auto d=std::make_shared<proc_containerObj>(name + "d");
+	auto e=std::make_shared<proc_containerObj>(name + "e");
 
 	e->dep_required_by.insert(name + "d");
 	e->dep_required_by.insert(name + "c");
@@ -949,39 +931,6 @@ void test_requires5()
 			"requires5e: started (dependency)",
 		},"unexpected state after starting all containers");
 
-	proc_container_stopped("requires5a");
-	if (logged_state_changes != std::vector<std::string>{
-			"requires5a: stopped",
-			"requires5d: removing",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 5a (2)";
-	}
-	logged_state_changes.clear();
-	proc_container_stopped("requires5d");
-	if (logged_state_changes != std::vector<std::string>{
-			"requires5d: stopped",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 5a (3)";
-	}
-
-	err=proc_container_stop("requires5b");
-	if (!err.empty())
-		throw "Unexpected error stopping requires5b";
-
-	proc_container_stopped("requires5b");
-
-	if (logged_state_changes != std::vector<std::string>{
-			"requires5b: stop pending",
-			"requires5b: removing",
-			"requires5b: stopped",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 5b";
-	}
-
-	logged_state_changes.clear();
 	err=proc_container_stop("requires5a");
 	if (!err.empty())
 		throw "Unexpected error stopping requires5a";
@@ -999,6 +948,39 @@ void test_requires5()
 	}
 
 	logged_state_changes.clear();
+	proc_container_stopped("requires5a");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5a: stopped",
+			"requires5d: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5a (2)";
+	}
+	logged_state_changes.clear();
+
+	proc_container_stopped("requires5d");
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5d: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5a (3)";
+	}
+
+	logged_state_changes.clear();
+	err=proc_container_stop("requires5b");
+	if (!err.empty())
+		throw "Unexpected error stopping requires5b";
+
+	proc_container_stopped("requires5b");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"requires5b: stop pending",
+			"requires5b: removing",
+			"requires5b: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stopping 5b";
+	}
 
 	verify_container_state(
 		{
