@@ -207,6 +207,25 @@ public:
 
 		//! All process containers that require this container.
 		all_dependencies all_required_by;
+
+		//! All process containers that start before this one
+		all_dependencies all_starting_first;
+
+		//! All process containers that stop before this one
+		all_dependencies all_stopping_first;
+
+		//! Reverse dependencies for all_starting_first
+
+		//! This is used during dependency resolution, and then gets
+		//! discarded, it is not used ever again.
+		all_dependencies all_starting_first_by;
+
+		//! Reverse dependencies for all_stopping_first
+
+		//! This is used during dependency resolution, and then gets
+		//! discarded, it is not used ever again.
+		all_dependencies all_stopping_first_by;
+
 	};
 
 	//! All dependency information for all process containers
@@ -254,8 +273,8 @@ public:
 		if (b->type == proc_container_type::runlevel &&
 		    a->type != proc_container_type::runlevel)
 		{
-			log_message(_("Non run-level unit cannot require a "
-				      "run level unit: ")
+			log_message(_("Non runlevel unit cannot require a "
+				      "runlevel unit: ")
 				    + a->name + _(" requires ") + b->name);
 			return;
 		}
@@ -327,6 +346,30 @@ private:
 		);
 	}
 
+	//! Retrieve all_starting_first dependencies
+
+	void all_starting_first_dependencies(
+		const proc_container &c,
+		const std::function<void (const current_container &)> &f)
+	{
+		all_required_or_required_by_dependencies(
+			c, f,
+			&dependency_info::all_starting_first
+		);
+	}
+
+	//! Retrieve all_stopping_first dependencies
+
+	void all_stopping_first_dependencies(
+		const proc_container &c,
+		const std::function<void (const current_container &)> &f)
+	{
+		all_required_or_required_by_dependencies(
+			c, f,
+			&dependency_info::all_stopping_first
+		);
+	}
+
 	//! Retrieve required or required by dependencies helper.
 
 	void all_required_or_required_by_dependencies(
@@ -384,8 +427,6 @@ private:
 		}
 	};
 
-	struct all_starting_or_stopping_containers;
-
 	void find_start_or_stop_to_do();
 
 	enum class blocking_dependency {
@@ -395,7 +436,7 @@ private:
 	};
 
 	bool do_dependencies(
-		current_container_lookup_t &containers,
+		const current_container_lookup_t &containers,
 		const std::function<blocking_dependency(
 				     const proc_container_run_info
 				     &)> &isqualified,
@@ -404,8 +445,7 @@ private:
 		> &do_something
 	);
 
-	bool do_start(const current_container &,
-		      proc_container_set &);
+	bool do_start(const current_container_lookup_t &);
 	void do_start_runner(const current_container &);
 
 	void initiate_stopping(
@@ -416,9 +456,8 @@ private:
 	struct stop_or_terminate_helper;
 
 	void do_stop_or_terminate(const current_container &);
-	bool do_stop(const current_container &,
-		     std::unordered_set<proc_container, proc_container_hash,
-		     proc_container_equal> &);
+	bool do_stop(const current_container_lookup_t &);
+
 	void do_stop_runner(const current_container &);
 	void do_remove(const current_container &);
 	void starting_command_finished(const proc_container &container,
@@ -538,37 +577,134 @@ void current_containers_info::install(const proc_container_set &new_containers)
 		//
 		// - At this point we declare: "requiring_ptr" requires
 		//   the "requirement_ptr.
+		//
+		// We then make additional passes:
+		//
+		// - The dep_requires_by and dep_required_by are used to
+		//   generate all_starting_first and all_stopping_first
+		//   dependency lists.
 
 		const proc_container *this_proc_container=&c;
 		const proc_container *other_proc_container;
 
 		for (const auto &[requiring_ptr, requirement_ptr,
+				  disallow_for_runlevel,
+				  skip_for_runlevel,
 				  forward_dependency, backward_dependency,
 				  dependency_list]
 			     : std::array< std::tuple<const proc_container **,
 			     const proc_container **,
+			     bool,
+			     bool,
 			     all_dependencies dependency_info::*,
 			     all_dependencies dependency_info::*,
 			     const std::unordered_set<std::string>
-			     proc_containerObj::*>, 2>{{
+			     proc_containerObj::*>, 10>{{
 				     { &this_proc_container,
-						     &other_proc_container,
-						     &dependency_info
-						     ::all_requires,
-						     &dependency_info
-						     ::all_required_by,
-						     &proc_containerObj
-						     ::dep_requires},
+				       &other_proc_container,
+				       true,
+				       false,
+				       &dependency_info::all_requires,
+				       &dependency_info::all_required_by,
+				       &proc_containerObj::dep_requires},
 				     { &other_proc_container,
-						     &this_proc_container,
-						     &dependency_info
-						     ::all_requires,
-						     &dependency_info
-						     ::all_required_by,
-						     &proc_containerObj
-						     ::dep_required_by},
+				       &this_proc_container,
+				       false,
+				       false,
+				       &dependency_info::all_requires,
+				       &dependency_info::all_required_by,
+				       &proc_containerObj::dep_required_by},
+
+				     // Automatically-generated starting_first
+				     // rules based on dep_requires and
+				     // dep_requires_by.
+				     //
+				     // requires and requires_by are basically
+				     // copied into all_starting_first(_by)?
+
+				     { &this_proc_container,
+				       &other_proc_container,
+				       false,
+				       true,
+				       &dependency_info::all_starting_first,
+				       &dependency_info::all_starting_first_by,
+				       &proc_containerObj::dep_requires},
+
+				     { &other_proc_container,
+				       &this_proc_container,
+				       false,
+				       true,
+				       &dependency_info::all_starting_first,
+				       &dependency_info::all_starting_first_by,
+				       &proc_containerObj::dep_required_by},
+
+				     // Automatically-generated stopping_first
+				     // rules based on dep_requires and
+				     // dep_requires_by.
+				     //
+				     // This is the same as all_starting_first
+				     // except reversing the order of this and
+				     // the other containers. They get
+				     // stopped in reverse order.
+
+				     { &other_proc_container,
+				       &this_proc_container,
+				       false,
+				       true,
+				       &dependency_info::all_stopping_first,
+				       &dependency_info::all_stopping_first_by,
+				       &proc_containerObj::dep_requires},
+
+				     { &this_proc_container,
+				       &other_proc_container,
+				       false,
+				       true,
+				       &dependency_info::all_stopping_first,
+				       &dependency_info::all_stopping_first_by,
+				       &proc_containerObj::dep_required_by},
+
+
+				     { &this_proc_container,
+				       &other_proc_container,
+				       true,
+				       true,
+				       &dependency_info::all_starting_first,
+				       &dependency_info::all_starting_first_by,
+				       &proc_containerObj::starting_after},
+
+				     { &other_proc_container,
+				       &this_proc_container,
+				       true,
+				       true,
+				       &dependency_info::all_starting_first,
+				       &dependency_info::all_starting_first_by,
+				       &proc_containerObj::starting_before},
+
+				     { &this_proc_container,
+				       &other_proc_container,
+				       true,
+				       true,
+				       &dependency_info::all_stopping_first,
+				       &dependency_info::all_stopping_first_by,
+				       &proc_containerObj::stopping_after},
+
+				     { &other_proc_container,
+				       &this_proc_container,
+				       true,
+				       true,
+				       &dependency_info::all_stopping_first,
+				       &dependency_info::all_stopping_first_by,
+				       &proc_containerObj::stopping_before},
+
 			     }})
 		{
+			// Calculate only requires and required-by for runlevel
+			// entries.
+
+			if (skip_for_runlevel &&
+			    c->type == proc_container_type::runlevel)
+				continue;
+
 			for (const auto &dep:(*c).*(dependency_list))
 			{
 				// Look up the dependency container. If it
@@ -593,6 +729,26 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				}
 
 				other_proc_container=&iter->first;
+
+				// Do not allow this dependency to specify
+				// a runlevel, only "required_by" is allowed
+				// to do this.
+
+				if (disallow_for_runlevel &&
+				    iter->first->type ==
+				    proc_container_type::runlevel)
+				{
+					log_message(_("Disallowed dependency "
+						      "on a runlevel: ")
+						    + c->name
+						    + " -> "
+						    + iter->first->name);
+					continue;
+				}
+				if (skip_for_runlevel &&
+				    iter->first->type ==
+				    proc_container_type::runlevel)
+					continue;
 
 				auto &requiring= **requiring_ptr;
 				auto &requirement= **requirement_ptr;
@@ -1184,32 +1340,24 @@ void current_containers_info::find_start_or_stop_to_do()
 
 	struct process_what_to_do {
 
-		current_containers_info		&me;
-		proc_container_set		&processed_containers;
-		current_containers::iterator	&iter;
-		bool				&did_something;
-		bool                            &doing_something;
+		current_container_lookup_t starting, stopping;
 
-		void operator()(state_stopped &)
+		void process(const current_container &cc, state_stopped &)
 		{
 		}
 
-		void operator()(state_started &)
+		void process(const current_container &cc, state_started &)
 		{
 		}
 
-		void operator()(state_starting &)
+		void process(const current_container &cc, state_starting &)
 		{
-			doing_something=true;
-			if (me.do_start(iter, processed_containers))
-				did_something=true;
+			starting.emplace(cc->first, cc);
 		}
 
-		void operator()(state_stopping &)
+		void process(const current_container &cc, state_stopping &)
 		{
-			doing_something=true;
-			if (me.do_stop(iter, processed_containers))
-				did_something=false;
+			stopping.emplace(cc->first, cc);
 		}
 	};
 
@@ -1290,32 +1438,42 @@ void current_containers_info::find_start_or_stop_to_do()
 	{
 		did_something=false;
 
-		bool doing_something=false;
-
-		// Keep track of every visited process container, so we don't
-		// redo a bunch of work.
-
-		proc_container_set processed_containers;
+		process_what_to_do do_it;
 
 		for (auto b=containers.begin(), e=containers.end(); b != e; ++b)
 		{
 			auto &[pc, run_info]= *b;
 
-			if (processed_containers.find(pc) !=
-			    processed_containers.end())
-				continue; // Already did this one.
-
-			process_what_to_do do_it{*this, processed_containers,
-				b, did_something, doing_something};
-
-			std::visit(do_it, run_info.state);
+			std::visit([&]
+				   (auto &state)
+			{
+				do_it.process(b, state);
+			}, run_info.state);
 		}
 
-		// If we didn't start or stop anything, the last thing to
-		// check would be whether we're switching run levels.
+		if (!do_it.starting.empty())
+		{
+			if (do_start(do_it.starting))
+			{
+				did_something=true;
+				continue;
+			}
+		}
 
-		if (doing_something)
-			continue; // Don't bother
+		if (!do_it.stopping.empty())
+		{
+			if (do_stop(do_it.stopping))
+			{
+				did_something=true;
+				continue;
+			}
+		}
+
+		if (!do_it.starting.empty() || !do_it.stopping.empty())
+			continue;
+
+		// If we are not starting or stopping anything, the last
+		// thing to check would be whether we're switching run levels.
 
 		if (!new_runlevel)
 			continue; // Not switching run levels.
@@ -1383,93 +1541,6 @@ void current_containers_info::find_start_or_stop_to_do()
 	}
 }
 
-//! Find all related starting or stopping containers
-
-//! Their dependencies will be evaluated together, in order to decide
-//! the starting or stopping order.
-
-struct current_containers_info::all_starting_or_stopping_containers {
-
-	current_container_lookup_t containers, new_containers;
-
-	//! Containers that were processed while starting/stopping them.
-
-	//! We insert containers into this set
-
-	proc_container_set &processed_containers;
-
-	template<typename state>
-	all_starting_or_stopping_containers(
-		current_containers_info &me,
-		const current_container &cc,
-		proc_container_set &processed_containers,
-		std::type_identity<state>
-	) : all_starting_or_stopping_containers{
-			me, cc,
-			processed_containers,
-			all_dependencies_in_state<state>{
-				[&, this](const current_container &iter,
-					  state &info)
-				{
-					this->created(iter);
-				}}
-		}
-	{
-	}
-
-	void created(const current_container &iter)
-	{
-		if (containers.find(iter->first) != containers.end())
-			return;
-
-		new_containers.emplace(iter->first, iter);
-	}
-
-	template<typename selector>
-	all_starting_or_stopping_containers(
-		current_containers_info &me,
-		const current_container &cc,
-		proc_container_set &processed_containers,
-
-		// Cannot be a forwarding reference, because forwarding it
-		// to all_* results in a move!
-		const selector &callback
-	) : processed_containers{processed_containers}
-	{
-		// The first step
-		created(cc);
-
-		// We need to make repeated passes, collecting all required
-		// and required-by containers.
-
-		while (!new_containers.empty())
-		{
-			containers.merge(new_containers);
-
-			for (const auto &cc:containers)
-			{
-				me.all_required_dependencies(
-					cc.first,
-					callback
-				);
-
-				me.all_required_by_dependencies(
-					cc.first,
-					callback
-				);
-
-			}
-		}
-
-		// Take care of this book-keeping, first.
-
-		for (const auto &[pc, iter] : containers)
-		{
-			processed_containers.insert(pc);
-		}
-	}
-};
-
 //! Attempt to start a container
 
 //! If there's a container in a starting state that's now eligible to be
@@ -1486,17 +1557,11 @@ struct current_containers_info::all_starting_or_stopping_containers {
 //! work again.
 
 bool current_containers_info::do_start(
-	const current_container &cc,
-	proc_container_set &processed_containers
+	const current_container_lookup_t &containers
 )
 {
-	all_starting_or_stopping_containers starting{
-		*this, cc, processed_containers,
-		std::type_identity<state_starting>{}
-	};
-
 	return do_dependencies(
-		starting.containers,
+		containers,
 		[]
 		(const proc_container_run_info &run_info)
 		{
@@ -1533,7 +1598,7 @@ bool current_containers_info::do_start(
 
 			bool notready=false;
 
-			all_required_dependencies(
+			all_starting_first_dependencies(
 				pc,
 				all_dependencies_in_state<state_starting>{
 					[&](const current_container &iter,
@@ -1579,7 +1644,7 @@ bool current_containers_info::do_start(
 //! container.
 
 bool current_containers_info::do_dependencies(
-	current_container_lookup_t &containers,
+	const current_container_lookup_t &containers,
 	const std::function<blocking_dependency(const proc_container_run_info
 						 &)> &isqualified,
 	const std::function<bool (const proc_container &)> &notready,
@@ -1892,17 +1957,11 @@ void current_containers_info::do_stop_or_terminate(const current_container &cc)
 
 
 bool current_containers_info::do_stop(
-	const current_container &cc,
-	proc_container_set &processed_containers
+	const current_container_lookup_t &containers
 )
 {
-	all_starting_or_stopping_containers starting{
-		*this, cc, processed_containers,
-		std::type_identity<state_stopping>{}
-	};
-
 	return do_dependencies(
-		starting.containers,
+		containers,
 		[]
 		(const proc_container_run_info &run_info)
 		{
@@ -1940,7 +1999,7 @@ bool current_containers_info::do_stop(
 
 			bool notready=false;
 
-			all_required_by_dependencies(
+			all_stopping_first_dependencies(
 				pc,
 				all_dependencies_in_state<state_stopping>{
 					[&](const current_container &iter,
@@ -2131,7 +2190,8 @@ void current_containers_info::stopped(const std::string &s)
 {
 	auto cc=containers.find(s);
 
-	if (cc == containers.end())
+	if (cc == containers.end() ||
+	    cc->first->type != proc_container_type::loaded)
 		return;
 
 	auto &[pc, run_info] = *cc;

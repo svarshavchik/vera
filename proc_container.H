@@ -290,6 +290,12 @@ public:
 	//! The container's starting command
 	std::string starting_command;
 
+	//! These process containers start before this one.
+	std::unordered_set<std::string> starting_before;
+
+	//! These process containers start after this one.
+	std::unordered_set<std::string> starting_after;
+
 	//! The timeout for the container's starting command.
 
 	//! A timeout of 0 is infinite.
@@ -297,6 +303,12 @@ public:
 
 	//! The container's stopping command
 	std::string stopping_command;
+
+	//! These process containers stop before this one.
+	std::unordered_set<std::string> stopping_before;
+
+	//! These process containers stop after this one.
+	std::unordered_set<std::string> stopping_after;
 
 	//! The timeout for the container's stopping command.
 

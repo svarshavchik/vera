@@ -1216,6 +1216,194 @@ void test_runlevels()
 		throw "Unexpected state changes for runlevel2 (2)";
 }
 
+void test_before_after1()
+{
+	auto a=std::make_shared<proc_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_containerObj>("runlevel2");
+	auto c=std::make_shared<proc_containerObj>("testbefore_after_1");
+	auto d=std::make_shared<proc_containerObj>("testbefore_after_2");
+	auto e=std::make_shared<proc_containerObj>("testbefore_after_3");
+
+	a->type=proc_container_type::runlevel;
+	b->type=proc_container_type::runlevel;
+
+	c->starting_after.insert("testbefore_after_2");
+	e->starting_before.insert("testbefore_after_2");
+
+	c->stopping_before.insert("testbefore_after_2");
+	e->stopping_after.insert("testbefore_after_2");
+
+	c->dep_required_by.insert("runlevel1");
+	d->dep_required_by.insert("runlevel1");
+	e->dep_required_by.insert("runlevel1");
+
+	proc_containers_install({
+			a, b, c, d, e
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes.size() > 3)
+		std::sort(&logged_state_changes[1],
+			  &logged_state_changes[4]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"testbefore_after_1: start pending (dependency)",
+			"testbefore_after_2: start pending (dependency)",
+			"testbefore_after_3: start pending (dependency)",
+			"testbefore_after_3: started (dependency)",
+			"testbefore_after_2: started (dependency)",
+			"testbefore_after_1: started (dependency)",
+		})
+	{
+		throw "Unexpected state change after starting runlevel1";
+	}
+
+	logged_state_changes.clear();
+	if (!proc_container_runlevel("runlevel2").empty())
+		throw "Unexpected error starting runlevel2";
+
+	if (logged_state_changes.size() > 3)
+		std::sort(&logged_state_changes[1],
+			  &logged_state_changes[4]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Stopping run level: runlevel1",
+			"testbefore_after_1: stop pending",
+			"testbefore_after_2: stop pending",
+			"testbefore_after_3: stop pending",
+			"testbefore_after_1: removing"
+		})
+	{
+		throw "Unexpected state change after stopping runlevel1";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("testbefore_after_1");
+	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_1: stopped",
+			"testbefore_after_2: removing"
+		})
+	{
+		throw "Unexpected state change after first container stopped";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("testbefore_after_2");
+	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_2: stopped",
+			"testbefore_after_3: removing"
+		})
+	{
+		throw "Unexpected state change after first container stopped";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("testbefore_after_3");
+	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_3: stopped",
+			"Starting run level: runlevel2"
+		})
+	{
+		throw "Unexpected state change after first container stopped";
+	}
+}
+
+void test_before_after2()
+{
+	auto a=std::make_shared<proc_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_containerObj>("runlevel2");
+	auto c=std::make_shared<proc_containerObj>("testbefore_after_1");
+	auto d=std::make_shared<proc_containerObj>("testbefore_after_2");
+	auto e=std::make_shared<proc_containerObj>("testbefore_after_3");
+
+	a->type=proc_container_type::runlevel;
+	b->type=proc_container_type::runlevel;
+
+	c->starting_before.insert("testbefore_after_2");
+	e->starting_after.insert("testbefore_after_2");
+
+	c->stopping_after.insert("testbefore_after_2");
+	e->stopping_before.insert("testbefore_after_2");
+
+	c->dep_required_by.insert("runlevel1");
+	d->dep_required_by.insert("runlevel1");
+	e->dep_required_by.insert("runlevel1");
+
+	proc_containers_install({
+			a, b, c, d, e
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes.size() > 3)
+		std::sort(&logged_state_changes[1],
+			  &logged_state_changes[4]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"testbefore_after_1: start pending (dependency)",
+			"testbefore_after_2: start pending (dependency)",
+			"testbefore_after_3: start pending (dependency)",
+			"testbefore_after_1: started (dependency)",
+			"testbefore_after_2: started (dependency)",
+			"testbefore_after_3: started (dependency)",
+		})
+	{
+		throw "Unexpected state change after starting runlevel1";
+	}
+
+	logged_state_changes.clear();
+	if (!proc_container_runlevel("runlevel2").empty())
+		throw "Unexpected error starting runlevel2";
+
+	if (logged_state_changes.size() > 3)
+		std::sort(&logged_state_changes[1],
+			  &logged_state_changes[4]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Stopping run level: runlevel1",
+			"testbefore_after_1: stop pending",
+			"testbefore_after_2: stop pending",
+			"testbefore_after_3: stop pending",
+			"testbefore_after_3: removing"
+		})
+	{
+		throw "Unexpected state change after stopping runlevel1";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("testbefore_after_3");
+	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_3: stopped",
+			"testbefore_after_2: removing"
+		})
+	{
+		throw "Unexpected state change after first container stopped";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("testbefore_after_2");
+	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_2: stopped",
+			"testbefore_after_1: removing"
+		})
+	{
+		throw "Unexpected state change after first container stopped";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("testbefore_after_1");
+	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_1: stopped",
+			"Starting run level: runlevel2"
+		})
+	{
+		throw "Unexpected state change after first container stopped";
+	}
+}
+
 int main()
 {
 	alarm(60);
@@ -1289,6 +1477,14 @@ int main()
 		test_reset();
 		test="test_runlevels";
 		test_runlevels();
+
+		test_reset();
+		test="test_before_after1";
+		test_before_after1();
+
+		test_reset();
+		test="test_before_after2";
+		test_before_after2();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";
