@@ -1046,6 +1046,120 @@ void test_install()
 		}, "unexpected state after replacing containers (2)");
 }
 
+void test_circular()
+{
+	auto a=std::make_shared<proc_containerObj>("circulara");
+	auto b=std::make_shared<proc_containerObj>("circularb");
+	auto c=std::make_shared<proc_containerObj>("circularc");
+
+	a->dep_requires.insert("circularb");
+	a->dep_required_by.insert("circularc");
+	b->dep_requires.insert("circularc");
+
+	proc_containers_install({
+			a, b, c
+		});
+
+	auto err=proc_container_start("circularb");
+
+	if (!err.empty())
+		throw "proc_container_start failed";
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
+	for (auto &s:logged_state_changes)
+	{
+		size_t n=s.find(" (dependency)");
+
+		if (n != s.npos)
+		{
+			s=s.substr(0, n);
+		}
+	}
+
+	if (logged_state_changes != std::vector<std::string>{
+			"circulara: detected a circular dependency requirement",
+			"circulara: start pending",
+			"circulara: started",
+			"circularb: detected a circular dependency requirement",
+			"circularb: start pending",
+			"circularb: started",
+			"circularc: detected a circular dependency requirement",
+			"circularc: start pending",
+			"circularc: started",
+		})
+	{
+		throw "unexpected state changes after starting circular deps";
+	}
+
+	std::unordered_map<std::string, bool> states;
+
+	for (const auto &[pc, s] : get_proc_containers())
+		states.emplace(pc->name, std::holds_alternative<state_started>(
+				  s));
+
+	if (states != std::unordered_map<std::string, bool>{
+			{"circulara", true},
+			{"circularb", true},
+			{"circularc", true},
+		})
+		throw "unexpected controller state after starting";
+
+	logged_state_changes.clear();
+
+	err=proc_container_stop("circularb");
+
+	if (!err.empty())
+		throw "proc_container_start failed";
+
+	for (int i=0; i<3; ++i)
+	{
+		for (const auto &[pc, s] : get_proc_containers())
+		{
+			if (std::holds_alternative<stop_removing>(
+				    std::get<state_stopping>(s).phase
+			    ))
+			{
+				proc_container_stopped(pc->name);
+				break;
+			}
+		}
+	}
+
+	std::sort(logged_state_changes.begin(),
+		  logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"circulara: detected a circular dependency requirement",
+			"circulara: removing",
+			"circulara: stop pending",
+			"circulara: stopped",
+			"circularb: detected a circular dependency requirement",
+			"circularb: removing",
+			"circularb: stop pending",
+			"circularb: stopped",
+			"circularc: detected a circular dependency requirement",
+			"circularc: removing",
+			"circularc: stop pending",
+			"circularc: stopped",
+		})
+	{
+		throw "unexpected state changes after stopping circular deps";
+	}
+
+	states.clear();
+	for (const auto &[pc, s] : get_proc_containers())
+		states.emplace(pc->name, std::holds_alternative<state_stopped>(
+				  s));
+
+	if (states != std::unordered_map<std::string, bool>{
+			{"circulara", true},
+			{"circularb", true},
+			{"circularc", true},
+		})
+		throw "unexpected controller state after starting";
+}
+
 int main()
 {
 	alarm(60);
@@ -1111,6 +1225,10 @@ int main()
 		test_reset();
 		test="test_install";
 		test_install();
+
+		test_reset();
+		test="test_circular";
+		test_circular();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";
