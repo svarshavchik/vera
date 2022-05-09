@@ -8,6 +8,8 @@ noinst_PROGRAMS=testcontroller testdepcomputations
 noinst_LIBRARIES=libvera.a
 
 libvera_a_SOURCES=						\
+	current_containers_infofwd.H				\
+	current_containers_info.H				\
 	log.C 							\
 	log.H							\
 	log_current_time.C					\
@@ -18,6 +20,8 @@ libvera_a_SOURCES=						\
 	proc_container_runner.C					\
 	proc_container_runner.H					\
 	proc_container_runnerfwd.H				\
+	proc_container_run_info.H				\
+	proc_container_state.H					\
 	proc_container_timer.C					\
 	proc_container_timer.H					\
 	proc_container_timerfwd.H				\

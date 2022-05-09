@@ -22,7 +22,7 @@ struct sort_test_dependencies {
 	}
 };
 
-typedef current_containers_info::dependency_info dependency_info;
+typedef current_containers_infoObj::dependency_info dependency_info;
 
 void test_deps()
 {
@@ -51,7 +51,7 @@ void test_deps()
 	{
 		std::cout << "test 1:";
 
-		current_containers_info
+		current_containers_infoObj
 			::all_dependency_info_t all_dependency_info;
 
 		for (auto &[a, b] : dependencies)
@@ -59,7 +59,7 @@ void test_deps()
 			std::cout << " " << a->name << "->"
 				  << b->name;
 
-			current_containers_info::install_requires_dependency(
+			current_containers_infoObj::install_requires_dependency(
 				all_dependency_info,
 				&dependency_info::all_requires,
 				&dependency_info::all_required_by,
@@ -156,7 +156,7 @@ void test_deps2()
 	{
 		std::cout << "test 2:";
 
-		current_containers_info
+		current_containers_infoObj
 			::all_dependency_info_t all_dependency_info;
 
 		for (auto &[a, b] : dependencies)
@@ -164,7 +164,7 @@ void test_deps2()
 			std::cout << " " << a->name << "->"
 				  << b->name;
 
-			current_containers_info::install_requires_dependency(
+			current_containers_infoObj::install_requires_dependency(
 				all_dependency_info,
 				&dependency_info::all_requires,
 				&dependency_info::all_required_by,

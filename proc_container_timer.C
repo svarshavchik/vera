@@ -3,16 +3,19 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_container.H"
 #include "proc_container_timer.H"
+#include "proc_container.H"
+#include "current_containers_info.H"
 #include "log.H"
 #include <iostream>
 #include <map>
 
 proc_container_timerObj::proc_container_timerObj(
+	const current_containers_info &all_containers,
 	const proc_container &container,
-	const std::function<void (const proc_container &)> &done
-) : container{container}, done{done}
+	const std::function<void (const current_containers_callback_info &
+						 )> &done
+) : all_containers(all_containers), container{container}, done{done}
 {
 }
 
@@ -20,12 +23,16 @@ static std::multimap<time_t, std::weak_ptr<const proc_container_timerObj>
 		     > current_timers;
 
 proc_container_timer create_timer(
+	const current_containers_info &all_containers,
 	const proc_container &container,
 	time_t timeout,
-	const std::function<void (const proc_container &)> &done
+	const std::function<void (const current_containers_callback_info &
+				  )> &done
 )
 {
-	auto timer=std::make_shared<proc_container_timerObj>(container, done);
+	auto timer=std::make_shared<proc_container_timerObj>(
+		all_containers, container, done
+	);
 
 	current_timers.emplace(timeout + log_current_time(), timer);
 
@@ -55,12 +62,20 @@ time_t run_timers()
 		if (!timer)
 			continue;
 
-		auto l=timer->container.lock();
+		auto me=timer->all_containers.lock();
+		auto pc=timer->container.lock();
 
-		if (!l)
+		if (!me || !pc)
 			continue;
 
-		timer->done(l);
+		current_containers_callback_info info{me};
+
+		info.cc=me->containers.find(pc);
+
+		if (info.cc == me->containers.end())
+			continue;
+
+		timer->done(info);
 	}
 
 	return 60 * 60;

@@ -3,6 +3,7 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
+#include "current_containers_info.H"
 #include "proc_container.H"
 #include "proc_container_runner.H"
 #include "proc_container_timer.H"
@@ -75,425 +76,81 @@ proc_containerObj::~proc_containerObj()
 
 //////////////////////////////////////////////////////////////////////////////
 
+void current_containers_infoObj::install_requires_dependency(
+
+	//! Where to record dependencies
+	all_dependency_info_t &all_dependency_info,
+
+	//! The forward dependency, the "required" dependency
+	all_dependencies dependency_info::*forward_dependency,
+
+	//! The backward dependency, the "required-by" dependency
+	all_dependencies dependency_info::*backward_dependency,
+	const proc_container &a,
+	const proc_container &b)
+{
+	auto &a_dep=all_dependency_info[a];
+	auto &b_dep=all_dependency_info[b];
+
+	if (b->type == proc_container_type::runlevel &&
+	    a->type != proc_container_type::runlevel)
+	{
+		log_message(_("Non runlevel unit cannot require a "
+			      "runlevel unit: ")
+			    + a->name + _(" requires ") + b->name);
+		return;
+	}
+
+	auto &a_dep_forward = a_dep.*forward_dependency;
+	auto &a_dep_backward= a_dep.*backward_dependency;
+
+	auto &b_dep_forward = b_dep.*forward_dependency;
+	auto &b_dep_backward = b_dep.*backward_dependency;
+
+	a_dep_forward.insert(b);
+	b_dep_backward.insert(a);
+
+	// 2)
+
+	a_dep_forward.insert(b_dep_forward.begin(),
+			     b_dep_forward.end());
+
+	// 3)
+	b_dep_backward.insert(a_dep_backward.begin(),
+			      a_dep_backward.end());
+
+	// 4)
+
+	for (const auto &by_a:a_dep_backward)
+	{
+		auto &what_requires_a=all_dependency_info[by_a];
+
+		(what_requires_a.*forward_dependency).insert(
+			a_dep_forward.begin(),
+			a_dep_forward.end()
+		);
+	}
+
+	// 5)
+
+	for (const auto &all_b:b_dep_forward)
+	{
+		auto &what_b_requires=all_dependency_info[all_b];
+
+		(what_b_requires.*backward_dependency).insert(
+			b_dep_backward.begin(),
+			b_dep_backward.end()
+		);
+	}
+}
+
 //! Information about a container's running state.
-
-struct proc_container_run_info {
-	//! The actual state
-	proc_container_state state;
-
-	//! This container has been completely removed
-
-	//! From the system configuration, that is. We need to wait until
-	//! all processes are stopped, that the actual container gets removed
-	//! and this object gets deleted.
-	bool autoremove=false;
-
-	//! Non-default non-copy constructor gets forwarded to state's.
-	template<typename T,
-		 typename=std::enable_if_t<!std::is_same_v<
-						   std::remove_cvref_t<T>,
-						   proc_container_run_info>>>
-	proc_container_run_info(T &&t) : state{std::forward<T>(t)} {}
-
-	//! Do something if the process container is in a specific state.
-
-	//! If so, invoke the passed-in callable object with the state as
-	//! a parameter.
-
-	template<typename T, typename Callable>
-	void run_if(Callable &&callable)
-	{
-		std::visit([&]
-			   (auto &current_state)
-		{
-			typedef std::remove_cvref_t<decltype(current_state)
-						    > current_state_t;
-
-			if constexpr(std::is_same_v<
-				     current_state_t,
-				     T>) {
-				callable(current_state);
-			}
-		}, state);
-	}
-
-	template<typename T, typename Callable>
-	void run_if(Callable &&callable) const
-	{
-		std::visit([&]
-			   (auto &current_state)
-		{
-			typedef std::remove_cvref_t<decltype(current_state)
-						    > current_state_t;
-
-			if constexpr(std::is_same_v<
-				     current_state_t,
-				     T>) {
-				callable(current_state);
-			}
-		}, state);
-	}
-
-	//! Do something if the process container is in a specific state.
-
-	//! If so, invoke the 1st callable object with the state as
-	//! a parameter.
-	//!
-	//! Invoke the 2nd callable if the container is in some other state.
-
-	template<typename T, typename Callable1, typename Callable2>
-	void run_if(Callable1 &&callable1, Callable2 && callable2)
-	{
-		std::visit([&]
-			   (auto &current_state)
-		{
-			typedef std::remove_cvref_t<decltype(current_state)
-						    > current_state_t;
-
-			if constexpr(std::is_same_v<
-				     current_state_t,
-				     T>) {
-				callable1(current_state);
-			}
-			else
-			{
-				callable2();
-			}
-		}, state);
-	}
-};
-
-//! Unordered map for \ref containers "current process containers".
-
-typedef std::unordered_map<proc_container,
-			   proc_container_run_info,
-			   proc_container_hash,
-			   proc_container_equal> current_containers;
-
-//! A current container: encompasses the container and its running state
-
-typedef current_containers::iterator current_container;
-
-//! The process containers singleton.
-
-//! A single static instance of this exists. Public methods document the API.
-//!
-//! Stuff that depends on the singleton are closure that capture [this].
-
-class current_containers_info {
-
-	current_containers containers;
-
-	proc_container current_runlevel;
-	proc_container new_runlevel;
-
-public:
-	//! All direct and indirect dependencies of a container.
-
-	typedef proc_container_set all_dependencies;
-
-	//! We lookup current_containers from proc_containers very often.
-
-	typedef std::unordered_map<proc_container, current_container,
-				   proc_container_hash, proc_container_equal
-				   > current_container_lookup_t;
-
-	//! Dependency information calculated by install()
-
-	struct dependency_info {
-
-		//! All process containers this process container requires.
-		all_dependencies all_requires;
-
-		//! All process containers that require this container.
-		all_dependencies all_required_by;
-
-		//! All process containers that start before this one
-		all_dependencies all_starting_first;
-
-		//! All process containers that stop before this one
-		all_dependencies all_stopping_first;
-
-		//! Reverse dependencies for all_starting_first
-
-		//! This is used during dependency resolution, and then gets
-		//! discarded, it is not used ever again.
-		all_dependencies all_starting_first_by;
-
-		//! Reverse dependencies for all_stopping_first
-
-		//! This is used during dependency resolution, and then gets
-		//! discarded, it is not used ever again.
-		all_dependencies all_stopping_first_by;
-
-	};
-
-	//! All dependency information for all process containers
-
-	typedef std::unordered_map<proc_container,
-				   dependency_info,
-				   proc_container_hash,
-				   proc_container_equal
-				   > all_dependency_info_t;
-
-	/*!
-	  "a" requires "b", what does this mean? It means:
-
-	  1) Assuming that both "a" and "b" enumerate everything that
-	  both "a" and "b" require and everything that requires "a" and "b",
-	  transitively, then:
-
-	  2) "a" now requires that everything "b" requires.
-
-	  3) "b" is now required by everything that's now required by "a".
-
-	  4) Everything that requires "a" now requires everything that "b"
-	     requires.
-
-	  5) Everything that "b" requires is now required by everything
-             that requires "a".
-	*/
-
-	static void install_requires_dependency(
-
-		//! Where to record dependencies
-		all_dependency_info_t &all_dependency_info,
-
-		//! The forward dependency, the "required" dependency
-		all_dependencies dependency_info::*forward_dependency,
-
-		//! The backward dependency, the "required-by" dependency
-		all_dependencies dependency_info::*backward_dependency,
-		const proc_container &a,
-		const proc_container &b)
-	{
-		auto &a_dep=all_dependency_info[a];
-		auto &b_dep=all_dependency_info[b];
-
-		if (b->type == proc_container_type::runlevel &&
-		    a->type != proc_container_type::runlevel)
-		{
-			log_message(_("Non runlevel unit cannot require a "
-				      "runlevel unit: ")
-				    + a->name + _(" requires ") + b->name);
-			return;
-		}
-
-		auto &a_dep_forward = a_dep.*forward_dependency;
-		auto &a_dep_backward= a_dep.*backward_dependency;
-
-		auto &b_dep_forward = b_dep.*forward_dependency;
-		auto &b_dep_backward = b_dep.*backward_dependency;
-
-		a_dep_forward.insert(b);
-		b_dep_backward.insert(a);
-
-		// 2)
-
-		a_dep_forward.insert(b_dep_forward.begin(),
-				     b_dep_forward.end());
-
-		// 3)
-		b_dep_backward.insert(a_dep_backward.begin(),
-						  a_dep_backward.end());
-
-		// 4)
-
-		for (const auto &by_a:a_dep_backward)
-		{
-			auto &what_requires_a=all_dependency_info[by_a];
-
-			(what_requires_a.*forward_dependency).insert(
-				a_dep_forward.begin(),
-				a_dep_forward.end()
-			);
-		}
-
-		// 5)
-
-		for (const auto &all_b:b_dep_forward)
-		{
-			auto &what_b_requires=all_dependency_info[all_b];
-
-			(what_b_requires.*backward_dependency).insert(
-				b_dep_backward.begin(),
-				b_dep_backward.end()
-			);
-		}
-	}
-private:
-	all_dependency_info_t all_dependency_info;
-
-	//! Retrieve all required dependencies of a process container
-	void all_required_dependencies(
-		const proc_container &c,
-		const std::function<void (const current_container &)> &f)
-	{
-		all_required_or_required_by_dependencies(
-			c, f,
-			&dependency_info::all_requires
-		);
-	}
-
-	//! Retrieve all required-by dependencies of a process container
-	void all_required_by_dependencies(
-		const proc_container &c,
-		const std::function<void (const current_container &)> &f)
-	{
-		all_required_or_required_by_dependencies(
-			c, f,
-			&dependency_info::all_required_by
-		);
-	}
-
-	//! Retrieve all_starting_first dependencies
-
-	void all_starting_first_dependencies(
-		const proc_container &c,
-		const std::function<void (const current_container &)> &f)
-	{
-		all_required_or_required_by_dependencies(
-			c, f,
-			&dependency_info::all_starting_first
-		);
-	}
-
-	//! Retrieve all_stopping_first dependencies
-
-	void all_stopping_first_dependencies(
-		const proc_container &c,
-		const std::function<void (const current_container &)> &f)
-	{
-		all_required_or_required_by_dependencies(
-			c, f,
-			&dependency_info::all_stopping_first
-		);
-	}
-
-	//! Retrieve required or required by dependencies helper.
-
-	void all_required_or_required_by_dependencies(
-		const proc_container &pc,
-		const std::function<void (const current_container &)> &f,
-		all_dependencies dependency_info::*which_dependencies)
-	{
-		auto dep_info=all_dependency_info.find(pc);
-
-		if (dep_info == all_dependency_info.end())
-			return;
-
-		for (const auto &requirement:
-			     dep_info->second.*which_dependencies)
-		{
-			auto iter=containers.find(requirement);
-
-			// Ignore synthesized, and other kinds of containers
-			// except the real, loaded, ones.
-			if (iter == containers.end() ||
-			    iter->first->type != proc_container_type::loaded)
-				continue;
-
-			f(iter);
-		}
-	}
-
-	//! All dependencies in specific state.
-
-	//! Passed as a parameter to all_required_dependencies or
-	//! all_required_by_dependencies.
-
-	template<typename state_type>
-	struct all_dependencies_in_state {
-		std::function<void (const current_container &iter,
-				    state_type &)> callback;
-
-		template<typename callable_object>
-		all_dependencies_in_state(callable_object &&object)
-			: callback{std::forward<callable_object>(object)}
-		{
-		}
-
-		void operator()(const current_container &iter)
-		{
-			auto &[pc, run_info] = *iter;
-
-			run_info.run_if<state_type>(
-				[&, this]
-				(auto &current_state)
-				{
-					callback(iter, current_state);
-				}
-			);
-		}
-	};
-
-	void find_start_or_stop_to_do();
-
-	enum class blocking_dependency {
-		na,
-		yes,
-		no
-	};
-
-	bool do_dependencies(
-		const current_container_lookup_t &containers,
-		const std::function<blocking_dependency(
-				     const proc_container_run_info
-				     &)> &isqualified,
-		const std::function<bool (const proc_container &)> &notready,
-		const std::function<void (const current_container &)
-		> &do_something
-	);
-
-	bool do_start(const current_container_lookup_t &);
-	void do_start_runner(const current_container &);
-
-	void initiate_stopping(
-		const current_container &,
-		const std::function<state_stopping &(proc_container_state &)> &
-	);
-
-	struct stop_or_terminate_helper;
-
-	void do_stop_or_terminate(const current_container &);
-	bool do_stop(const current_container_lookup_t &);
-
-	void do_stop_runner(const current_container &);
-	void do_remove(const current_container &);
-	void starting_command_finished(const proc_container &container,
-				       int status,
-				       bool for_dependency);
-	proc_container_timer create_sigkill_timer(
-		const proc_container &pc
-	);
-	void send_sigkill(const current_container &cc);
-
-public:
-	std::vector<std::tuple<proc_container, proc_container_state>> get();
-
-	void install(proc_new_container_set &new_containers);
-
-	std::string runlevel(const std::string &new_runlevel);
-
-	std::string start(const std::string &name);
-
-private:
-	struct start_eligibility;
-	struct stop_eligibility;
-public:
-	std::string stop(const std::string &name);
-
-private:
-	void stop_with_all_requirements(
-		const current_container &iter
-	);
-public:
-	void stopped(const std::string &s);
-};
 
 //! All current process containers.
 
-static current_containers_info containers_info;
+static current_containers_info containers_info{
+	std::make_shared<current_containers_infoObj>()
+};
 
 //! Unordered map for all current runners.
 
@@ -518,11 +175,11 @@ static void started(const current_container &, bool);
 std::vector<std::tuple<proc_container, proc_container_state>
 	    > get_proc_containers()
 {
-	return containers_info.get();
+	return containers_info->get();
 }
 
 std::vector<std::tuple<proc_container, proc_container_state>
-	    >  current_containers_info::get()
+	    >  current_containers_infoObj::get()
 {
 	std::vector<std::tuple<proc_container, proc_container_state>> snapshot;
 
@@ -549,10 +206,10 @@ void proc_containers_install(const proc_new_container_set &new_containers)
 
 void proc_containers_install(proc_new_container_set &&new_containers)
 {
-	containers_info.install(new_containers);
+	containers_info->install(new_containers);
 }
 
-void current_containers_info::install(
+void current_containers_infoObj::install(
 	proc_new_container_set &new_containers
 )
 {
@@ -873,10 +530,10 @@ void current_containers_info::install(
 
 std::string proc_container_runlevel(const std::string &new_runlevel)
 {
-	return containers_info.runlevel(new_runlevel);
+	return containers_info->runlevel(new_runlevel);
 }
 
-std::string current_containers_info::runlevel(const std::string &runlevel)
+std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 {
 	auto iter=containers.find(runlevel);
 
@@ -900,7 +557,7 @@ std::string current_containers_info::runlevel(const std::string &runlevel)
 
 std::string proc_container_start(const std::string &name)
 {
-	return containers_info.start(name);
+	return containers_info->start(name);
 }
 
 //! Determine eligibility of containers for starting them
@@ -917,7 +574,7 @@ std::string proc_container_start(const std::string &name)
 //! A stopping container's name gets added to not_stopped_containers. This
 //! will result in a failure.
 
-struct current_containers_info::start_eligibility {
+struct current_containers_infoObj::start_eligibility {
 
 	current_container next_visited_container;
 
@@ -953,7 +610,7 @@ struct current_containers_info::start_eligibility {
 	}
 };
 
-std::string current_containers_info::start(const std::string &name)
+std::string current_containers_infoObj::start(const std::string &name)
 {
 	auto iter=containers.find(name);
 
@@ -1042,7 +699,7 @@ std::string current_containers_info::start(const std::string &name)
 
 std::string proc_container_stop(const std::string &name)
 {
-	return containers_info.stop(name);
+	return containers_info->stop(name);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1064,7 +721,7 @@ std::string proc_container_stop(const std::string &name)
 //! A starting container's name gets added to not_started_containers. This
 //! will result in a failure.
 
-struct current_containers_info::stop_eligibility {
+struct current_containers_infoObj::stop_eligibility {
 
 	current_container next_visited_container;
 
@@ -1092,7 +749,7 @@ struct current_containers_info::stop_eligibility {
 };
 
 
-std::string current_containers_info::stop(const std::string &name)
+std::string current_containers_infoObj::stop(const std::string &name)
 {
 	auto iter=containers.find(name);
 
@@ -1119,7 +776,7 @@ std::string current_containers_info::stop(const std::string &name)
 //    will be stopped. If they were automatically started as a dependency,
 //    and nothing else requires them, they can also bs stopped.
 
-void current_containers_info::stop_with_all_requirements(
+void current_containers_infoObj::stop_with_all_requirements(
 	const current_container &iter
 )
 {
@@ -1157,7 +814,7 @@ void current_containers_info::stop_with_all_requirements(
 	// If so, then the start dependency can be stopped automatically.
 
 	struct dependency_not_needed_check {
-		current_containers_info &me;
+		current_containers_infoObj &me;
 		stop_eligibility &eligibility;
 
 		// Additional started dependencies that can be removed get
@@ -1362,7 +1019,7 @@ void runner_finished(pid_t pid, int wstatus)
 
 //////////////////////////////////////////////////////////////////////
 
-void current_containers_info::find_start_or_stop_to_do()
+void current_containers_infoObj::find_start_or_stop_to_do()
 {
 	bool did_something=true;
 
@@ -1399,7 +1056,7 @@ void current_containers_info::find_start_or_stop_to_do()
 
 		proc_container_set containers_to_stop;
 
-		stop_current_runlevel(current_containers_info &me,
+		stop_current_runlevel(current_containers_infoObj &me,
 				      const proc_container &current_runlevel,
 				      const proc_container &new_runlevel)
 		{
@@ -1588,7 +1245,7 @@ void current_containers_info::find_start_or_stop_to_do()
 //! processed_containers set that gets passed in, so we don't redo all this
 //! work again.
 
-bool current_containers_info::do_start(
+bool current_containers_infoObj::do_start(
 	const current_container_lookup_t &containers
 )
 {
@@ -1675,7 +1332,7 @@ bool current_containers_info::do_start(
 //! 4) After finding a ready container: "do_something". This actions the
 //! container.
 
-bool current_containers_info::do_dependencies(
+bool current_containers_infoObj::do_dependencies(
 	const current_container_lookup_t &containers,
 	const std::function<blocking_dependency(const proc_container_run_info
 						 &)> &isqualified,
@@ -1798,7 +1455,7 @@ bool current_containers_info::do_dependencies(
 	return did_something;
 }
 
-void current_containers_info::do_start_runner(
+void current_containers_infoObj::do_start_runner(
 	const current_container &cc
 )
 {
@@ -1877,15 +1534,16 @@ void current_containers_info::do_start_runner(
 		// There's a start command. Start it.
 
 		auto runner=create_runner(
+			shared_from_this(),
 			pc, pc->starting_command,
-			[this, dependency=starting.dependency]
-			(const proc_container &container,
-			 int status
-			)
+			[]
+			(const auto &info, int status)
 			{
-				starting_command_finished(container, status,
-							  dependency);
-				find_start_or_stop_to_do();
+				auto &[me, cc]=info;
+
+
+				me->starting_command_finished(cc, status);
+				me->find_start_or_stop_to_do();
 			}
 		);
 
@@ -1905,16 +1563,13 @@ void current_containers_info::do_start_runner(
 			// Set a timeout
 
 			starting.starting_runner_timeout=create_timer(
+				shared_from_this(),
 				pc,
 				pc->starting_timeout,
-				[this]
-				(const proc_container &c)
+				[]
+				(const auto &info)
 				{
-
-					auto cc=containers.find(c);
-
-					if (cc == containers.end())
-						return;
+					const auto &[me, cc]=info;
 
 					// Timeout expired
 
@@ -1923,9 +1578,9 @@ void current_containers_info::do_start_runner(
 						pc,
 						_("start process timed out")
 					);
-					stop_with_all_requirements(cc);
+					me->stop_with_all_requirements(cc);
 
-					find_start_or_stop_to_do();
+					me->find_start_or_stop_to_do();
 					// We might find something to do.
 				}
 			);
@@ -1943,15 +1598,22 @@ void current_containers_info::do_start_runner(
 //
 // Check its exit status.
 
-void current_containers_info::starting_command_finished(
-	const proc_container &container,
-	int status,
-	bool for_dependency)
+void current_containers_infoObj::starting_command_finished(
+	const current_container &cc,
+	int status)
 {
-	auto cc=containers.find(container);
+	bool for_dependency=true; // Unless told otherwise
 
-	if (cc == containers.end())
-		return;
+	std::visit(
+		[&]
+		(auto &current_state)
+		{
+			if constexpr(std::is_same_v<std::remove_cvref_t<
+				     decltype(current_state)>,
+				     state_starting>) {
+				for_dependency=current_state.dependency;
+			}
+		}, cc->second.state);
 
 	if (status == 0)
 	{
@@ -1969,7 +1631,7 @@ void current_containers_info::starting_command_finished(
 //! Calls the supplied closure to formally set the proc_container_state
 //! to stopping state, then log it.
 
-void current_containers_info::initiate_stopping(
+void current_containers_infoObj::initiate_stopping(
 	const current_container &cc,
 	const std::function<state_stopping &(proc_container_state &)
 	> &set_to_stop
@@ -1993,8 +1655,8 @@ void current_containers_info::initiate_stopping(
 // and the stopping process into the Thunderdome, so might as well call
 // do_remove() directly.
 
-struct current_containers_info::stop_or_terminate_helper {
-	current_containers_info &me;
+struct current_containers_infoObj::stop_or_terminate_helper {
+	current_containers_infoObj &me;
 	const current_container &cc;
 
 	void operator()(state_started &) const;
@@ -2005,7 +1667,7 @@ struct current_containers_info::stop_or_terminate_helper {
 	}
 };
 
-void current_containers_info::stop_or_terminate_helper::operator()(
+void current_containers_infoObj::stop_or_terminate_helper::operator()(
 	state_started &) const
 {
 	me.initiate_stopping(
@@ -2020,14 +1682,14 @@ void current_containers_info::stop_or_terminate_helper::operator()(
 		});
 }
 
-void current_containers_info::do_stop_or_terminate(const current_container &cc)
+void current_containers_infoObj::do_stop_or_terminate(const current_container &cc)
 {
 	std::visit( stop_or_terminate_helper{*this, cc},
 		    cc->second.state );
 }
 
 
-bool current_containers_info::do_stop(
+bool current_containers_infoObj::do_stop(
 	const current_container_lookup_t &containers
 )
 {
@@ -2090,7 +1752,7 @@ bool current_containers_info::do_stop(
 	);
 }
 
-void current_containers_info::do_stop_runner(const current_container &cc)
+void current_containers_infoObj::do_stop_runner(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -2106,26 +1768,23 @@ void current_containers_info::do_stop_runner(const current_container &cc)
 	// There's a stop command. Start it.
 
 	auto runner=create_runner(
+		shared_from_this(),
 		pc, pc->stopping_command,
-		[this]
-		(const proc_container &c,
-		 int status)
+		[]
+		(const auto &info, int status)
 		{
+			const auto &[me, cc] = info;
+
 			// Stop command finished. Whatever exit code it
 			// ended up produce it, it doesn't matter, but log
 			// it if it's an error.
-
-			auto cc=containers.find(c);
-
-			if (cc == containers.end())
-				return;
 
 			if (status != 0)
 			{
 				log_container_failed_process(cc->first, status);
 			}
-			do_remove(cc);
-			find_start_or_stop_to_do();
+			me->do_remove(cc);
+			me->find_start_or_stop_to_do();
 		}
 	);
 
@@ -2146,15 +1805,13 @@ void current_containers_info::do_stop_runner(const current_container &cc)
 				std::in_place_type_t<stop_running>{},
 				runner,
 				create_timer(
+					shared_from_this(),
 					pc,
 					pc->stopping_timeout,
-					[this]
-					(const proc_container &c)
+					[]
+					(const auto &info)
 					{
-						auto cc=containers.find(c);
-
-						if (cc == containers.end())
-							return;
+						const auto &[me, cc]=info;
 
 						// Timeout expired
 
@@ -2164,8 +1821,8 @@ void current_containers_info::do_stop_runner(const current_container &cc)
 							_("stop process "
 							  "timed out")
 						);
-						do_remove(cc);
-						find_start_or_stop_to_do();
+						me->do_remove(cc);
+						me->find_start_or_stop_to_do();
 						// We might find something
 						// to do.
 					}
@@ -2176,23 +1833,21 @@ void current_containers_info::do_stop_runner(const current_container &cc)
 
 // Create a timeout for force-killing a process container.
 
-proc_container_timer current_containers_info::create_sigkill_timer(
+proc_container_timer current_containers_infoObj::create_sigkill_timer(
 	const proc_container &pc
 )
 {
 	return create_timer(
+		shared_from_this(),
 		pc,
 		SIGTERM_TIMEOUT,
-		[this]
-		(const proc_container &pc)
+		[]
+		(const auto &info)
 		{
-			auto cc=containers.find(pc);
+			const auto &[me, cc]=info;
 
-			if (cc == containers.end())
-				return;
-
-			send_sigkill(cc);
-			find_start_or_stop_to_do();
+			me->send_sigkill(cc);
+			me->find_start_or_stop_to_do();
 			// We might find something to do.
 		});
 }
@@ -2214,7 +1869,7 @@ proc_container_timer current_containers_info::create_sigkill_timer(
 // All paths into do_remove must come via stop_with_all_requirements
 // to ensure that all dependencies are observed.
 
-void current_containers_info::do_remove(const current_container &cc)
+void current_containers_infoObj::do_remove(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -2233,7 +1888,7 @@ void current_containers_info::do_remove(const current_container &cc)
 
 // Timer to send sigkill has expired.
 
-void current_containers_info::send_sigkill(const current_container &cc)
+void current_containers_infoObj::send_sigkill(const current_container &cc)
 {
 	auto &[pc, run_info] = *cc;
 
@@ -2267,10 +1922,10 @@ static void started(const current_container &cc, bool for_dependency)
 
 void proc_container_stopped(const std::string &s)
 {
-	containers_info.stopped(s);
+	containers_info->stopped(s);
 }
 
-void current_containers_info::stopped(const std::string &s)
+void current_containers_infoObj::stopped(const std::string &s)
 {
 	auto cc=containers.find(s);
 
