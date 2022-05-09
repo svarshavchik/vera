@@ -24,6 +24,10 @@ struct sort_test_dependencies {
 
 typedef current_containers_infoObj::dependency_info dependency_info;
 
+typedef current_containers_infoObj::new_all_dependency_info_t
+	new_all_dependency_info_t;
+
+
 void test_deps()
 {
 	std::shared_ptr<proc_containerObj> tests[5]={
@@ -51,8 +55,7 @@ void test_deps()
 	{
 		std::cout << "test 1:";
 
-		current_containers_infoObj
-			::all_dependency_info_t all_dependency_info;
+		new_all_dependency_info_t all_dependency_info;
 
 		for (auto &[a, b] : dependencies)
 		{
@@ -156,8 +159,7 @@ void test_deps2()
 	{
 		std::cout << "test 2:";
 
-		current_containers_infoObj
-			::all_dependency_info_t all_dependency_info;
+		new_all_dependency_info_t all_dependency_info;
 
 		for (auto &[a, b] : dependencies)
 		{

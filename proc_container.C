@@ -79,13 +79,13 @@ proc_containerObj::~proc_containerObj()
 void current_containers_infoObj::install_requires_dependency(
 
 	//! Where to record dependencies
-	all_dependency_info_t &all_dependency_info,
+	new_all_dependency_info_t &all_dependency_info,
 
 	//! The forward dependency, the "required" dependency
-	all_dependencies dependency_info::*forward_dependency,
+	all_dependencies extra_dependency_info::*forward_dependency,
 
 	//! The backward dependency, the "required-by" dependency
-	all_dependencies dependency_info::*backward_dependency,
+	all_dependencies extra_dependency_info::*backward_dependency,
 	const proc_container &a,
 	const proc_container &b)
 {
@@ -214,7 +214,7 @@ void current_containers_infoObj::install(
 )
 {
 	current_containers new_current_containers;
-	all_dependency_info_t new_all_dependency_info;
+	new_all_dependency_info_t new_all_dependency_info;
 
 	for (const auto &c:new_containers)
 	{
@@ -266,23 +266,23 @@ void current_containers_infoObj::install(
 			     const proc_new_container **,
 			     bool,
 			     bool,
-			     all_dependencies dependency_info::*,
-			     all_dependencies dependency_info::*,
+			     all_dependencies extra_dependency_info::*,
+			     all_dependencies extra_dependency_info::*,
 			     const std::unordered_set<std::string>
 			     proc_new_containerObj::*>, 10>{{
 				     { &this_proc_container,
 				       &other_proc_container,
 				       true,
 				       false,
-				       &dependency_info::all_requires,
-				       &dependency_info::all_required_by,
+				       &extra_dependency_info::all_requires,
+				       &extra_dependency_info::all_required_by,
 				       &proc_new_containerObj::dep_requires},
 				     { &other_proc_container,
 				       &this_proc_container,
 				       false,
 				       false,
-				       &dependency_info::all_requires,
-				       &dependency_info::all_required_by,
+				       &extra_dependency_info::all_requires,
+				       &extra_dependency_info::all_required_by,
 				       &proc_new_containerObj::dep_required_by},
 
 				     // Automatically-generated starting_first
@@ -296,16 +296,16 @@ void current_containers_infoObj::install(
 				       &other_proc_container,
 				       false,
 				       true,
-				       &dependency_info::all_starting_first,
-				       &dependency_info::all_starting_first_by,
+				       &extra_dependency_info::all_starting_first,
+				       &extra_dependency_info::all_starting_first_by,
 				       &proc_new_containerObj::dep_requires},
 
 				     { &other_proc_container,
 				       &this_proc_container,
 				       false,
 				       true,
-				       &dependency_info::all_starting_first,
-				       &dependency_info::all_starting_first_by,
+				       &extra_dependency_info::all_starting_first,
+				       &extra_dependency_info::all_starting_first_by,
 				       &proc_new_containerObj::dep_required_by},
 
 				     // Automatically-generated stopping_first
@@ -321,16 +321,16 @@ void current_containers_infoObj::install(
 				       &this_proc_container,
 				       false,
 				       true,
-				       &dependency_info::all_stopping_first,
-				       &dependency_info::all_stopping_first_by,
+				       &extra_dependency_info::all_stopping_first,
+				       &extra_dependency_info::all_stopping_first_by,
 				       &proc_new_containerObj::dep_requires},
 
 				     { &this_proc_container,
 				       &other_proc_container,
 				       false,
 				       true,
-				       &dependency_info::all_stopping_first,
-				       &dependency_info::all_stopping_first_by,
+				       &extra_dependency_info::all_stopping_first,
+				       &extra_dependency_info::all_stopping_first_by,
 				       &proc_new_containerObj::dep_required_by},
 
 
@@ -338,32 +338,32 @@ void current_containers_infoObj::install(
 				       &other_proc_container,
 				       true,
 				       true,
-				       &dependency_info::all_starting_first,
-				       &dependency_info::all_starting_first_by,
+				       &extra_dependency_info::all_starting_first,
+				       &extra_dependency_info::all_starting_first_by,
 				       &proc_new_containerObj::starting_after},
 
 				     { &other_proc_container,
 				       &this_proc_container,
 				       true,
 				       true,
-				       &dependency_info::all_starting_first,
-				       &dependency_info::all_starting_first_by,
+				       &extra_dependency_info::all_starting_first,
+				       &extra_dependency_info::all_starting_first_by,
 				       &proc_new_containerObj::starting_before},
 
 				     { &this_proc_container,
 				       &other_proc_container,
 				       true,
 				       true,
-				       &dependency_info::all_stopping_first,
-				       &dependency_info::all_stopping_first_by,
+				       &extra_dependency_info::all_stopping_first,
+				       &extra_dependency_info::all_stopping_first_by,
 				       &proc_new_containerObj::stopping_after},
 
 				     { &other_proc_container,
 				       &this_proc_container,
 				       true,
 				       true,
-				       &dependency_info::all_stopping_first,
-				       &dependency_info::all_stopping_first_by,
+				       &extra_dependency_info::all_stopping_first,
+				       &extra_dependency_info::all_stopping_first_by,
 				       &proc_new_containerObj::stopping_before},
 
 			     }})
@@ -475,8 +475,17 @@ void current_containers_infoObj::install(
 		new_current_containers.emplace(b->first, b->second);
 	}
 
+	// Move new_all_dependency_info into prepared_dependency_info
+
+	// Move the containers and the dependency info, installing them.
+
+	all_dependency_info_t prepared_dependency_info;
+
+	for (auto &[pc,info] : new_all_dependency_info)
+		prepared_dependency_info.emplace(pc, std::move(info));
+
 	containers=std::move(new_current_containers);
-	all_dependency_info=std::move(new_all_dependency_info);
+	all_dependency_info=std::move(prepared_dependency_info);
 
 	/////////////////////////////////////////////////////////////
 	//

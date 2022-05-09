@@ -19,14 +19,19 @@
 
 typedef current_containers::iterator current_container;
 
-//! The process containers singleton.
+//! Information about the process containers, and their current state
 
 class current_containers_infoObj : public std::enable_shared_from_this<
 	current_containers_infoObj> {
 
+	//! The containers themselves
 	current_containers containers;
 
+	//! The current runlevel
 	proc_container current_runlevel;
+
+	//! When switching runlevels: the new runlevel
+
 	proc_container new_runlevel;
 
 public:
@@ -58,6 +63,9 @@ public:
 
 		//! All process containers that stop before this one
 		all_dependencies all_stopping_first;
+	};
+
+	struct extra_dependency_info : dependency_info {
 
 		//! Reverse dependencies for all_starting_first
 
@@ -81,6 +89,12 @@ public:
 				   proc_container_equal
 				   > all_dependency_info_t;
 
+	typedef std::unordered_map<proc_container,
+				   extra_dependency_info,
+				   proc_container_hash,
+				   proc_container_equal
+				   > new_all_dependency_info_t;
+
 	/*!
 	  "a" requires "b", what does this mean? It means:
 
@@ -102,15 +116,16 @@ public:
 	static void install_requires_dependency(
 
 		//! Where to record dependencies
-		all_dependency_info_t &all_dependency_info,
+		new_all_dependency_info_t &all_dependency_info,
 
 		//! The forward dependency, the "required" dependency
-		all_dependencies dependency_info::*forward_dependency,
+		all_dependencies extra_dependency_info::*forward_dependency,
 
 		//! The backward dependency, the "required-by" dependency
-		all_dependencies dependency_info::*backward_dependency,
+		all_dependencies extra_dependency_info::*backward_dependency,
 		const proc_container &a,
 		const proc_container &b);
+
 private:
 	all_dependency_info_t all_dependency_info;
 

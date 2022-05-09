@@ -135,7 +135,7 @@ public:
 
 typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
 
-//! A set of new_process containers.
+//! A set of proc_new_containers.
 
 typedef std::unordered_set<proc_new_container, proc_container_hash,
 			   proc_container_equal> proc_new_container_set;
