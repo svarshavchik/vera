@@ -148,7 +148,7 @@ void test_happy_start_stop_common(const std::string &name)
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			name + ": start"
+			name + ": start (pid 1)"
 		})
 	{
 		throw "did not schedule a start runner";
@@ -210,7 +210,7 @@ void test_happy_start()
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"happy_start: stop"
+			"happy_start: stop (pid 2)"
 		})
 	{
 		throw "did not schedule a stop runner";
@@ -1404,6 +1404,311 @@ void test_before_after2()
 	}
 }
 
+void test_failure_with_dependencies_common(const std::string &name)
+{
+	auto a=std::make_shared<proc_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_containerObj>(name + "b");
+	auto c=std::make_shared<proc_containerObj>(name + "c");
+	auto d=std::make_shared<proc_containerObj>(name + "d");
+	auto e=std::make_shared<proc_containerObj>(name + "e");
+
+	a->type=proc_container_type::runlevel;
+
+	b->dep_required_by.insert("runlevel1");
+	b->dep_requires.insert(name + "c");
+	c->dep_requires.insert(name + "d");
+	c->starting_command="start_c";
+	d->starting_command="start_d";
+	c->stopping_command="stop_c";
+	d->stopping_command="stop_d";
+
+	e->dep_required_by.insert("runlevel1");
+
+	proc_containers_install({
+			a, b, c, d, e
+		});
+}
+
+void test_failed_fork_with_dependencies()
+{
+	test_failure_with_dependencies_common("dep_fail_fork");
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"dep_fail_forkb: start pending (dependency)",
+			"dep_fail_forkc: start pending (dependency)",
+			"dep_fail_forkd: start pending (dependency)",
+			"dep_fail_forkd: starting (dependency)",
+			"dep_fail_forke: start pending (dependency)",
+			"dep_fail_forke: started (dependency)",
+		})
+	{
+		throw "Unexpected sequence of events after starting runlevel";
+	}
+
+	logged_state_changes.clear();
+	next_pid= -1;
+
+	runner_finished(1, 0);
+
+	if (logged_runners != std::vector<std::string>{
+			"dep_fail_forkd: start_d (pid 1)",
+			"dep_fail_forkc: start_c (pid -1)"
+		})
+	{
+		throw "Unexpected runners after starting containers";
+	}
+	logged_runners.clear();
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_fail_forkd: started (dependency)",
+			"dep_fail_forkc: fork() failed",
+			"dep_fail_forkc: removing",
+			"dep_fail_forkd: stop pending",
+			"dep_fail_forkb: removing",
+		})
+	{
+		throw "Unexpected sequence of events after failed fork";
+	}
+
+	logged_state_changes.clear();
+
+	proc_container_stopped("dep_fail_forkc");
+	if (logged_runners != std::vector<std::string>{})
+		throw "Unexpected runner start after container stop";
+	proc_container_stopped("dep_fail_forkb");
+
+	if (logged_runners != std::vector<std::string>{
+			"dep_fail_forkd: stop_d (pid 1)"
+		})
+		throw "Missing runner start after container stop";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_fail_forkc: stopped",
+			"dep_fail_forkb: stopped",
+			"dep_fail_forkd: stopping"
+		})
+	{
+		throw "Unexpected sequence of events stopping two containers";
+	}
+
+	logged_state_changes.clear();
+	runner_finished(1, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_fail_forkd: termination signal: 1",
+			"dep_fail_forkd: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stop runner (1)";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("dep_fail_forkd");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_fail_forkd: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stop runner(2)";
+	}
+
+	verify_container_state(
+		{
+			"dep_fail_forkb: stopped",
+			"dep_fail_forkc: stopped",
+			"dep_fail_forkd: stopped",
+			"dep_fail_forke: started (dependency)",
+			"runlevel1: stopped"
+		}, "Unexpected final container state");
+}
+
+void test_timeout_with_dependencies()
+{
+	test_failure_with_dependencies_common("dep_timeout");
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(1, 0);
+
+	if (logged_runners != std::vector<std::string>{
+			"dep_timeoutc: start_c (pid 2)",
+		})
+	{
+		throw "Unexpected runners after starting containers";
+	}
+	logged_runners.clear();
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutd: started (dependency)",
+			"dep_timeoutc: starting (dependency)",
+		})
+	{
+		throw "Unexpected sequence of events after 1st container start";
+	}
+
+	logged_state_changes.clear();
+	test_advance(DEFAULT_STARTING_TIMEOUT);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutc: start process timed out",
+			"dep_timeoutc: removing",
+			"dep_timeoutd: stop pending",
+			"dep_timeoutb: removing",
+		})
+	{
+		throw "Unexpected sequence of events after failed fork";
+	}
+
+	logged_state_changes.clear();
+
+	proc_container_stopped("dep_timeoutc");
+	if (logged_runners != std::vector<std::string>{})
+		throw "Unexpected runner start after container stop";
+	proc_container_stopped("dep_timeoutb");
+
+	if (logged_runners != std::vector<std::string>{
+			"dep_timeoutd: stop_d (pid 3)"
+		})
+		throw "Missing runner start after container stop";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutc: stopped",
+			"dep_timeoutb: stopped",
+			"dep_timeoutd: stopping"
+		})
+	{
+		throw "Unexpected sequence of events stopping two containers";
+	}
+
+	logged_state_changes.clear();
+	runner_finished(3, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutd: termination signal: 1",
+			"dep_timeoutd: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stop runner (1)";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("dep_timeoutd");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutd: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stop runner(2)";
+	}
+
+	verify_container_state(
+		{
+			"dep_timeoutb: stopped",
+			"dep_timeoutc: stopped",
+			"dep_timeoutd: stopped",
+			"dep_timeoute: started (dependency)",
+			"runlevel1: stopped"
+		}, "Unexpected final container state");
+}
+
+void test_startfail_with_dependencies()
+{
+	test_failure_with_dependencies_common("dep_startfail");
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(1, 0);
+
+	if (logged_runners != std::vector<std::string>{
+			"dep_startfailc: start_c (pid 2)",
+		})
+	{
+		throw "Unexpected runners after starting containers";
+	}
+	logged_runners.clear();
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfaild: started (dependency)",
+			"dep_startfailc: starting (dependency)",
+		})
+	{
+		throw "Unexpected sequence of events after 1st container start";
+	}
+
+	logged_state_changes.clear();
+	runner_finished(2, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfailc: termination signal: 1",
+			"dep_startfailc: removing",
+			"dep_startfaild: stop pending",
+			"dep_startfailb: removing",
+		})
+	{
+		throw "Unexpected sequence of events after failed fork";
+	}
+
+	logged_state_changes.clear();
+
+	proc_container_stopped("dep_startfailc");
+	if (logged_runners != std::vector<std::string>{})
+		throw "Unexpected runner start after container stop";
+	proc_container_stopped("dep_startfailb");
+
+	if (logged_runners != std::vector<std::string>{
+			"dep_startfaild: stop_d (pid 3)"
+		})
+		throw "Missing runner start after container stop";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfailc: stopped",
+			"dep_startfailb: stopped",
+			"dep_startfaild: stopping"
+		})
+	{
+		throw "Unexpected sequence of events stopping two containers";
+	}
+
+	logged_state_changes.clear();
+	runner_finished(3, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfaild: termination signal: 1",
+			"dep_startfaild: removing",
+		})
+	{
+		throw "Unexpected sequence of events after stop runner (1)";
+	}
+	logged_state_changes.clear();
+	proc_container_stopped("dep_startfaild");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfaild: stopped",
+		})
+	{
+		throw "Unexpected sequence of events after stop runner(2)";
+	}
+
+	verify_container_state(
+		{
+			"dep_startfailb: stopped",
+			"dep_startfailc: stopped",
+			"dep_startfaild: stopped",
+			"dep_startfaile: started (dependency)",
+			"runlevel1: stopped"
+		}, "Unexpected final container state");
+}
+
 int main()
 {
 	alarm(60);
@@ -1485,6 +1790,19 @@ int main()
 		test_reset();
 		test="test_before_after2";
 		test_before_after2();
+
+		test_reset();
+		test="test_failed_fork_with_dependencies";
+		test_failed_fork_with_dependencies();
+
+		test_reset();
+		test="test_timeout_with_dependencies";
+		test_timeout_with_dependencies();
+
+		test_reset();
+		test="test_startfail_with_dependencies";
+		test_startfail_with_dependencies();
+
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

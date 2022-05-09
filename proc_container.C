@@ -483,8 +483,11 @@ private:
 public:
 	std::string stop(const std::string &name);
 
-	void finished(pid_t pid, int wstatus);
-
+private:
+	void stop_with_all_requirements(
+		const current_container &iter
+	);
+public:
 	void stopped(const std::string &s);
 };
 
@@ -814,6 +817,8 @@ void current_containers_info::install(const proc_container_set &new_containers)
 		if (iter == containers.end() ||
 		    iter->first->type != proc_container_type::runlevel)
 		{
+			// Don't panic. This happens in unit tests.
+
 			log_message(_("Removed current run level!"));
 			current_runlevel=nullptr;
 		}
@@ -1081,6 +1086,27 @@ std::string current_containers_info::stop(const std::string &name)
 		return name + _(": unknown unit");
 	}
 
+	stop_with_all_requirements(iter);
+
+	find_start_or_stop_to_do(); // We should find something now.
+	return "";
+}
+
+//////////////////////////////////////////////////////////////////////////
+//
+// We want to stop a container.
+//
+// 1) We must also stop all other container that require the container to
+//    be stopped.
+//
+// 2) Check which containers are required by the list of containers that
+//    will be stopped. If they were automatically started as a dependency,
+//    and nothing else requires them, they can also bs stopped.
+
+void current_containers_info::stop_with_all_requirements(
+	const current_container &iter
+)
+{
 	auto &[pc, run_info] = *iter;
 
 	//! Check the eligibility of the specified container, first.
@@ -1090,7 +1116,7 @@ std::string current_containers_info::stop(const std::string &name)
 	std::visit(eligibility, iter->second.state);
 
 	if (eligibility.containers.empty())
-		return ""; // Already in progress.
+		return; // Already in progress.
 
 	// Check all requirements. If any are in a started state move them
 	// into the stopping state, too.
@@ -1288,9 +1314,6 @@ std::string current_containers_info::stop(const std::string &name)
 
 	for (auto &[ignore, iter] : eligibility.containers)
 		do_stop_or_terminate(iter);
-
-	find_start_or_stop_to_do(); // We should find something now.
-	return "";
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1299,11 +1322,6 @@ std::string current_containers_info::stop(const std::string &name)
 // action.
 
 void runner_finished(pid_t pid, int wstatus)
-{
-	containers_info.finished(pid, wstatus);
-}
-
-void current_containers_info::finished(pid_t pid, int wstatus)
 {
 	// Do we know this runner?
 
@@ -1324,8 +1342,6 @@ void current_containers_info::finished(pid_t pid, int wstatus)
 		return;
 
 	runner->invoke(wstatus);
-
-	find_start_or_stop_to_do(); // We might find something to do.
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -1794,12 +1810,50 @@ void current_containers_info::do_start_runner(
 			cc->first,
 			_("attempting to start a container that's not in a "
 			  "pending start state"));
-		do_remove(cc);
+		stop_with_all_requirements(cc);
 		return;
 	}
 
 	auto &starting= *starting_ptr;
 
+	// We're starting a container. If the start fails we want to bail
+	// out of starting anything that depends of this, failed, container.
+	//
+	// However we'll do this the other way around: before starting this
+	// container: check if its required_dependencies have are not
+	// in starting state. If so, they must've failed, so we fail too.
+
+	bool failed=false;
+
+	all_required_dependencies(
+		pc,
+		[&]
+		(const current_container &dep)
+		{
+			auto &[pc, run_info] = *dep;
+
+			// When we're breaking a circular dependency we can
+			// see a state_starting here.
+			if (std::holds_alternative<state_started>(
+				    run_info.state)
+			    || std::holds_alternative<state_starting>(
+				    run_info.state
+			    ))
+				return;
+
+			log_container_error(
+				cc->first,
+				_("aborting, dependency not started: ")
+				+ pc->name);
+			failed=true;
+		});
+
+	if (failed)
+	{
+		abort();
+		stop_with_all_requirements(cc);
+		return;
+	}
 	// If there's a non-empty starting command: run it.
 
 	if (!pc->starting_command.empty())
@@ -1815,12 +1869,13 @@ void current_containers_info::do_start_runner(
 			{
 				starting_command_finished(container, status,
 							  dependency);
+				find_start_or_stop_to_do();
 			}
 		);
 
 		if (!runner)
 		{
-			do_remove(cc);
+			stop_with_all_requirements(cc);
 			return;
 		}
 
@@ -1852,7 +1907,7 @@ void current_containers_info::do_start_runner(
 						pc,
 						_("start process timed out")
 					);
-					do_remove(cc);
+					stop_with_all_requirements(cc);
 
 					find_start_or_stop_to_do();
 					// We might find something to do.
@@ -1889,7 +1944,7 @@ void current_containers_info::starting_command_finished(
 	else
 	{
 		log_container_failed_process(cc->first, status);
-		do_remove(cc);
+		stop_with_all_requirements(cc);
 	}
 }
 
@@ -2054,6 +2109,7 @@ void current_containers_info::do_stop_runner(const current_container &cc)
 				log_container_failed_process(cc->first, status);
 			}
 			do_remove(cc);
+			find_start_or_stop_to_do();
 		}
 	);
 
@@ -2129,6 +2185,18 @@ proc_container_timer current_containers_info::create_sigkill_timer(
 //
 // Start removing the container by sending sigterm to it, and setting a
 // sigkill timer.
+//
+// This is called only when a container stop has been initiated previously.
+//
+// - from do_stop_runner: which is called from do_stop(), which is called
+//   from find_start_or_stop_to_do(), which means that something must've
+//   already initiated the container stop.
+//
+// - via stop_or_terminate_helper: which is called from do_stop_or_terminate,
+//   that's called by stop_with_all_requirements.
+//
+// All paths into do_remove must come via stop_with_all_requirements
+// to ensure that all dependencies are observed.
 
 void current_containers_info::do_remove(const current_container &cc)
 {
