@@ -172,7 +172,7 @@ struct get_name_for_comparator {
 
 Implements a transparent hash function and equality comparison.
 
-Allows proc_container_set to be looked up by a proc_container/
+Allows proc_container_set to be looked up by a proc_container.
 
 */
 
@@ -183,6 +183,25 @@ struct get_name_for_comparator<T, std::void_t<decltype(std::declval<std::remove_
 	static auto &name(V &&v)
 	{
 		return v->name;
+	}
+
+};
+
+/*! Helper class used by proc_new_container_set
+
+Implements a transparent hash function and equality comparison.
+
+Allows proc_new_container_set to be looked up by a proc_new_container.
+
+*/
+
+template<typename T>
+struct get_name_for_comparator<T, std::void_t<decltype(std::declval<std::remove_cvref_t<T> &&>()->new_container->name)>> {
+
+	template<typename V>
+	static auto &name(V &&v)
+	{
+		return v->new_container->name;
 	}
 
 };
@@ -243,10 +262,6 @@ struct proc_container_hash {
 typedef std::unordered_set<proc_container, proc_container_hash,
 			   proc_container_equal> proc_container_set;
 
-//! Install process containers
-
-void proc_containers_install(const proc_container_set &new_containers);
-
 //! Switch run levels
 std::string proc_container_runlevel(const std::string &new_runlevel);
 
@@ -290,12 +305,6 @@ public:
 	//! The container's starting command
 	std::string starting_command;
 
-	//! These process containers start before this one.
-	std::unordered_set<std::string> starting_before;
-
-	//! These process containers start after this one.
-	std::unordered_set<std::string> starting_after;
-
 	//! The timeout for the container's starting command.
 
 	//! A timeout of 0 is infinite.
@@ -304,21 +313,9 @@ public:
 	//! The container's stopping command
 	std::string stopping_command;
 
-	//! These process containers stop before this one.
-	std::unordered_set<std::string> stopping_before;
-
-	//! These process containers stop after this one.
-	std::unordered_set<std::string> stopping_after;
-
 	//! The timeout for the container's stopping command.
 
 	time_t stopping_timeout=DEFAULT_STOPPING_TIMEOUT;
-
-	//! What other process containers this one requires
-	std::unordered_set<std::string> dep_requires;
-
-	//! What other process containers require this one.
-	std::unordered_set<std::string> dep_required_by;
 
 	//! Constructor
 	proc_containerObj(const std::string &name);
@@ -326,5 +323,58 @@ public:
 	//! Destructor
 	~proc_containerObj();
 };
+
+//! Dependencies for a new container.
+
+//! Used when installing a new set of containers. Includes additional data
+//! that's not needed after the containers get processed and installed.
+
+class proc_new_containerObj {
+
+public:
+	//! The new container
+
+	const std::shared_ptr<proc_containerObj> new_container;
+
+	//! Constructor
+	proc_new_containerObj(const std::string &name)
+		: new_container{std::make_shared<proc_containerObj>(
+				name
+		)}
+	{
+	}
+
+	//! What other process containers this one requires
+	std::unordered_set<std::string> dep_requires;
+
+	//! What other process containers require this one.
+	std::unordered_set<std::string> dep_required_by;
+
+	//! These process containers start before this one.
+	std::unordered_set<std::string> starting_before;
+
+	//! These process containers start after this one.
+	std::unordered_set<std::string> starting_after;
+
+	//! These process containers stop before this one.
+	std::unordered_set<std::string> stopping_before;
+
+	//! These process containers stop after this one.
+	std::unordered_set<std::string> stopping_after;
+
+};
+
+typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
+
+//! A set of new_process containers.
+
+typedef std::unordered_set<proc_new_container, proc_container_hash,
+			   proc_container_equal> proc_new_container_set;
+
+//! Install process containers
+
+void proc_containers_install(const proc_new_container_set &new_containers);
+void proc_containers_install(proc_new_container_set &&new_containers);
+
 
 #endif

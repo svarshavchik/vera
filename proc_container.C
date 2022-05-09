@@ -471,7 +471,7 @@ private:
 public:
 	std::vector<std::tuple<proc_container, proc_container_state>> get();
 
-	void install(const proc_container_set &new_containers);
+	void install(proc_new_container_set &new_containers);
 
 	std::string runlevel(const std::string &new_runlevel);
 
@@ -540,12 +540,21 @@ std::vector<std::tuple<proc_container, proc_container_state>
 //
 // Install/update process containers
 
-void proc_containers_install(const proc_container_set &new_containers)
+void proc_containers_install(const proc_new_container_set &new_containers)
+{
+	proc_new_container_set copy{new_containers};
+
+	proc_containers_install(std::move(copy));
+}
+
+void proc_containers_install(proc_new_container_set &&new_containers)
 {
 	containers_info.install(new_containers);
 }
 
-void current_containers_info::install(const proc_container_set &new_containers)
+void current_containers_info::install(
+	proc_new_container_set &new_containers
+)
 {
 	current_containers new_current_containers;
 	all_dependency_info_t new_all_dependency_info;
@@ -553,7 +562,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 	for (const auto &c:new_containers)
 	{
 		new_current_containers.emplace(
-			c,
+			c->new_container,
 			std::in_place_type_t<state_stopped>{}
 		);
 	}
@@ -587,36 +596,37 @@ void current_containers_info::install(const proc_container_set &new_containers)
 		//   generate all_starting_first and all_stopping_first
 		//   dependency lists.
 
-		const proc_container *this_proc_container=&c;
-		const proc_container *other_proc_container;
+		const proc_new_container *this_proc_container=&c;
+		const proc_new_container *other_proc_container;
 
 		for (const auto &[requiring_ptr, requirement_ptr,
 				  disallow_for_runlevel,
 				  skip_for_runlevel,
 				  forward_dependency, backward_dependency,
 				  dependency_list]
-			     : std::array< std::tuple<const proc_container **,
-			     const proc_container **,
+			     : std::array< std::tuple<
+			     const proc_new_container **,
+			     const proc_new_container **,
 			     bool,
 			     bool,
 			     all_dependencies dependency_info::*,
 			     all_dependencies dependency_info::*,
 			     const std::unordered_set<std::string>
-			     proc_containerObj::*>, 10>{{
+			     proc_new_containerObj::*>, 10>{{
 				     { &this_proc_container,
 				       &other_proc_container,
 				       true,
 				       false,
 				       &dependency_info::all_requires,
 				       &dependency_info::all_required_by,
-				       &proc_containerObj::dep_requires},
+				       &proc_new_containerObj::dep_requires},
 				     { &other_proc_container,
 				       &this_proc_container,
 				       false,
 				       false,
 				       &dependency_info::all_requires,
 				       &dependency_info::all_required_by,
-				       &proc_containerObj::dep_required_by},
+				       &proc_new_containerObj::dep_required_by},
 
 				     // Automatically-generated starting_first
 				     // rules based on dep_requires and
@@ -631,7 +641,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_starting_first,
 				       &dependency_info::all_starting_first_by,
-				       &proc_containerObj::dep_requires},
+				       &proc_new_containerObj::dep_requires},
 
 				     { &other_proc_container,
 				       &this_proc_container,
@@ -639,7 +649,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_starting_first,
 				       &dependency_info::all_starting_first_by,
-				       &proc_containerObj::dep_required_by},
+				       &proc_new_containerObj::dep_required_by},
 
 				     // Automatically-generated stopping_first
 				     // rules based on dep_requires and
@@ -656,7 +666,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_stopping_first,
 				       &dependency_info::all_stopping_first_by,
-				       &proc_containerObj::dep_requires},
+				       &proc_new_containerObj::dep_requires},
 
 				     { &this_proc_container,
 				       &other_proc_container,
@@ -664,7 +674,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_stopping_first,
 				       &dependency_info::all_stopping_first_by,
-				       &proc_containerObj::dep_required_by},
+				       &proc_new_containerObj::dep_required_by},
 
 
 				     { &this_proc_container,
@@ -673,7 +683,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_starting_first,
 				       &dependency_info::all_starting_first_by,
-				       &proc_containerObj::starting_after},
+				       &proc_new_containerObj::starting_after},
 
 				     { &other_proc_container,
 				       &this_proc_container,
@@ -681,7 +691,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_starting_first,
 				       &dependency_info::all_starting_first_by,
-				       &proc_containerObj::starting_before},
+				       &proc_new_containerObj::starting_before},
 
 				     { &this_proc_container,
 				       &other_proc_container,
@@ -689,7 +699,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_stopping_first,
 				       &dependency_info::all_stopping_first_by,
-				       &proc_containerObj::stopping_after},
+				       &proc_new_containerObj::stopping_after},
 
 				     { &other_proc_container,
 				       &this_proc_container,
@@ -697,7 +707,7 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				       true,
 				       &dependency_info::all_stopping_first,
 				       &dependency_info::all_stopping_first_by,
-				       &proc_containerObj::stopping_before},
+				       &proc_new_containerObj::stopping_before},
 
 			     }})
 		{
@@ -705,7 +715,8 @@ void current_containers_info::install(const proc_container_set &new_containers)
 			// entries.
 
 			if (skip_for_runlevel &&
-			    c->type == proc_container_type::runlevel)
+			    c->new_container->type ==
+			    proc_container_type::runlevel)
 				continue;
 
 			for (const auto &dep:(*c).*(dependency_list))
@@ -714,47 +725,52 @@ void current_containers_info::install(const proc_container_set &new_containers)
 				// does not exist we create a "synthesized"
 				// container.
 
-				auto iter=new_current_containers.find(dep);
+				auto iter=new_containers.find(dep);
 
-				if (iter == new_current_containers.end())
+				if (iter == new_containers.end())
 				{
 					auto newc=std::make_shared<
-						proc_containerObj>(dep);
+						proc_new_containerObj>(dep);
 
-					newc->type=
+					newc->new_container->type=
 						proc_container_type::synthesized
 						;
-					iter=new_current_containers.emplace(
-						std::move(newc),
+
+					iter=new_containers.insert(newc).first;
+					new_current_containers.emplace(
+						newc->new_container,
 						std::in_place_type_t<
 						state_stopped>{}
-					).first;
+					);
 				}
 
-				other_proc_container=&iter->first;
+				other_proc_container=&*iter;
 
 				// Do not allow this dependency to specify
 				// a runlevel, only "required_by" is allowed
 				// to do this.
 
 				if (disallow_for_runlevel &&
-				    iter->first->type ==
+				    (*iter)->new_container->type ==
 				    proc_container_type::runlevel)
 				{
-					log_message(_("Disallowed dependency "
-						      "on a runlevel: ")
-						    + c->name
-						    + " -> "
-						    + iter->first->name);
+					log_message(
+						_("Disallowed dependency "
+						  "on a runlevel: ")
+						+ c->new_container->name
+						+ " -> "
+						+ (*iter)->new_container->name);
 					continue;
 				}
 				if (skip_for_runlevel &&
-				    iter->first->type ==
+				    (*iter)->new_container->type ==
 				    proc_container_type::runlevel)
 					continue;
 
-				auto &requiring= **requiring_ptr;
-				auto &requirement= **requirement_ptr;
+				auto &requiring=
+					(**requiring_ptr)->new_container;
+				auto &requirement=
+					(**requirement_ptr)->new_container;
 
 				install_requires_dependency(
 					new_all_dependency_info,

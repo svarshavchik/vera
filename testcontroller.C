@@ -28,23 +28,23 @@ void test_advance(time_t interval)
 	run_timers();
 }
 
-void test_proc_container_set()
+void test_proc_new_container_set()
 {
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>("a");
-	auto b=std::make_shared<proc_containerObj>("b");
+	auto a=std::make_shared<proc_new_containerObj>("a");
+	auto b=std::make_shared<proc_new_containerObj>("b");
 
 	pcs.insert(a);
 
 	auto iter=pcs.find(a);
 
-	if (iter == pcs.end() || (*iter)->name != "a")
+	if (iter == pcs.end() || (*iter)->new_container->name != "a")
 		throw "Could not find container";
 
 	iter=pcs.find("a");
 
-	if (iter == pcs.end() || (*iter)->name != "a")
+	if (iter == pcs.end() || (*iter)->new_container->name != "a")
 		throw "Could not find container by its name";
 
 	if (pcs.find(b) != pcs.end() || pcs.find("b") != pcs.end())
@@ -53,9 +53,9 @@ void test_proc_container_set()
 
 void test_start_and_stop()
 {
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>("a");
+	auto a=std::make_shared<proc_new_containerObj>("a");
 
 	pcs.insert(a);
 	proc_containers_install(pcs);
@@ -123,13 +123,13 @@ void test_start_and_stop()
 
 void test_happy_start_stop_common(const std::string &name)
 {
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>(name);
+	auto a=std::make_shared<proc_new_containerObj>(name);
 
-	a->starting_command="start";
-	a->starting_timeout=0;
-	a->stopping_command="stop";
+	a->new_container->starting_command="start";
+	a->new_container->starting_timeout=0;
+	a->new_container->stopping_command="stop";
 
 	pcs.insert(a);
 	proc_containers_install(pcs);
@@ -264,11 +264,11 @@ void test_start_failed_fork()
 {
 	next_pid=(pid_t)-1;
 
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>("failed_fork");
+	auto a=std::make_shared<proc_new_containerObj>("failed_fork");
 
-	a->starting_command="start";
+	a->new_container->starting_command="start";
 
 	pcs.insert(a);
 	proc_containers_install(pcs);
@@ -293,11 +293,11 @@ void test_start_failed_fork()
 
 void test_start_failed()
 {
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>("start_failed");
+	auto a=std::make_shared<proc_new_containerObj>("start_failed");
 
-	a->starting_command="start";
+	a->new_container->starting_command="start";
 
 	pcs.insert(a);
 	proc_containers_install(pcs);
@@ -332,11 +332,11 @@ void test_start_failed()
 
 void test_start_timeout()
 {
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>("start_timeout");
+	auto a=std::make_shared<proc_new_containerObj>("start_timeout");
 
-	a->starting_command="start";
+	a->new_container->starting_command="start";
 
 	pcs.insert(a);
 	proc_containers_install(pcs);
@@ -354,7 +354,7 @@ void test_start_timeout()
 		throw "unexpected state change after start";
 	}
 
-	test_advance(a->starting_timeout);
+	test_advance(a->new_container->starting_timeout);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_timeout: start pending",
@@ -442,26 +442,26 @@ void test_stop_timeout()
 	}
 }
 
-proc_container_set test_requires_common(std::string prefix)
+proc_new_container_set test_requires_common(std::string prefix)
 {
-	proc_container_set pcs;
+	proc_new_container_set pcs;
 
-	auto a=std::make_shared<proc_containerObj>(prefix + "a");
-	auto b=std::make_shared<proc_containerObj>(prefix + "b");
-	auto c=std::make_shared<proc_containerObj>(prefix + "c");
+	auto a=std::make_shared<proc_new_containerObj>(prefix + "a");
+	auto b=std::make_shared<proc_new_containerObj>(prefix + "b");
+	auto c=std::make_shared<proc_new_containerObj>(prefix + "c");
 
 	a->dep_requires.insert(prefix + "b");
-	a->starting_command="start_a";
-	a->stopping_command="stop_a";
+	a->new_container->starting_command="start_a";
+	a->new_container->stopping_command="stop_a";
 	pcs.insert(a);
 
 	b->dep_requires.insert(prefix + "c");
-	b->starting_command="start_b";
-	a->stopping_command="stop_b";
+	b->new_container->starting_command="start_b";
+	a->new_container->stopping_command="stop_b";
 	pcs.insert(b);
 
-	c->starting_command="start_c";
-	a->stopping_command="stop_c";
+	c->new_container->starting_command="start_c";
+	a->new_container->stopping_command="stop_c";
 	pcs.insert(c);
 
 	return pcs;
@@ -616,12 +616,12 @@ void test_requires2()
 {
 	auto pcs=test_requires_common("requires2");
 
-	auto d=std::make_shared<proc_containerObj>("requires2d");
+	auto d=std::make_shared<proc_new_containerObj>("requires2d");
 
 	d->dep_requires.insert("requires2a");
 	d->dep_requires.insert("requires2e");
-	d->starting_command="start_d";
-	d->stopping_command="stop_d";
+	d->new_container->starting_command="start_d";
+	d->new_container->stopping_command="stop_d";
 	pcs.insert(d);
 
 	proc_containers_install(pcs);
@@ -684,11 +684,11 @@ void test_requires2()
 
 void test_requires_common2(std::string name)
 {
-	auto a=std::make_shared<proc_containerObj>(name + "a");
-	auto b=std::make_shared<proc_containerObj>(name + "b");
-	auto c=std::make_shared<proc_containerObj>(name + "c");
-	auto d=std::make_shared<proc_containerObj>(name + "d");
-	auto e=std::make_shared<proc_containerObj>(name + "e");
+	auto a=std::make_shared<proc_new_containerObj>(name + "a");
+	auto b=std::make_shared<proc_new_containerObj>(name + "b");
+	auto c=std::make_shared<proc_new_containerObj>(name + "c");
+	auto d=std::make_shared<proc_new_containerObj>(name + "d");
+	auto e=std::make_shared<proc_new_containerObj>(name + "e");
 
 	e->dep_required_by.insert(name + "d");
 	e->dep_required_by.insert(name + "c");
@@ -974,9 +974,9 @@ void test_requires5()
 void test_install()
 {
 	proc_containers_install({
-			std::make_shared<proc_containerObj>("installa"),
-			std::make_shared<proc_containerObj>("installb"),
-			std::make_shared<proc_containerObj>("installc"),
+			std::make_shared<proc_new_containerObj>("installa"),
+			std::make_shared<proc_new_containerObj>("installb"),
+			std::make_shared<proc_new_containerObj>("installc"),
 		});
 
 	auto err=proc_container_start("installb");
@@ -1007,9 +1007,9 @@ void test_install()
 		}, "unexpected state after starting containers");
 
 	proc_containers_install({
-			std::make_shared<proc_containerObj>("installa"),
-			std::make_shared<proc_containerObj>("installc"),
-			std::make_shared<proc_containerObj>("installd"),
+			std::make_shared<proc_new_containerObj>("installa"),
+			std::make_shared<proc_new_containerObj>("installc"),
+			std::make_shared<proc_new_containerObj>("installd"),
 		});
 
 	verify_container_state(
@@ -1032,9 +1032,9 @@ void test_install()
 
 void test_circular()
 {
-	auto a=std::make_shared<proc_containerObj>("circulara");
-	auto b=std::make_shared<proc_containerObj>("circularb");
-	auto c=std::make_shared<proc_containerObj>("circularc");
+	auto a=std::make_shared<proc_new_containerObj>("circulara");
+	auto b=std::make_shared<proc_new_containerObj>("circularb");
+	auto c=std::make_shared<proc_new_containerObj>("circularc");
 
 	a->dep_requires.insert("circularb");
 	a->dep_required_by.insert("circularc");
@@ -1146,15 +1146,15 @@ void test_circular()
 
 void test_runlevels()
 {
-	auto a=std::make_shared<proc_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_containerObj>("runlevel2");
-	auto c=std::make_shared<proc_containerObj>("runlevel1prog");
-	auto d=std::make_shared<proc_containerObj>("runlevel12prog");
-	auto e=std::make_shared<proc_containerObj>("runlevel2prog");
-	auto f=std::make_shared<proc_containerObj>("otherprog");
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("runlevel2");
+	auto c=std::make_shared<proc_new_containerObj>("runlevel1prog");
+	auto d=std::make_shared<proc_new_containerObj>("runlevel12prog");
+	auto e=std::make_shared<proc_new_containerObj>("runlevel2prog");
+	auto f=std::make_shared<proc_new_containerObj>("otherprog");
 
-	a->type=proc_container_type::runlevel;
-	b->type=proc_container_type::runlevel;
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->type=proc_container_type::runlevel;
 
 	c->dep_required_by.insert("runlevel1");
 	d->dep_required_by.insert("runlevel1");
@@ -1218,14 +1218,14 @@ void test_runlevels()
 
 void test_before_after1()
 {
-	auto a=std::make_shared<proc_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_containerObj>("runlevel2");
-	auto c=std::make_shared<proc_containerObj>("testbefore_after_1");
-	auto d=std::make_shared<proc_containerObj>("testbefore_after_2");
-	auto e=std::make_shared<proc_containerObj>("testbefore_after_3");
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("runlevel2");
+	auto c=std::make_shared<proc_new_containerObj>("testbefore_after_1");
+	auto d=std::make_shared<proc_new_containerObj>("testbefore_after_2");
+	auto e=std::make_shared<proc_new_containerObj>("testbefore_after_3");
 
-	a->type=proc_container_type::runlevel;
-	b->type=proc_container_type::runlevel;
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->type=proc_container_type::runlevel;
 
 	c->starting_after.insert("testbefore_after_2");
 	e->starting_before.insert("testbefore_after_2");
@@ -1312,14 +1312,14 @@ void test_before_after1()
 
 void test_before_after2()
 {
-	auto a=std::make_shared<proc_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_containerObj>("runlevel2");
-	auto c=std::make_shared<proc_containerObj>("testbefore_after_1");
-	auto d=std::make_shared<proc_containerObj>("testbefore_after_2");
-	auto e=std::make_shared<proc_containerObj>("testbefore_after_3");
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("runlevel2");
+	auto c=std::make_shared<proc_new_containerObj>("testbefore_after_1");
+	auto d=std::make_shared<proc_new_containerObj>("testbefore_after_2");
+	auto e=std::make_shared<proc_new_containerObj>("testbefore_after_3");
 
-	a->type=proc_container_type::runlevel;
-	b->type=proc_container_type::runlevel;
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->type=proc_container_type::runlevel;
 
 	c->starting_before.insert("testbefore_after_2");
 	e->starting_after.insert("testbefore_after_2");
@@ -1406,21 +1406,21 @@ void test_before_after2()
 
 void test_failure_with_dependencies_common(const std::string &name)
 {
-	auto a=std::make_shared<proc_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_containerObj>(name + "b");
-	auto c=std::make_shared<proc_containerObj>(name + "c");
-	auto d=std::make_shared<proc_containerObj>(name + "d");
-	auto e=std::make_shared<proc_containerObj>(name + "e");
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>(name + "b");
+	auto c=std::make_shared<proc_new_containerObj>(name + "c");
+	auto d=std::make_shared<proc_new_containerObj>(name + "d");
+	auto e=std::make_shared<proc_new_containerObj>(name + "e");
 
-	a->type=proc_container_type::runlevel;
+	a->new_container->type=proc_container_type::runlevel;
 
 	b->dep_required_by.insert("runlevel1");
 	b->dep_requires.insert(name + "c");
 	c->dep_requires.insert(name + "d");
-	c->starting_command="start_c";
-	d->starting_command="start_d";
-	c->stopping_command="stop_c";
-	d->stopping_command="stop_d";
+	c->new_container->starting_command="start_c";
+	d->new_container->starting_command="start_d";
+	c->new_container->stopping_command="stop_c";
+	d->new_container->stopping_command="stop_d";
 
 	e->dep_required_by.insert("runlevel1");
 
@@ -1716,8 +1716,8 @@ int main()
 
 	try {
 		test_reset();
-		test="test_proc_container_set";
-		test_proc_container_set();
+		test="test_proc_new_container_set";
+		test_proc_new_container_set();
 
 		test_reset();
 		test="test_start_and_stop";
