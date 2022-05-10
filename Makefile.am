@@ -1,9 +1,12 @@
 SUBDIRS = po
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CXXFLAGS = -std=c++20
+AM_CXXFLAGS = -std=c++20 @YAMLCPPFLAGS@
 
-noinst_PROGRAMS=testcontroller testdepcomputations
+LC_ALL=C
+
+noinst_PROGRAMS=testcontroller testdepcomputations testprocloader
+noinst_SCRIPTS=testprocloader.sh
 
 noinst_LIBRARIES=libvera.a
 
@@ -25,14 +28,20 @@ libvera_a_SOURCES=						\
 	proc_container_timer.C					\
 	proc_container_timer.H					\
 	proc_container_timerfwd.H				\
+	proc_loader.C						\
+	proc_loader.H						\
 	unit_test.H
 
 testcontroller_SOURCES=testcontroller.C
-testcontroller_LDADD=libvera.a
+testcontroller_LDADD=libvera.a @YAMLLIBS@
 
 testdepcomputations_SOURCES=testdepcomputations.C
-testdepcomputations_LDADD=libvera.a
+testdepcomputations_LDADD=libvera.a @YAMLLIBS@
+
+testprocloader_SOURCES=testprocloader.C
+testprocloader_LDADD=libvera.a @YAMLLIBS@
 
 check:
 	$(VALGRIND) ./testdepcomputations
 	$(VALGRIND) ./testcontroller
+	sh $(srcdir)/testprocloader.sh
