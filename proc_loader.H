@@ -86,4 +86,30 @@ proc_new_container_set proc_load(
 	const std::filesystem::path &relative_path,
 	const std::function<void (const std::string &)> &error);
 
+//! Different kinds of overrides.
+
+enum class proc_override {
+	none,	 //!< No overrides
+	masked,	 //!< Container masked, as if it does not exist.
+	disabled, //!< Container exists, but is not enabled in its runlevel
+};
+
+//! Install an override entry.
+
+//! Parameters
+//!
+//! - pathname to the override directory
+//!
+//! - the relative path in the override directory
+//!
+//! - "none", "mask", or "disabled".
+//!
+//! - a callback that gets invoked to report errors.
+
+void proc_set_override(
+	const std::string &config_override,
+	const std::string &path,
+	const std::string &override_type,
+	const std::function<void (const std::string &)> &error);
+
 #endif

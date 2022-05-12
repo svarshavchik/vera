@@ -376,4 +376,27 @@ built-in:start=forking:stop=manual
 EOF
 diff -U 3 loadtest.expected loadtest.sorted.out
 
-rm -f loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected
+mkdir -p overridedir
+
+$VALGRIND ./testprocloader setoverride overridedir .bad mask >loadtest.out
+cat >loadtest.txt <<EOF
+.bad: non-compliant filename
+EOF
+diff -U 3 loadtest.out loadtest.txt
+
+$VALGRIND ./testprocloader setoverride overridedir sub/dir mask
+
+test -f overridedir/sub/dir
+
+$VALGRIND ./testprocloader setoverride overridedir sub/dir none
+
+test ! -f overridedir/sub/dir
+
+$VALGRIND ./testprocloader setoverride overridedir sub/dir disabled
+
+cat >loadtest.txt <<EOF
+disabled
+EOF
+diff -U 3 overridedir/sub/dir loadtest.txt
+
+rm -rf overridedir loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

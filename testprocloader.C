@@ -132,5 +132,17 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (args.size() == 5 && args[1] == "setoverride")
+	{
+		proc_set_override(args[2], args[3], args[4],
+				  []
+				  (const std::string &error)
+				  {
+					  std::cout << error << "\n";
+				  });
+
+		return 0;
+	}
+
 	return 1;
 }

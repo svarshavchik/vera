@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <optional>
 #include <unordered_set>
+#include <errno.h>
+#include <sys/stat.h>
 #include <yaml.h>
 
 #define SPECIAL(c) \
@@ -989,4 +991,63 @@ proc_new_container_set proc_load(
 		results.clear();
 	}
 	return results;
+}
+
+void proc_set_override(
+	const std::string &config_override,
+	const std::string &path,
+	const std::string &override_type,
+	const std::function<void (const std::string &)> &error)
+{
+	if (!proc_validpath(path))
+	{
+		error(path + _(": non-compliant filename"));
+		return;
+	}
+
+	// Create any parent directories, first.
+
+	std::filesystem::path fullpath{config_override};
+
+	if (override_type == "none")
+	{
+		unlink( (fullpath / path).c_str());
+		return;
+	}
+
+	if (override_type != "mask" && override_type != "disabled")
+	{
+		error(override_type + _(": unknown override type"));
+		return;
+	}
+
+	for (auto b=path.begin(), e=path.end(), p=b; (p=std::find(p, e, '/'))
+		     != e;
+	     ++p)
+	{
+		mkdir( (fullpath / std::string{b, p}).c_str(), 0755);
+	}
+
+	auto temppath = fullpath / (path + "~");
+
+	std::ofstream o{ temppath };
+
+	if (!o)
+	{
+		error(static_cast<std::string>(temppath) + ": " +
+		      strerror(errno));
+		return;
+	}
+
+	if (override_type == "disabled")
+		o << "disabled\n" << std::flush;
+	o.close();
+
+	if (o.fail() ||
+	    rename(temppath.c_str(), (fullpath / path).c_str()))
+	{
+		error(static_cast<std::string>(temppath) + ": " +
+		      strerror(errno));
+		return;
+	}
 }
