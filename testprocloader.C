@@ -8,6 +8,56 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <sstream>
+
+void loadtest()
+{
+	auto res=proc_load(std::cin, "(built-in)", "built-in",
+			   []
+			   (const std::string &error)
+			   {
+				   std::cout << "error: " << error << "\n";
+			   });
+
+
+	for (const auto &n:res)
+	{
+		auto &name=n->new_container->name;
+
+		for (const auto &r:n->dep_requires)
+			std::cout << name << ":requires " << r << "\n";
+		for (const auto &r:n->dep_required_by)
+			std::cout << name << ":required-by " << r << "\n";
+
+		if (!n->new_container->starting_command.empty())
+			std::cout << name << ":starting:"
+				  << n->new_container->starting_command
+				  << "\n";
+		if (!n->new_container->stopping_command.empty())
+			std::cout << name << ":stopping:"
+				  << n->new_container->stopping_command
+				  << "\n";
+		if (n->new_container->starting_timeout !=
+		    DEFAULT_STARTING_TIMEOUT)
+			std::cout << name << ":starting_timeout "
+				  << n->new_container->starting_timeout
+				  << "\n";
+		if (n->new_container->stopping_timeout !=
+		    DEFAULT_STOPPING_TIMEOUT)
+			std::cout << name << ":stopping_timeout "
+				  << n->new_container->stopping_timeout
+				  << "\n";
+		for (const auto &r:n->starting_before)
+			std::cout << name << ":starting_before " << r << "\n";
+		for (const auto &r:n->starting_after)
+			std::cout << name << ":starting_after " << r << "\n";
+
+		for (const auto &r:n->stopping_before)
+			std::cout << name << ":stopping_before " << r << "\n";
+		for (const auto &r:n->stopping_after)
+			std::cout << name << ":stopping_after " << r << "\n";
+	}
+}
 
 int main(int argc, char **argv)
 {
@@ -19,20 +69,39 @@ int main(int argc, char **argv)
 			  args[3],
 			  args[4],
 			  []
-			  (const std::string &filename,
-			   const std::string &name,
-			   bool overridden)
+			  (const auto &globalfilename,
+			   const auto &localfilename,
+			   const auto &overridefilename,
+			   const auto &name)
 			  {
 				  std::cout << "config:"
-					    << filename << ":" << name << "\n";
+					    << (overridefilename ?
+						static_cast<std::string>(
+							*overridefilename
+						):"*")
+					    << ":"
+					    << (localfilename ?
+						static_cast<std::string>(
+							*localfilename
+						):"*")
+					    << ":"
+					    << static_cast<std::string>(
+						    globalfilename
+					    ) << ":"
+					    << static_cast<std::string>(
+						    name
+					    ) << "\n";
 			  },
 			  []
-			  (const std::string &filename,
+			  (const std::filesystem::path &filename,
 			   const std::string &error)
 			  {
 				  std::cout << "error:"
-					    << filename << ":" << error << "\n";
+					    << static_cast<std::string>(
+						    filename
+					    ) << ":" << error << "\n";
 			  });
+		return 0;
 	}
 
 	if (args.size() == 5 && args[1] == "gc")
@@ -43,6 +112,15 @@ int main(int argc, char **argv)
 			{
 				std::cout << message << "\n";
 			});
+
+		return 0;
 	}
-	return 0;
+
+	if (args.size() == 2 && args[1] == "loadtest")
+	{
+		loadtest();
+		return 0;
+	}
+
+	return 1;
 }

@@ -6,20 +6,25 @@
 #define proc_loader_h
 
 #include "proc_container.H"
+#include <filesystem>
 #include <functional>
 #include <string>
+#include <vector>
+#include <iostream>
+#include <optional>
 
 /*! Find pathnames to load
 
 Scans the global, local, and override directory. found() gets called with
 the following parameters.
 
-- the full pathname to the entry, from one of the three diretories
+- the full pathname to the entry in the global directory (global).
 
-- the relative pathname from the directory where the pathname was found
+- if there's a corresponding entry in the local directory (or nullopt)
 
-- a flag indicating whether the entry was found in the local or the
-  override directory.
+- if there's a corresponding entry in the override directory (or nullopt)
+
+- the relative pathname from the directory where the entry pathname was found
 
 invalid() gets called with the following parameters
 
@@ -31,10 +36,12 @@ invalid() gets called with the following parameters
 void proc_find(const std::string &config_global,
 	       const std::string &config_local,
 	       const std::string &config_override,
-	       const std::function<void (const std::string &,
-					 const std::string &,
-					 bool)> &found,
-	       const std::function<void (const std::string &,
+	       const std::function<void (
+		       const std::filesystem::path &,
+		       const std::optional<std::filesystem::path> &,
+		       const std::optional<std::filesystem::path> &,
+		       const std::filesystem::path &)> &found,
+	       const std::function<void (const std::filesystem::path &,
 					 const std::string &)> &invalid);
 
 /*! Garbage collection
@@ -54,5 +61,11 @@ void proc_gc(const std::string &config_global,
 	     const std::string &config_local,
 	     const std::string &config_override,
 	     const std::function<void (const std::string &message)> &message);
+
+proc_new_container_set proc_load(
+	std::istream &input_file,
+	const std::string &filename,
+	const std::filesystem::path &path,
+	const std::function<void (const std::string &)> &error);
 
 #endif

@@ -34,6 +34,9 @@ proc_container_timer create_timer(
 		all_containers, container, done
 	);
 
+	if (timeout == 0)
+		return timer; // Pretend there's a timeout, but there's not.
+
 	current_timers.emplace(timeout + log_current_time(), timer);
 
 	return timer;

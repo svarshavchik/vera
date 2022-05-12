@@ -1,4 +1,5 @@
 set -xe
+export LC_ALL=C
 
 rm -rf testconfglobal
 rm -rf testconflocal
@@ -29,11 +30,11 @@ echo "" >testconflocal/nothere1
 echo "" >testconfoverride/notthere2
 
 cat >testprocloader.txt <<EOF
-config:testconfglobal/globalfile1 space:globalfile1 space
-config:testconfglobal/globalfile1:globalfile1
-config:testconfglobal/sub2/inconfoverride:sub2/inconfoverride
-config:testconflocal/sub1/inconflocal:sub1/inconflocal
-config:testconfoverride/inconfoverride2:inconfoverride2
+config:*:*:testconfglobal/globalfile1 space:globalfile1 space
+config:*:*:testconfglobal/globalfile1:globalfile1
+config:*:*:testconfglobal/sub2/inconfoverride:sub2/inconfoverride
+config:*:testconflocal/sub1/inconflocal:testconfglobal/sub1/inconflocal:sub1/inconflocal
+config:testconfoverride/inconfoverride2:testconflocal/inconfoverride2:testconfglobal/inconfoverride2:inconfoverride2
 error:testconfglobal/.file1.invalid:ignoring non-compliant filename
 error:testconfglobal/file1,invalid:ignoring non-compliant filename
 error:testconfglobal/file1..invalid:ignoring non-compliant filename
@@ -43,7 +44,7 @@ EOF
 $VALGRIND ./testprocloader dump testconfglobal testconflocal testconfoverride \
 	  >testprocloader.out
 
-LC_ALL=C sort <testprocloader.out | diff -U 3 testprocloader.txt -
+sort <testprocloader.out | diff -U 3 testprocloader.txt -
 
 rm -rf testprocloader.txt testprocloader.out
 rm -rf testconfglobal
@@ -109,3 +110,192 @@ test -e testconfglobal/otherdir2
 test ! -e testconfoverride/otherdir2
 
 rm -rf testconfglobal testconflocal testconfoverride
+
+cat >loadtest.txt <<EOF
+name: built-in
+requires: [ 'built-in/subunit', 'some/other/unit' ]
+Required-By: runlevel1
+---
+name: subunit
+requires: /some/other/unit/again
+Required-By:
+    - prereq1
+    - prereq2
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+
+sort <loadtest.out >loadtest.sorted.out
+
+cat >loadtest.expected <<EOF
+built-in/subunit:required-by built-in/prereq1
+built-in/subunit:required-by built-in/prereq2
+built-in/subunit:requires some/other/unit/again
+built-in:required-by runlevel1
+built-in:requires built-in/subunit
+built-in:requires some/other/unit
+EOF
+
+cat loadtest.expected
+diff -U 3 loadtest.expected loadtest.sorted.out
+
+>loadtest.txt
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat loadtest.out
+test ! -s loadtest.out
+
+echo 'name: built-in' >loadtest.txt
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: (built-in): did not see a "version: 1" tag
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+echo 'name: other-unit' >loadtest.txt
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: "other-unit": does not match its filename
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+---
+name: sub/unit
+version:
+  - 1
+EOF
+
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+---
+name: /sub/unit
+version:
+  - 2
+  - 1
+EOF
+
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: "/sub/unit": non-compliant name
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+---
+name: sub/unit/
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: "sub/unit/": non-compliant name
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+---
+name: sub&unit
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: "sub&unit": non-compliant name
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+---
+name: sub.un-it
+version:
+  - 1
+EOF
+
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+---
+name: sub..unit
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: "sub..unit": non-compliant name
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+- foo
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: built-in: bad format, expected a key/value map
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+requires:
+   foo: bar
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.txt <<EOF
+error: built-in: requires: bad format, expected a sequence (list)
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+requires: built-in/sub1
+---
+name: sub1
+requires: .
+---
+name: sub2
+requires: sub1
+
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+
+sort <loadtest.out >loadtest.sorted.out
+cat >loadtest.txt <<EOF
+built-in/sub1:requires built-in
+built-in/sub2:requires built-in/sub1
+built-in:requires built-in/sub1
+EOF
+diff -U 3 loadtest.txt loadtest.sorted.out
+
+cat >loadtest.txt <<EOF
+name: built-in
+requires: built-in/sub1
+---
+name: sub1
+requires: .
+---
+name: sub1
+requires: sub1
+
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+
+cat >loadtest.txt <<EOF
+error: built-in/sub1: each unit must have a unique name
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+rm -f loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

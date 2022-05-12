@@ -6,7 +6,7 @@ AM_CXXFLAGS = -std=c++20 @YAMLCPPFLAGS@
 LC_ALL=C
 
 noinst_PROGRAMS=testcontroller testdepcomputations testprocloader
-noinst_SCRIPTS=testprocloader.sh
+EXTRA_DIST=testprocloader.sh
 
 noinst_LIBRARIES=libvera.a
 
@@ -44,4 +44,4 @@ testprocloader_LDADD=libvera.a @YAMLLIBS@
 check:
 	$(VALGRIND) ./testdepcomputations
 	$(VALGRIND) ./testcontroller
-	sh $(srcdir)/testprocloader.sh
+	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testprocloader.sh
