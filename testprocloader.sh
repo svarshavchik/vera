@@ -298,4 +298,43 @@ error: built-in/sub1: each unit must have a unique name
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
+cat >loadtest.txt <<EOF
+name: built-in
+starting:
+    command: /bin/true
+    timeout: 120
+    before:
+       - dep1
+       - dep2
+    after:
+       - dep3
+       - dep4
+stopping:
+    command: /bin/false
+    timeout: 180
+    before:
+       - dep5
+       - dep6
+    after:
+       - dep7
+       - dep8
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+sort <loadtest.out >loadtest.sorted.out
+cat >loadtest.txt <<EOF
+built-in:starting:/bin/true
+built-in:starting_after dep3
+built-in:starting_after dep4
+built-in:starting_before dep1
+built-in:starting_before dep2
+built-in:starting_timeout 120
+built-in:stopping:/bin/false
+built-in:stopping_after dep7
+built-in:stopping_after dep8
+built-in:stopping_before dep5
+built-in:stopping_before dep6
+built-in:stopping_timeout 180
+EOF
+
 rm -f loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

@@ -710,7 +710,7 @@ struct parsed_yaml {
 						name + "/after",
 						error,
 						hier_name,
-						before
+						after
 					);
 				}
 				return true;
