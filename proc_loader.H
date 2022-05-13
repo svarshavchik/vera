@@ -112,4 +112,24 @@ void proc_set_override(
 	const std::string &override_type,
 	const std::function<void (const std::string &)> &error);
 
+/*! Load all container specifications
+
+Calls proc_find(), followed by proc_load() for each found container.
+
+A masked override quietly skips the container entirely.
+
+Warning messages are the ones that get reported by proc_find(), all others
+are reported as error messages.
+
+ */
+
+proc_new_container_set proc_load_all(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+
+	const std::function<void (const std::string &)> &warning,
+	const std::function<void (const std::string &)> &error
+);
+
 #endif

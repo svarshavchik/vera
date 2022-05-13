@@ -1051,3 +1051,75 @@ void proc_set_override(
 		return;
 	}
 }
+
+proc_new_container_set proc_load_all(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+
+	const std::function<void (const std::string &)> &warning,
+	const std::function<void (const std::string &)> &error
+)
+{
+	proc_new_container_set containers;
+
+	proc_find(config_global,
+		  config_local,
+		  config_override,
+		  [&]
+		  (const auto &global_path,
+		   const auto &local_path,
+		   const auto &override_path,
+		   const auto &relative_path)
+		  {
+			  bool disabled=false;
+
+			  if (override_path)
+			  {
+				  std::ifstream i{*override_path};
+
+				  if (!i.is_open())
+				  {
+					  error(static_cast<std::string>(
+							  *override_path
+						  ) + ": " + strerror(errno));
+					  return;
+				  }
+
+				  std::string s;
+
+				  std::getline(i, s);
+
+				  if (s.empty())
+					  return;
+
+				  if (s == "disabled")
+					  disabled=true;
+			  }
+
+			  std::string name{
+				  local_path ? *local_path:global_path
+			  };
+
+			  std::ifstream i{name};
+
+			  if (!i.is_open())
+			  {
+				  error(name + ": " + strerror(errno));
+				  return;
+			  }
+			  containers.merge(
+				  proc_load(i, disabled, name,
+					    relative_path, error)
+			  );
+		  },
+		  [&]
+		  (const auto &path,
+		   const auto &message)
+		  {
+			  warning(static_cast<std::string>(path)
+				  + ": " + message);
+		  });
+
+	return containers;
+}

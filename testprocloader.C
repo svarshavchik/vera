@@ -10,16 +10,8 @@
 #include <string>
 #include <sstream>
 
-void loadtest(bool disabled)
+void loadtest(const proc_new_container_set &res)
 {
-	auto res=proc_load(std::cin, disabled, "(built-in)", "built-in",
-			   []
-			   (const std::string &error)
-			   {
-				   std::cout << "error: " << error << "\n";
-			   });
-
-
 	for (const auto &n:res)
 	{
 		auto &name=n->new_container->name;
@@ -61,6 +53,16 @@ void loadtest(bool disabled)
 		for (const auto &r:n->stopping_after)
 			std::cout << name << ":stopping_after " << r << "\n";
 	}
+}
+
+void loadtest(bool disabled)
+{
+	loadtest(proc_load(std::cin, disabled, "(built-in)", "built-in",
+			   []
+			   (const std::string &error)
+			   {
+				   std::cout << "error: " << error << "\n";
+			   }));
 }
 
 int main(int argc, char **argv)
@@ -140,6 +142,25 @@ int main(int argc, char **argv)
 				  {
 					  std::cout << error << "\n";
 				  });
+
+		return 0;
+	}
+	if (args.size() == 5 && args[1] == "loadalltest")
+	{
+		loadtest(
+			proc_load_all(
+				args[2], args[3], args[4],
+				[]
+				(const auto &message)
+				{
+					std::cout << "W: " << message << "\n";
+				},
+				[]
+				(const auto &message)
+				{
+					std::cout << "E: " << message << "\n";
+				})
+		);
 
 		return 0;
 	}

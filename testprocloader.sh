@@ -382,7 +382,7 @@ $VALGRIND ./testprocloader setoverride overridedir .bad mask >loadtest.out
 cat >loadtest.txt <<EOF
 .bad: non-compliant filename
 EOF
-diff -U 3 loadtest.out loadtest.txt
+diff -U 3 loadtest.txt loadtest.out
 
 $VALGRIND ./testprocloader setoverride overridedir sub/dir mask
 
@@ -397,6 +397,71 @@ $VALGRIND ./testprocloader setoverride overridedir sub/dir disabled
 cat >loadtest.txt <<EOF
 disabled
 EOF
-diff -U 3 overridedir/sub/dir loadtest.txt
+diff -U 3 loadtest.txt overridedir/sub/dir
 
-rm -rf overridedir loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected
+rm -rf overridedir globaldir localdir
+
+mkdir -p overridedir globaldir localdir overridedir
+
+cat >globaldir/globalunit1 <<EOF
+name: unit1
+version: 1
+EOF
+
+cat >globaldir/unit2-runlevel1 <<EOF
+name: unit2-runlevel1
+enabled: runlevel1
+version: 1
+EOF
+
+cat >globaldir/unit3-runlevel2 <<EOF
+name: unit3-runlevel2
+enabled: runlevel1
+version: 1
+EOF
+
+cat >globaldir/unit4-disabled <<EOF
+name: unit4-disabled
+enabled: runlevel1
+version: 1
+EOF
+
+cat >globaldir/unit5-masked <<EOF
+name: unit5-masked
+enabled: runlevel1
+version: 1
+EOF
+
+cat >localdir/unit3-runlevel2 <<EOF
+name: unit3-runlevel2
+enabled: runlevel2
+version: 1
+EOF
+
+>globaldir/.temporary
+
+cat >overridedir/unit4-disabled <<EOF
+disabled
+EOF
+
+>overridedir/unit5-masked
+
+$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir >loadtest.out
+
+sort <loadtest.out >loadtest.sorted.out
+
+cat loadtest.sorted.out
+cat >loadtest.txt <<EOF
+E: "unit1": does not match its filename
+W: globaldir/.temporary: ignoring non-compliant filename
+unit2-runlevel1:required-by runlevel1
+unit2-runlevel1:start=forking:stop=manual
+unit3-runlevel2:required-by runlevel2
+unit3-runlevel2:start=forking:stop=manual
+unit4-disabled:start=forking:stop=manual
+EOF
+
+diff -U 3 loadtest.txt loadtest.sorted.out
+
+rm -rf globaldir localdir overridedir \
+    loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected
