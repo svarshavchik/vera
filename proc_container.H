@@ -158,6 +158,9 @@ public:
 	{
 	}
 
+	//! Container's description
+	std::string description;
+
 	//! What other process containers this one requires
 	std::unordered_set<std::string> dep_requires;
 
@@ -185,10 +188,27 @@ typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
 typedef std::unordered_set<proc_new_container, proc_container_hash,
 			   proc_container_equal> proc_new_container_set;
 
+/*! Run level configuration
+
+The set keys are the primary runlevel names: "single", "multi", "graphical",
+etc..
+
+The set values are aliases: "0", "1", "6", etc...
+
+An alias of "default" specifies the default runlevel.
+
+ */
+
+typedef std::unordered_map<std::string,
+			   std::unordered_set<std::string>> runlevels;
+
 //! Install process containers
 
 void proc_containers_install(const proc_new_container_set &new_containers);
 void proc_containers_install(proc_new_container_set &&new_containers);
+
+//! For unit tests
+void proc_containers_reset();
 
 
 #endif

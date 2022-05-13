@@ -7,6 +7,7 @@
 #include "proc_container.H"
 #include "proc_container_runner.H"
 #include "proc_container_timer.H"
+#include "proc_loader.H"
 #include "messages.H"
 #include "log.H"
 #include <unordered_map>
@@ -254,6 +255,11 @@ std::vector<std::tuple<proc_container, proc_container_state>
 //
 // Install/update process containers
 
+void proc_containers_reset()
+{
+	containers_info=std::make_shared<current_containers_infoObj>();
+}
+
 void proc_containers_install(const proc_new_container_set &new_containers)
 {
 	proc_new_container_set copy{new_containers};
@@ -272,6 +278,39 @@ void current_containers_infoObj::install(
 {
 	current_containers new_current_containers;
 	new_all_dependency_info_t new_all_dependency_info;
+
+	// Generate stubs for runlevels.
+	//
+	// Run level config has, for example:
+	//
+	// graphical:
+	//    - 5
+	//
+	// And we have a "graphical runlevel" stub in the configuration
+	// directory.
+	//
+	// Create an alias entry so that starting "5" finds the
+	// "graphical runlevel" entry.
+
+	std::unordered_map<std::string, proc_container> new_runlevel_containers;
+
+	for (auto &[name, aliases] : runlevel_configuration)
+	{
+		auto runlevel_container=
+			*new_containers.insert(
+				std::make_shared<proc_new_containerObj>(
+					name + RUNLEVEL_SUFFIX
+				)).first;
+
+		runlevel_container->new_container->type=
+			proc_container_type::runlevel;
+
+		for (auto &alias:aliases)
+			new_runlevel_containers.emplace(
+				alias,
+				runlevel_container->new_container
+			);
+	}
 
 	for (const auto &c:new_containers)
 	{
@@ -543,6 +582,7 @@ void current_containers_infoObj::install(
 
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
+	runlevel_containers=std::move(new_runlevel_containers);
 
 	/////////////////////////////////////////////////////////////
 	//
@@ -601,15 +641,28 @@ std::string proc_container_runlevel(const std::string &new_runlevel)
 
 std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 {
-	auto iter=containers.find(runlevel);
+	// Check for aliases, first
 
-	if (iter == containers.end() ||
-	    iter->first->type != proc_container_type::runlevel)
+	auto iter=runlevel_containers.find(runlevel);
+
+	if (iter != runlevel_containers.end())
 	{
-		return _("No such run level: ") + runlevel;
+		new_runlevel=iter->second;
 	}
+	else
+	{
+		// Maybe they specified the "real" name.
 
-	new_runlevel=iter->first;
+		auto iter=containers.find(runlevel + RUNLEVEL_SUFFIX);
+
+		if (iter == containers.end() ||
+		    iter->first->type != proc_container_type::runlevel)
+		{
+			return _("No such run level: ") + runlevel;
+		}
+
+		new_runlevel=iter->first;
+	}
 
 	find_start_or_stop_to_do();
 
@@ -1245,7 +1298,7 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 				*this, current_runlevel, new_runlevel
 			};
 
-			log_message(_("Stopping run level: ")
+			log_message(_("Stopping ")
 				    + current_runlevel->name);
 			for (auto b=containers.begin(),
 				     e=containers.end(); b != e; ++b)
@@ -1274,7 +1327,7 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 
 		current_runlevel=new_runlevel;
 		new_runlevel=nullptr;
-		log_message(_("Starting run level: ") + current_runlevel->name);
+		log_message(_("Starting ") + current_runlevel->name);
 
 		all_required_dependencies(
 			current_runlevel,

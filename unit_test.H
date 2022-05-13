@@ -43,7 +43,7 @@ std::unordered_set<std::string> stopped_containers;
 
 void test_reset()
 {
-	proc_containers_install({});
+	proc_containers_reset();
 
 	for (const auto &[pc, ignore] : get_proc_containers())
 		proc_container_stopped(pc->name);

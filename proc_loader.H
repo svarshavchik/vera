@@ -132,4 +132,30 @@ proc_new_container_set proc_load_all(
 	const std::function<void (const std::string &)> &error
 );
 
+//! Return the default runlevel configuration
+
+runlevels default_runlevels();
+
+//! Install new runlevel configuration
+bool proc_set_runlevel_config(const std::string &configfile,
+			      const runlevels &new_runlevels);
+
+//! Retrieve the runlevel configuration
+
+//! The error callback gets used to report any errors. This function always
+//! succeeds, and fallsback to default_runlevels() if necessary.
+
+runlevels proc_get_runlevel_config(
+	const std::string &configfile,
+	const std::function<void (const std::string &)> &error);
+
+//! Update configfile to reflect the new "default" runlevel.
+
+bool proc_set_runlevel_default(
+	const std::string &configfile,
+	const std::string &new_runlevel,
+	const std::function<void (const std::string &)> &error);
+
+#define RUNLEVEL_SUFFIX " runlevel"
+
 #endif

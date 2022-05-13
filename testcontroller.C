@@ -9,6 +9,13 @@
 
 #include "unit_test.H"
 
+#include "proc_loader.H"
+
+current_containers_infoObj::current_containers_infoObj()
+	: runlevel_configuration{default_runlevels()}
+{
+}
+
 void test_proc_new_container_set()
 {
 	proc_new_container_set pcs;
@@ -579,6 +586,10 @@ void verify_container_state(
 	std::vector<std::string> states;
 
 	for (const auto &[pc, s] : get_proc_containers())
+	{
+		if (pc->type == proc_container_type::runlevel)
+			continue;
+
 		states.push_back(
 			pc->name + ": " +
 			std::visit([]
@@ -586,6 +597,7 @@ void verify_container_state(
 			{
 				return ss;
 			}, s));
+	}
 
 	std::sort(states.begin(), states.end());
 
@@ -610,7 +622,8 @@ void test_requires2()
 	std::unordered_map<std::string, proc_container_type> containers;
 
 	for (const auto &[pc, ignore] : get_proc_containers())
-		containers.emplace(pc->name, pc->type);
+		if (pc->type != proc_container_type::runlevel)
+			containers.emplace(pc->name, pc->type);
 
 	if (containers != std::unordered_map<std::string, proc_container_type>{
 			{"requires2a", proc_container_type::loaded},
@@ -1060,9 +1073,13 @@ void test_circular()
 	std::unordered_map<std::string, bool> states;
 
 	for (const auto &[pc, s] : get_proc_containers())
+	{
+		if (pc->type == proc_container_type::runlevel)
+			continue;
+
 		states.emplace(pc->name, std::holds_alternative<state_started>(
 				  s));
-
+	}
 	if (states != std::unordered_map<std::string, bool>{
 			{"circulara", true},
 			{"circularb", true},
@@ -1081,6 +1098,8 @@ void test_circular()
 	{
 		for (const auto &[pc, s] : get_proc_containers())
 		{
+			if (pc->type == proc_container_type::runlevel)
+				continue;
 			if (std::holds_alternative<stop_removing>(
 				    std::get<state_stopping>(s).phase
 			    ))
@@ -1114,8 +1133,12 @@ void test_circular()
 
 	states.clear();
 	for (const auto &[pc, s] : get_proc_containers())
+	{
+		if (pc->type == proc_container_type::runlevel)
+			continue;
 		states.emplace(pc->name, std::holds_alternative<state_stopped>(
 				  s));
+	}
 
 	if (states != std::unordered_map<std::string, bool>{
 			{"circulara", true},
@@ -1127,23 +1150,18 @@ void test_circular()
 
 void test_runlevels()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_new_containerObj>("runlevel2");
 	auto c=std::make_shared<proc_new_containerObj>("runlevel1prog");
 	auto d=std::make_shared<proc_new_containerObj>("runlevel12prog");
 	auto e=std::make_shared<proc_new_containerObj>("runlevel2prog");
 	auto f=std::make_shared<proc_new_containerObj>("otherprog");
 
-	a->new_container->type=proc_container_type::runlevel;
-	b->new_container->type=proc_container_type::runlevel;
-
-	c->dep_required_by.insert("runlevel1");
-	d->dep_required_by.insert("runlevel1");
-	d->dep_required_by.insert("runlevel2");
-	e->dep_required_by.insert("runlevel2");
+	c->dep_required_by.insert("graphical runlevel");
+	d->dep_required_by.insert("graphical runlevel");
+	d->dep_required_by.insert("multi-user runlevel");
+	e->dep_required_by.insert("multi-user runlevel");
 
 	proc_containers_install({
-			a, b, c, d, e, f
+			c, d, e, f
 		});
 
 	if (proc_container_runlevel("runlevel1prog").empty() ||
@@ -1151,14 +1169,14 @@ void test_runlevels()
 		throw "Unexpected success of referencing something other than "
 			"a runlevel container";
 
-	if (!proc_container_runlevel("runlevel1").empty())
+	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
 
 	std::sort(logged_state_changes.begin(),
 		  logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"runlevel12prog: start pending (dependency)",
 			"runlevel12prog: started (dependency)",
 			"runlevel1prog: start pending (dependency)",
@@ -1177,10 +1195,10 @@ void test_runlevels()
 		throw "Unexpected state changes after proc_container_start";
 
 	logged_state_changes.clear();
-	if (!proc_container_runlevel("runlevel2").empty())
+	if (!proc_container_runlevel("multi-user").empty())
 		throw "Unexpected error starting runlevel2";
 	if (logged_state_changes != std::vector<std::string>{
-			"Stopping run level: runlevel1",
+			"Stopping graphical runlevel",
 			"runlevel1prog: stop pending",
 			"runlevel1prog: removing",
 		})
@@ -1190,7 +1208,7 @@ void test_runlevels()
 	proc_container_stopped("runlevel1prog");
 	if (logged_state_changes != std::vector<std::string>{
 			"runlevel1prog: stopped",
-			"Starting run level: runlevel2",
+			"Starting multi-user runlevel",
 			"runlevel2prog: start pending (dependency)",
 			"runlevel2prog: started (dependency)",
 		})
@@ -1199,14 +1217,9 @@ void test_runlevels()
 
 void test_before_after1()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_new_containerObj>("runlevel2");
 	auto c=std::make_shared<proc_new_containerObj>("testbefore_after_1");
 	auto d=std::make_shared<proc_new_containerObj>("testbefore_after_2");
 	auto e=std::make_shared<proc_new_containerObj>("testbefore_after_3");
-
-	a->new_container->type=proc_container_type::runlevel;
-	b->new_container->type=proc_container_type::runlevel;
 
 	c->starting_after.insert("testbefore_after_2");
 	e->starting_before.insert("testbefore_after_2");
@@ -1214,15 +1227,15 @@ void test_before_after1()
 	c->stopping_before.insert("testbefore_after_2");
 	e->stopping_after.insert("testbefore_after_2");
 
-	c->dep_required_by.insert("runlevel1");
-	d->dep_required_by.insert("runlevel1");
-	e->dep_required_by.insert("runlevel1");
+	c->dep_required_by.insert("graphical runlevel");
+	d->dep_required_by.insert("graphical runlevel");
+	e->dep_required_by.insert("graphical runlevel");
 
 	proc_containers_install({
-			a, b, c, d, e
+			c, d, e
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
+	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
 
 	if (logged_state_changes.size() > 3)
@@ -1230,7 +1243,7 @@ void test_before_after1()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"testbefore_after_1: start pending (dependency)",
 			"testbefore_after_2: start pending (dependency)",
 			"testbefore_after_3: start pending (dependency)",
@@ -1243,7 +1256,7 @@ void test_before_after1()
 	}
 
 	logged_state_changes.clear();
-	if (!proc_container_runlevel("runlevel2").empty())
+	if (!proc_container_runlevel("multi-user").empty())
 		throw "Unexpected error starting runlevel2";
 
 	if (logged_state_changes.size() > 3)
@@ -1251,7 +1264,7 @@ void test_before_after1()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Stopping run level: runlevel1",
+			"Stopping graphical runlevel",
 			"testbefore_after_1: stop pending",
 			"testbefore_after_2: stop pending",
 			"testbefore_after_3: stop pending",
@@ -1284,7 +1297,7 @@ void test_before_after1()
 	proc_container_stopped("testbefore_after_3");
 	if (logged_state_changes != std::vector<std::string>{
 			"testbefore_after_3: stopped",
-			"Starting run level: runlevel2"
+			"Starting multi-user runlevel"
 		})
 	{
 		throw "Unexpected state change after first container stopped";
@@ -1293,14 +1306,9 @@ void test_before_after1()
 
 void test_before_after2()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
-	auto b=std::make_shared<proc_new_containerObj>("runlevel2");
 	auto c=std::make_shared<proc_new_containerObj>("testbefore_after_1");
 	auto d=std::make_shared<proc_new_containerObj>("testbefore_after_2");
 	auto e=std::make_shared<proc_new_containerObj>("testbefore_after_3");
-
-	a->new_container->type=proc_container_type::runlevel;
-	b->new_container->type=proc_container_type::runlevel;
 
 	c->starting_before.insert("testbefore_after_2");
 	e->starting_after.insert("testbefore_after_2");
@@ -1308,15 +1316,15 @@ void test_before_after2()
 	c->stopping_after.insert("testbefore_after_2");
 	e->stopping_before.insert("testbefore_after_2");
 
-	c->dep_required_by.insert("runlevel1");
-	d->dep_required_by.insert("runlevel1");
-	e->dep_required_by.insert("runlevel1");
+	c->dep_required_by.insert("graphical runlevel");
+	d->dep_required_by.insert("graphical runlevel");
+	e->dep_required_by.insert("graphical runlevel");
 
 	proc_containers_install({
-			a, b, c, d, e
+			c, d, e
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
+	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
 
 	if (logged_state_changes.size() > 3)
@@ -1324,7 +1332,7 @@ void test_before_after2()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"testbefore_after_1: start pending (dependency)",
 			"testbefore_after_2: start pending (dependency)",
 			"testbefore_after_3: start pending (dependency)",
@@ -1337,7 +1345,7 @@ void test_before_after2()
 	}
 
 	logged_state_changes.clear();
-	if (!proc_container_runlevel("runlevel2").empty())
+	if (!proc_container_runlevel("multi-user").empty())
 		throw "Unexpected error starting runlevel2";
 
 	if (logged_state_changes.size() > 3)
@@ -1345,7 +1353,7 @@ void test_before_after2()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Stopping run level: runlevel1",
+			"Stopping graphical runlevel",
 			"testbefore_after_1: stop pending",
 			"testbefore_after_2: stop pending",
 			"testbefore_after_3: stop pending",
@@ -1378,7 +1386,7 @@ void test_before_after2()
 	proc_container_stopped("testbefore_after_1");
 	if (logged_state_changes != std::vector<std::string>{
 			"testbefore_after_1: stopped",
-			"Starting run level: runlevel2"
+			"Starting multi-user runlevel"
 		})
 	{
 		throw "Unexpected state change after first container stopped";
@@ -1387,15 +1395,12 @@ void test_before_after2()
 
 void test_failure_with_dependencies_common(const std::string &name)
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
 	auto b=std::make_shared<proc_new_containerObj>(name + "b");
 	auto c=std::make_shared<proc_new_containerObj>(name + "c");
 	auto d=std::make_shared<proc_new_containerObj>(name + "d");
 	auto e=std::make_shared<proc_new_containerObj>(name + "e");
 
-	a->new_container->type=proc_container_type::runlevel;
-
-	b->dep_required_by.insert("runlevel1");
+	b->dep_required_by.insert("graphical runlevel");
 	b->dep_requires.insert(name + "c");
 	c->dep_requires.insert(name + "d");
 	c->new_container->starting_command="start_c";
@@ -1403,10 +1408,10 @@ void test_failure_with_dependencies_common(const std::string &name)
 	c->new_container->stopping_command="stop_c";
 	d->new_container->stopping_command="stop_d";
 
-	e->dep_required_by.insert("runlevel1");
+	e->dep_required_by.insert("graphical runlevel");
 
 	proc_containers_install({
-			a, b, c, d, e
+			b, c, d, e
 		});
 }
 
@@ -1414,13 +1419,13 @@ void test_failed_fork_with_dependencies()
 {
 	test_failure_with_dependencies_common("dep_fail_fork");
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"dep_fail_forkb: start pending (dependency)",
 			"dep_fail_forkc: start pending (dependency)",
 			"dep_fail_forkd: start pending (dependency)",
@@ -1504,7 +1509,6 @@ void test_failed_fork_with_dependencies()
 			"dep_fail_forkc: stopped",
 			"dep_fail_forkd: stopped",
 			"dep_fail_forke: started (dependency)",
-			"runlevel1: stopped"
 		}, "Unexpected final container state");
 }
 
@@ -1512,8 +1516,8 @@ void test_timeout_with_dependencies()
 {
 	test_failure_with_dependencies_common("dep_timeout");
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	logged_state_changes.clear();
 	logged_runners.clear();
@@ -1595,7 +1599,6 @@ void test_timeout_with_dependencies()
 			"dep_timeoutc: stopped",
 			"dep_timeoutd: stopped",
 			"dep_timeoute: started (dependency)",
-			"runlevel1: stopped"
 		}, "Unexpected final container state");
 }
 
@@ -1603,8 +1606,8 @@ void test_startfail_with_dependencies()
 {
 	test_failure_with_dependencies_common("dep_startfail");
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	logged_state_changes.clear();
 	logged_runners.clear();
@@ -1686,28 +1689,25 @@ void test_startfail_with_dependencies()
 			"dep_startfailc: stopped",
 			"dep_startfaild: stopped",
 			"dep_startfaile: started (dependency)",
-			"runlevel1: stopped"
 		}, "Unexpected final container state");
 }
 
 void happy_oneshot()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
 	auto b=std::make_shared<proc_new_containerObj>("happyoneshotb");
 
-	a->new_container->type=proc_container_type::runlevel;
 	b->new_container->start_type=start_type_t::oneshot;
-	b->dep_required_by.insert("runlevel1");
+	b->dep_required_by.insert("graphical runlevel");
 	b->new_container->starting_command="happyoneshot";
 	proc_containers_install({
-			a, b,
+			b,
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"happyoneshotb: start pending (dependency)",
 			"happyoneshotb: started (dependency)",
 		})
@@ -1733,22 +1733,20 @@ void happy_oneshot()
 
 void sad_oneshot()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
 	auto b=std::make_shared<proc_new_containerObj>("sadoneshotb");
 
-	a->new_container->type=proc_container_type::runlevel;
 	b->new_container->start_type=start_type_t::oneshot;
-	b->dep_required_by.insert("runlevel1");
+	b->dep_required_by.insert("graphical runlevel");
 	b->new_container->starting_command="sadoneshot";
 	proc_containers_install({
-			a, b,
+			b,
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"sadoneshotb: start pending (dependency)",
 			"sadoneshotb: started (dependency)",
 		})
@@ -1774,7 +1772,6 @@ void sad_oneshot()
 
 	verify_container_state(
 		{
-			"runlevel1: stopped",
 			"sadoneshotb: started (dependency)",
 		},
 		"unexpected container state after failed oenshot");
@@ -1782,21 +1779,19 @@ void sad_oneshot()
 
 void manualstopearly()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
 	auto b=std::make_shared<proc_new_containerObj>("manualstopearly");
 
-	a->new_container->type=proc_container_type::runlevel;
 	b->new_container->start_type=start_type_t::oneshot;
-	b->dep_required_by.insert("runlevel1");
+	b->dep_required_by.insert("graphical runlevel");
 	proc_containers_install({
-			a, b,
+			b,
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"manualstopearly: start pending (dependency)",
 			"manualstopearly: started (dependency)",
 		})
@@ -1827,22 +1822,20 @@ void manualstopearly()
 
 void automaticstopearly1()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
 	auto b=std::make_shared<proc_new_containerObj>("automaticstopearly1");
 
-	a->new_container->type=proc_container_type::runlevel;
 	b->new_container->start_type=start_type_t::oneshot;
 	b->new_container->stop_type=stop_type_t::automatic;
-	b->dep_required_by.insert("runlevel1");
+	b->dep_required_by.insert("graphical runlevel");
 	proc_containers_install({
-			a, b,
+			b,
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"automaticstopearly1: start pending (dependency)",
 			"automaticstopearly1: started (dependency)",
 		})
@@ -1866,23 +1859,21 @@ void automaticstopearly1()
 
 void automaticstopearly2()
 {
-	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
 	auto b=std::make_shared<proc_new_containerObj>("automaticstopearly2");
 
-	a->new_container->type=proc_container_type::runlevel;
 	b->new_container->start_type=start_type_t::oneshot;
 	b->new_container->stop_type=stop_type_t::automatic;
 	b->new_container->stopping_command="stop";
-	b->dep_required_by.insert("runlevel1");
+	b->dep_required_by.insert("graphical runlevel");
 	proc_containers_install({
-			a, b,
+			b,
 		});
 
-	if (!proc_container_runlevel("runlevel1").empty())
-		throw "Unexpected error starting runlevel1";
+	if (!proc_container_runlevel("graphical").empty())
+		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting run level: runlevel1",
+			"Starting graphical runlevel",
 			"automaticstopearly2: start pending (dependency)",
 			"automaticstopearly2: started (dependency)",
 		})

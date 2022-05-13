@@ -5,10 +5,18 @@
 
 #include "config.h"
 #include "proc_loader.H"
+#include "current_containers_info.H"
 #include <iostream>
 #include <vector>
 #include <string>
 #include <sstream>
+#include <fstream>
+#include <errno.h>
+#include <string.h>
+
+current_containers_infoObj::current_containers_infoObj()
+{
+}
 
 void loadtest(const proc_new_container_set &res)
 {
@@ -20,6 +28,9 @@ void loadtest(const proc_new_container_set &res)
 			  << ":start=" << n->new_container->get_start_type()
 			  << ":stop=" << n->new_container->get_stop_type()
 			  << "\n";
+		if (!n->description.empty())
+			std::cout << name << ":description="
+				  << n->description << "\n";
 		for (const auto &r:n->dep_requires)
 			std::cout << name << ":requires " << r << "\n";
 		for (const auto &r:n->dep_required_by)
@@ -55,9 +66,9 @@ void loadtest(const proc_new_container_set &res)
 	}
 }
 
-void loadtest(bool disabled)
+void loadtest(bool disabled, const std::string &name)
 {
-	loadtest(proc_load(std::cin, disabled, "(built-in)", "built-in",
+	loadtest(proc_load(std::cin, disabled, "(built-in)", name,
 			   []
 			   (const std::string &error)
 			   {
@@ -124,13 +135,19 @@ int main(int argc, char **argv)
 
 	if (args.size() == 2 && args[1] == "loadtest")
 	{
-		loadtest(false);
+		loadtest(false, "built-in");
 		return 0;
 	}
 
 	if (args.size() == 2 && args[1] == "disabledloadtest")
 	{
-		loadtest(true);
+		loadtest(true, "built-in");
+		return 0;
+	}
+
+	if (args.size() == 3 && args[1] == "loadtest")
+	{
+		loadtest(false, args[2]);
 		return 0;
 	}
 
@@ -165,5 +182,97 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (args.size() == 3 && args[1] == "testrunlevelconfig")
+	{
+		if (!proc_set_runlevel_config(args[2], default_runlevels()))
+		{
+			exit(1);
+		}
+
+		if (!proc_set_runlevel_default(args[2], "single-user",
+			     [&]
+			     (auto &msg)
+			     {
+				     std::cerr << msg << "\n";
+			     }))
+		{
+			std::cout << "Could not set \"single-user\"\n";
+			exit(1);
+		}
+
+		if (!proc_set_runlevel_default(args[2], "4",
+			     [&]
+			     (auto &msg)
+			     {
+				     std::cerr << msg << "\n";
+			     }))
+		{
+			std::cout << "Could not set \"4\"\n";
+			exit(1);
+		}
+
+		std::vector<std::string> default_runlevel;
+
+		for (auto &[runlevel, aliases] : proc_get_runlevel_config(
+			     args[2],
+			     [&]
+			     (auto &msg)
+			     {
+				     std::cerr << msg << "\n";
+			     }))
+		{
+			if (aliases.find("default") != aliases.end())
+				default_runlevel.push_back(runlevel);
+		}
+
+		if (default_runlevel != std::vector<std::string>{"custom"})
+		{
+			std::cerr << "Unexpected default runlevel update."
+				  << std::endl;
+			exit(1);
+		}
+
+		if (proc_set_runlevel_default(args[2], "XXX",
+					      [](auto &msg)
+					      {
+						      std::cout << msg << "\n";
+					      }))
+		{
+			std::cerr << "Unknown runlevel was accepted.\n";
+			exit(1);
+		}
+
+		return 0;
+	}
+
+	if (args.size() == 3 && args[1] == "genrunlevels")
+	{
+		for (const auto &[name, aliases] : default_runlevels())
+		{
+			std::ofstream o{args[2] + "/" + name + RUNLEVEL_SUFFIX};
+
+			o << "# Placeholder entry -- do not remove\n\n"
+				"name: "
+				<< name
+				<< " runlevel\n"
+				"description: >\n"
+				"    Run Level \""
+				<< name << "\"\n\n"
+				"    Specifying:\n"
+				"\n"
+				"       Enabled: " << name << " runlevel\n\n"
+				"    automatically starts the process container"
+				" when this run level gets started.\n"
+				"version: 1\n";
+
+			o.close();
+			if (!o)
+			{
+				std::cerr << strerror(errno) << "\n";
+				exit(1);
+			}
+		}
+		return 0;
+	}
 	return 1;
 }

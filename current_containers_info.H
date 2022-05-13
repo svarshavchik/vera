@@ -24,17 +24,28 @@ typedef current_containers::iterator current_container;
 class current_containers_infoObj : public std::enable_shared_from_this<
 	current_containers_infoObj> {
 
+	//! Runlevel configuration
+	runlevels runlevel_configuration;
+
 	//! The containers themselves
 	current_containers containers;
 
 	//! The current runlevel
 	proc_container current_runlevel;
 
+	//! Lookup map for runlevel containers.
+
+	std::unordered_map<std::string, proc_container> runlevel_containers;
+
 	//! When switching runlevels: the new runlevel
 
 	proc_container new_runlevel;
 
 public:
+	//! The constructor only loads the runlevel configuration.
+
+	current_containers_infoObj();
+
 	friend time_t run_timers();
 	friend class proc_container_runnerObj;
 

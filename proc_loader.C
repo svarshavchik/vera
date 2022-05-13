@@ -7,12 +7,14 @@
 #include "messages.H"
 #include <algorithm>
 #include <filesystem>
+#include <vector>
 #include <array>
 #include <string>
 #include <unistd.h>
 #include <fstream>
 #include <algorithm>
 #include <optional>
+#include <memory>
 #include <unordered_set>
 #include <errno.h>
 #include <sys/stat.h>
@@ -903,6 +905,19 @@ proc_new_container_set proc_load(
 				    name += ": ";
 				    name += key;
 
+				    if (key == "description")
+				    {
+					    auto s=parsed.parse_scalar(
+						    n,
+						    name,
+						    error);
+
+					    if (!s)
+						    return false;
+
+					    nc->description=*s;
+				    }
+
 				    if (key == "requires" &&
 					!parsed.parse_requirements(
 						n,
@@ -1122,4 +1137,433 @@ proc_new_container_set proc_load_all(
 		  });
 
 	return containers;
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+// Some basic, generic scaffolding for writing out YAML. This is used to
+// update the runlevel configuration file, to specify the default runlevel
+
+namespace {
+#if 0
+}
+#endif
+
+// Interface libyaml to write the YAML contents to a std::ofstream
+
+extern "C" int write_runlevel(void *data,
+			      unsigned char *buffer,
+			      size_t size)
+{
+	auto stream=reinterpret_cast<std::ofstream *>(data);
+
+	stream->write( reinterpret_cast<char *>(buffer), size);
+
+	return stream->good() ? 1:0;
+}
+
+struct yaml_writer;
+
+// Write out a YAML node.
+
+struct yaml_write_node {
+
+	virtual bool write(yaml_writer &w)=0;
+};
+
+// RAII wrapper for a yaml_emitter.
+
+struct yaml_writer {
+
+	std::ofstream &o;
+	yaml_emitter_t emitter;
+	bool initialized{false};
+
+	yaml_writer(std::ofstream &o) : o{o}
+	{
+		if (!yaml_emitter_initialize(&emitter))
+			return;
+		initialized=true;
+
+		yaml_emitter_set_output(&emitter, &write_runlevel, &o);
+	}
+
+	~yaml_writer()
+	{
+		if (!initialized)
+		    return;
+
+		yaml_emitter_delete(&emitter);
+	}
+
+	// Write out the top level YAML node.
+
+	bool write(yaml_write_node &n)
+	{
+		yaml_event_t stream_start, stream_end;
+		yaml_event_t doc_start, doc_end;
+
+		if (!yaml_stream_start_event_initialize(
+			    &stream_start,
+			    YAML_ANY_ENCODING))
+			return false;
+
+		if (!yaml_emitter_emit(&emitter, &stream_start))
+			return false;
+
+		if (!yaml_document_start_event_initialize(
+			    &doc_start,
+			    NULL, NULL, NULL, 1))
+			return false;
+
+		if (!yaml_emitter_emit(&emitter, &doc_start))
+			return false;
+
+		if (!n.write(*this))
+			return false;
+
+		if (!yaml_document_end_event_initialize(&doc_end, 1))
+			return false;
+
+		if (!yaml_emitter_emit(&emitter, &doc_end))
+			return false;
+
+		if (!yaml_stream_end_event_initialize(&stream_end))
+			return false;
+
+		if (!yaml_emitter_emit(&emitter, &stream_end))
+			return false;
+
+		return true;
+	}
+};
+
+// Write out a scalar.
+
+// The object owns a std::string with the scalar's value.
+
+struct yaml_write_scalar : yaml_write_node {
+
+	std::string s;
+	yaml_event_t event;
+
+	yaml_write_scalar(std::string s) : s{std::move(s)}
+	{
+	}
+
+	bool write(yaml_writer &w) override
+	{
+		if (!yaml_scalar_event_initialize(
+			    &event, NULL, NULL,
+			    reinterpret_cast<const yaml_char_t *>(s.c_str()),
+			    s.size(),
+			    1, 1,
+			    YAML_ANY_SCALAR_STYLE))
+			return false;
+
+		if (!yaml_emitter_emit(&w.emitter, &event))
+			return false;
+
+		return true;
+	}
+
+
+};
+
+// Write out a map. The map is represented as a vector of key/value tuples.
+
+typedef std::vector<std::tuple<std::shared_ptr<yaml_write_node>,
+			       std::shared_ptr<yaml_write_node>>> yaml_map_t;
+
+struct yaml_write_map : yaml_write_node {
+
+	yaml_event_t start_event, end_event;
+
+	yaml_map_t map;
+
+	yaml_write_map(yaml_map_t map) : map{std::move(map)}
+	{
+	}
+
+	bool write(yaml_writer &w) override
+	{
+		if (!yaml_mapping_start_event_initialize(
+			    &start_event,
+			    NULL, NULL, 1, YAML_ANY_MAPPING_STYLE
+		    ))
+			return false;
+
+		if (!yaml_emitter_emit(&w.emitter, &start_event))
+			return false;
+
+		for ( auto &[key, value] : map)
+		{
+			if (!key->write(w) || !value->write(w))
+				return false;
+		}
+
+		if (!yaml_mapping_end_event_initialize(&end_event))
+			return false;
+
+		if (!yaml_emitter_emit(&w.emitter, &end_event))
+			return false;
+
+		return true;
+	}
+};
+
+// Write out a YAML sequence. The sequence naturally gets defined as a vector.
+
+struct yaml_write_seq : yaml_write_node {
+
+	yaml_event_t start_event, end_event;
+
+	std::vector<std::shared_ptr<yaml_write_node>> seq;
+
+	yaml_write_seq(std::vector<std::shared_ptr<yaml_write_node>> seq)
+		: seq{std::move(seq)}
+	{
+	}
+
+	bool write(yaml_writer &w) override
+	{
+		if (!yaml_sequence_start_event_initialize(
+			    &start_event,
+			    NULL, NULL, 1, YAML_ANY_SEQUENCE_STYLE
+		    ))
+			return false;
+
+		if (!yaml_emitter_emit(&w.emitter, &start_event))
+			return false;
+
+		for ( auto &value : seq)
+			if (!value->write(w))
+				return false;
+
+		if (!yaml_sequence_end_event_initialize(&end_event))
+			return false;
+
+		if (!yaml_emitter_emit(&w.emitter, &end_event))
+			return false;
+		return true;
+	}
+};
+#if 0
+{
+#endif
+}
+
+bool proc_set_runlevel_config(const std::string &configfile,
+			      const runlevels &new_runlevels)
+{
+	// Create a temporary file, first.
+
+	std::string tmpname = configfile + "~";
+
+	std::ofstream o{tmpname};
+
+	if (!o)
+		return false;
+
+	o << "# This file gets automatically updated.\n"
+		"# It should not be manually updated.\n\n";
+
+	yaml_writer writer{o};
+
+	if (!writer.initialized)
+	{
+		std::cout << _("unable to initialize the YAML writer")
+			  << "\n";
+		return false;
+	}
+
+	yaml_map_t m;
+
+	for (auto &[name, aliases]:new_runlevels)
+	{
+		std::vector<std::shared_ptr<yaml_write_node>> levels;
+
+		levels.reserve(aliases.size());
+
+		for (auto &a:aliases)
+		{
+			levels.push_back(
+				std::make_shared<yaml_write_scalar>(a)
+			);
+		}
+
+		m.emplace_back(std::make_shared<yaml_write_scalar>(name),
+			       std::make_shared<yaml_write_seq>(
+				       std::move(levels)
+			       )
+		);
+	}
+
+	yaml_write_map runlevel_map{ std::move(m) };
+
+	errno=0;
+
+	if (!writer.write(runlevel_map) || (o.close(), !o) ||
+	    rename(tmpname.c_str(), configfile.c_str()))
+	{
+		std::cerr << configfile << ": "
+			  << (errno ? strerror(errno)
+			      : _("error writing out the YAML file"))
+			  << "\n";
+		return false;
+	}
+
+	return true;
+}
+
+runlevels default_runlevels()
+{
+	return {
+		{"shutdown", {
+			"0"
+			}
+		},
+		{
+			"single-user",	{ "1", "s", "S" },
+		},
+		{
+			"multi-user",	{ "2" },
+		},
+		{
+			"networking",	{ "3" },
+		},
+		{
+			"custom",	{ "4" },
+		},
+		{
+			"graphical",	{ "5", "default" },
+		},
+		{
+			"reboot",	{ "6" }
+		},
+	};
+}
+
+
+runlevels proc_get_runlevel_config(
+	const std::string &configfile,
+	const std::function<void (const std::string &)> &error)
+{
+	std::ifstream input_file{configfile};
+
+	if (!input_file)
+	{
+		error(configfile + ": " + strerror(errno));
+		return default_runlevels();
+	}
+
+	yaml_parser_info info{input_file};
+
+	if (!info.initialized)
+	{
+		error(configfile +
+		      _(": YAML parser initialization failure"));
+		return default_runlevels();
+	}
+
+	parsed_yaml parsed{info, configfile, error};
+
+	if (!parsed.initialized)
+	{
+		error(configfile +
+		      _(": loaded document was empty"));
+		return default_runlevels();
+	}
+
+	runlevels current_runlevels;
+
+	if (parsed.parse_map(
+		    yaml_document_get_root_node(&parsed.doc),
+		    configfile,
+		    [&]
+		    (const std::string &key,
+		     yaml_node_t *n,
+		     const auto &error)
+		    {
+			    std::unordered_set<std::string> aliases;
+
+			    auto this_key = configfile + "/" + key;
+
+			    if (!parsed.parse_sequence(
+					n,
+					this_key,
+					[&]
+					(yaml_node_t *n, const auto &error)
+					{
+						auto s=parsed.parse_scalar(
+							n,
+							this_key,
+							error);
+
+						if (!s)
+							return false;
+						aliases.insert(
+							std::move(*s)
+						);
+
+						return true;
+					},
+					error))
+				    return false;
+
+			    current_runlevels.emplace(
+				    key,
+				    std::move(aliases));
+
+			    return true;
+		    },
+		    error))
+	{
+		return current_runlevels;
+	}
+
+	current_runlevels=default_runlevels();
+
+	return current_runlevels;
+}
+
+bool proc_set_runlevel_default(
+	const std::string &configfile,
+	const std::string &new_runlevel,
+	const std::function<void (const std::string &)> &error)
+{
+	// First, read the current default
+
+	auto current_runlevels=proc_get_runlevel_config(configfile, error);
+
+	// Go through, and:
+	//
+	// If we find a default entry, remove it.
+	//
+	// When we find the new default runlevel, add a "default" alias for it.
+
+	bool found=false;
+
+	for (auto &[runlevel, aliases] : current_runlevels)
+	{
+		auto iter=aliases.find("default");
+
+		if (iter != aliases.end())
+			aliases.erase(iter);
+
+		if (!found && (runlevel == new_runlevel ||
+			       aliases.find(new_runlevel) != aliases.end()))
+		{
+			found=true;
+			aliases.insert("default");
+		}
+	}
+
+	if (!found)
+	{
+		error(configfile + ": " + new_runlevel + _(": not found"));
+		return false;
+	}
+
+	return proc_set_runlevel_config(configfile, current_runlevels);
 }

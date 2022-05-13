@@ -463,5 +463,30 @@ EOF
 
 diff -U 3 loadtest.txt loadtest.sorted.out
 
+./testprocloader testrunlevelconfig loadtest.txt
+
+cat >loadtest.txt <<EOF
+# Comments should be ignored
+name: built-in
+description: >-
+    Long
+    multiline description
+version: 1
+EOF
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+cat >loadtest.expected <<EOF
+built-in:start=forking:stop=manual
+built-in:description=Long multiline description
+EOF
+
+diff -U 3 loadtest.expected loadtest.out
+
+rm -rf globaldir
+mkdir globaldir
+./testprocloader genrunlevels globaldir
+for f in globaldir/*\ runlevel
+do
+    ./testprocloader loadtest "`basename \"$f\"`" <$f
+done
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

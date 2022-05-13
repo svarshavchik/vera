@@ -6,9 +6,14 @@
 #include "config.h"
 #include "unit_test.H"
 #include "proc_container.C"
+#include "current_containers_info.H"
 #include <iostream>
 #include <algorithm>
 #include <vector>
+
+current_containers_infoObj::current_containers_infoObj()
+{
+}
 
 struct sort_test_dependencies {
 
