@@ -350,4 +350,30 @@ built-in:stopping_before dep6
 built-in:stopping_timeout 180
 EOF
 
+cat >loadtest.txt <<EOF
+name: built-in
+required-by: one
+enabled: graphical
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
+sort <loadtest.out >loadtest.sorted.out
+
+cat >loadtest.expected <<EOF
+built-in:required-by graphical
+built-in:required-by one
+built-in:start=forking:stop=manual
+EOF
+diff -U 3 loadtest.expected loadtest.sorted.out
+
+$VALGRIND ./testprocloader disabledloadtest <loadtest.txt >loadtest.out
+sort <loadtest.out >loadtest.sorted.out
+
+cat >loadtest.expected <<EOF
+built-in:required-by one
+built-in:start=forking:stop=manual
+EOF
+diff -U 3 loadtest.expected loadtest.sorted.out
+
 rm -f loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

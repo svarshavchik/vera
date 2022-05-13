@@ -62,10 +62,28 @@ void proc_gc(const std::string &config_global,
 	     const std::string &config_override,
 	     const std::function<void (const std::string &message)> &message);
 
+//! Attempt to load a container configuration
+
+//! Parameters:
+//!
+//! - the opened file from where the container configuration gets loaded.
+//!
+//! - whether these containers are flagged as disabled
+//!
+//! - the filename, for logging purposes
+//!
+//! - the relative path, in the global or the local configuration directory
+//!
+//! - a callback that gets invoked to report loading errors.
+//!
+//! Returns the set of containers loaded from a file. A loading error is
+//! determined by whether the error callback gets invoked.
+
 proc_new_container_set proc_load(
 	std::istream &input_file,
+	bool disabled,
 	const std::string &filename,
-	const std::filesystem::path &path,
+	const std::filesystem::path &relative_path,
 	const std::function<void (const std::string &)> &error);
 
 #endif

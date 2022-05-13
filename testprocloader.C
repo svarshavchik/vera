@@ -10,9 +10,9 @@
 #include <string>
 #include <sstream>
 
-void loadtest()
+void loadtest(bool disabled)
 {
-	auto res=proc_load(std::cin, "(built-in)", "built-in",
+	auto res=proc_load(std::cin, disabled, "(built-in)", "built-in",
 			   []
 			   (const std::string &error)
 			   {
@@ -122,7 +122,13 @@ int main(int argc, char **argv)
 
 	if (args.size() == 2 && args[1] == "loadtest")
 	{
-		loadtest();
+		loadtest(false);
+		return 0;
+	}
+
+	if (args.size() == 2 && args[1] == "disabledloadtest")
+	{
+		loadtest(true);
 		return 0;
 	}
 

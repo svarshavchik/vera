@@ -748,6 +748,7 @@ struct parsed_yaml {
 
 proc_new_container_set proc_load(
 	std::istream &input_file,
+	bool disabled,
 	const std::string &filename,
 	const std::filesystem::path &relative_path,
 	const std::function<void (const std::string &)> &error)
@@ -910,7 +911,16 @@ proc_new_container_set proc_load(
 				    {
 					    return false;
 				    }
-				    if (key == "required-by" &&
+
+				    // "required-by" loads dep_required_by
+				    //
+				    // "enabled" is functionally equivalent
+				    // to "required-by", but "disabled"
+				    // disables "runlevel", it gets ignored.
+
+				    if ((key == "required-by" ||
+					 (key == "enabled" && !disabled)
+					) &&
 					!parsed.parse_requirements(
 						n,
 						name,
