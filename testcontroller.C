@@ -9,25 +9,6 @@
 
 #include "unit_test.H"
 
-void test_reset()
-{
-	proc_containers_install({});
-
-	for (const auto &[pc, ignore] : get_proc_containers())
-		proc_container_stopped(pc->name);
-
-	logged_state_changes.clear();
-	logged_runners.clear();
-	next_pid=1;
-	fake_time=1;
-}
-
-void test_advance(time_t interval)
-{
-	fake_time += interval;
-	run_timers();
-}
-
 void test_proc_new_container_set()
 {
 	proc_new_container_set pcs;
@@ -1709,6 +1690,229 @@ void test_startfail_with_dependencies()
 		}, "Unexpected final container state");
 }
 
+void happy_oneshot()
+{
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("happyoneshotb");
+
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->start_type=start_type_t::oneshot;
+	b->dep_required_by.insert("runlevel1");
+	b->new_container->starting_command="happyoneshot";
+	proc_containers_install({
+			a, b,
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"happyoneshotb: start pending (dependency)",
+			"happyoneshotb: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes after starting";
+	}
+
+	if (logged_runners != std::vector<std::string>{
+			"happyoneshotb: happyoneshot (pid 1)"
+		})
+	{
+		throw "did not schedule a start runner";
+	}
+	logged_state_changes.clear();
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+		})
+	{
+		throw "Unexpected state changes when starting process finished";
+	}
+}
+
+void sad_oneshot()
+{
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("sadoneshotb");
+
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->start_type=start_type_t::oneshot;
+	b->dep_required_by.insert("runlevel1");
+	b->new_container->starting_command="sadoneshot";
+	proc_containers_install({
+			a, b,
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"sadoneshotb: start pending (dependency)",
+			"sadoneshotb: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes after starting";
+	}
+
+	if (logged_runners != std::vector<std::string>{
+			"sadoneshotb: sadoneshot (pid 1)"
+		})
+	{
+		throw "did not schedule a start runner";
+	}
+	logged_state_changes.clear();
+	runner_finished(1, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"sadoneshotb: termination signal: 1"
+		})
+	{
+		throw "Unexpected state changes when starting process finished";
+	}
+
+	verify_container_state(
+		{
+			"runlevel1: stopped",
+			"sadoneshotb: started (dependency)",
+		},
+		"unexpected container state after failed oenshot");
+}
+
+void manualstopearly()
+{
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("manualstopearly");
+
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->start_type=start_type_t::oneshot;
+	b->dep_required_by.insert("runlevel1");
+	proc_containers_install({
+			a, b,
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"manualstopearly: start pending (dependency)",
+			"manualstopearly: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes after starting";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("manualstopearly");
+	if (logged_state_changes != std::vector<std::string>{
+		})
+	{
+		throw "Unexpected state changes after early container stop";
+	}
+
+	stopped_containers.insert("manualstopearly");
+	proc_container_stop("manualstopearly");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"manualstopearly: stop pending",
+			"manualstopearly: removing",
+			"manualstopearly: stopped",
+		})
+	{
+		throw "Unexpected state changes after manual container stop";
+	}
+}
+
+void automaticstopearly1()
+{
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("automaticstopearly1");
+
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->start_type=start_type_t::oneshot;
+	b->new_container->stop_type=stop_type_t::automatic;
+	b->dep_required_by.insert("runlevel1");
+	proc_containers_install({
+			a, b,
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"automaticstopearly1: start pending (dependency)",
+			"automaticstopearly1: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes after starting";
+	}
+
+	logged_state_changes.clear();
+	stopped_containers.insert("automaticstopearly1");
+	proc_container_stopped("automaticstopearly1");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"automaticstopearly1: stop pending",
+			"automaticstopearly1: removing",
+			"automaticstopearly1: stopped",
+		})
+	{
+		throw "Unexpected state changes after automatic container stop";
+	}
+}
+
+void automaticstopearly2()
+{
+	auto a=std::make_shared<proc_new_containerObj>("runlevel1");
+	auto b=std::make_shared<proc_new_containerObj>("automaticstopearly2");
+
+	a->new_container->type=proc_container_type::runlevel;
+	b->new_container->start_type=start_type_t::oneshot;
+	b->new_container->stop_type=stop_type_t::automatic;
+	b->new_container->stopping_command="stop";
+	b->dep_required_by.insert("runlevel1");
+	proc_containers_install({
+			a, b,
+		});
+
+	if (!proc_container_runlevel("runlevel1").empty())
+		throw "Unexpected error starting runlevel1";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting run level: runlevel1",
+			"automaticstopearly2: start pending (dependency)",
+			"automaticstopearly2: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes after starting";
+	}
+
+	logged_state_changes.clear();
+	proc_container_stopped("automaticstopearly2");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"automaticstopearly2: stop pending",
+			"automaticstopearly2: stopping",
+		})
+	{
+		throw "Unexpected state changes after automatic container stop";
+	}
+	logged_state_changes.clear();
+	stopped_containers.insert("automaticstopearly2");
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"automaticstopearly2: removing",
+			"automaticstopearly2: stopped",
+		})
+	{
+		throw "Unexpected state changes after automatic container stop";
+	}
+}
+
 int main()
 {
 	alarm(60);
@@ -1803,6 +2007,25 @@ int main()
 		test="test_startfail_with_dependencies";
 		test_startfail_with_dependencies();
 
+		test_reset();
+		test="happyoneshot";
+		happy_oneshot();
+
+		test_reset();
+		test="sadoneshot";
+		sad_oneshot();
+
+		test_reset();
+		test="manualstopearly";
+		manualstopearly();
+
+		test_reset();
+		test="automaticstopearly1";
+		automaticstopearly1();
+
+		test_reset();
+		test="automaticstopearly2";
+		automaticstopearly2();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

@@ -266,6 +266,7 @@ private:
 	void do_stop_runner(const current_container &);
 	void do_remove(const current_container &);
 	void starting_command_finished(const current_container &cc,
+				       bool oneshot,
 				       int status);
 	proc_container_timer create_sigkill_timer(
 		const proc_container &pc

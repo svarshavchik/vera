@@ -132,9 +132,11 @@ cat >loadtest.expected <<EOF
 built-in/subunit:required-by built-in/prereq1
 built-in/subunit:required-by built-in/prereq2
 built-in/subunit:requires some/other/unit/again
+built-in/subunit:start=forking:stop=manual
 built-in:required-by runlevel1
 built-in:requires built-in/subunit
 built-in:requires some/other/unit
+built-in:start=forking:stop=manual
 EOF
 
 cat loadtest.expected
@@ -163,12 +165,18 @@ cat >loadtest.txt <<EOF
 name: built-in
 ---
 name: sub/unit
+starting:
+   type: oneshot
+stopping:
+   type: automatic
 version:
   - 1
 EOF
 
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.txt <<EOF
+built-in/sub/unit:start=oneshot:stop=automatic
+built-in:start=forking:stop=manual
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -221,6 +229,8 @@ EOF
 
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.txt <<EOF
+built-in/sub.un-it:start=forking:stop=manual
+built-in:start=forking:stop=manual
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -274,8 +284,11 @@ $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 sort <loadtest.out >loadtest.sorted.out
 cat >loadtest.txt <<EOF
 built-in/sub1:requires built-in
+built-in/sub1:start=forking:stop=manual
 built-in/sub2:requires built-in/sub1
+built-in/sub2:start=forking:stop=manual
 built-in:requires built-in/sub1
+built-in:start=forking:stop=manual
 EOF
 diff -U 3 loadtest.txt loadtest.sorted.out
 

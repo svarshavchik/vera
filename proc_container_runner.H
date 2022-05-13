@@ -51,4 +51,8 @@ proc_container_runner create_runner(
 				  int)> &done
 );
 
+//! Check if this container has any processes.
+
+bool is_stopped(const proc_container &container);
+
 #endif

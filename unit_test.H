@@ -35,8 +35,29 @@ static pid_t get_next_pid(const proc_container &container,
 	return pid;
 }
 
+std::unordered_set<std::string> stopped_containers;
+
 #define UNIT_TEST() (get_next_pid(container, command))
 #include "proc_container_runner.C"
 #undef UNIT_TEST
 
+void test_reset()
+{
+	proc_containers_install({});
+
+	for (const auto &[pc, ignore] : get_proc_containers())
+		proc_container_stopped(pc->name);
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	stopped_containers.clear();
+	next_pid=1;
+	fake_time=1;
+}
+
+void test_advance(time_t interval)
+{
+	fake_time += interval;
+	run_timers();
+}
 #endif

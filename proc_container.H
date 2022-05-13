@@ -58,6 +58,33 @@ void runner_finished(pid_t pid, int wstatus);
 
 #define DEFAULT_STOPPING_TIMEOUT 60
 
+//! Container start_type
+
+//! - forking: the starting command is expected to fork and the parent exit
+//!   the container remains in the starting state until the initial process
+//!   terminates.
+//!
+//! - oneshot: the container starts immediately, after that starting command
+//!   gets executed
+
+enum class start_type_t {
+	forking,
+	oneshot,
+};
+
+//! Container stop_type
+
+//! - atomatic: the container enters the stopping state when there are no
+//!   more processes in it.
+//!
+//! - manual: the container remains in active state until it gets explicitly
+//!   stopped.
+
+enum class stop_type_t {
+	automatic,
+	manual,
+};
+
 //! Implementation object.
 
 //! \see proc_container
@@ -70,6 +97,24 @@ public:
 
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
+
+	//! The container's starting type
+	start_type_t start_type{start_type_t::forking};
+
+	//! The container's stopping type
+	stop_type_t stop_type{stop_type_t::manual};
+
+	//! When parsing, set the start_type value.
+	bool set_start_type(const std::string &);
+
+	//! When parsing, set the start_type value.
+	bool set_stop_type(const std::string &);
+
+	//! Return the start type, as a string literal
+	const char *get_start_type() const;
+
+	//! Return the stop type, as a string literal
+	const char *get_stop_type() const;
 
 	//! The container's starting command
 	std::string starting_command;

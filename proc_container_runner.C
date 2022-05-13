@@ -65,3 +65,14 @@ proc_container_runner create_runner(
 	return std::make_shared<proc_container_runnerObj>(
 		p, all_containers, container, done);
 }
+
+bool is_stopped(const proc_container &container)
+{
+#ifdef UNIT_TEST
+
+	if (stopped_containers.erase(container->name))
+		return true;
+#endif
+
+	return false;
+}

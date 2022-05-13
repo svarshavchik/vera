@@ -399,6 +399,21 @@ struct parsed_yaml {
 		}
 	}
 
+	static void lc(std::string &s)
+	{
+		std::transform(
+			s.begin(),
+			s.end(),
+			s.begin(),
+			[]
+			(char c)
+			{
+				if (c >= 'A' && c <= 'Z')
+					c += 'a'-'A';
+				return c;
+			});
+	}
+
 	parsed_yaml(const parsed_yaml &)=delete;
 
 	parsed_yaml &operator=(const parsed_yaml &)=delete;
@@ -442,17 +457,8 @@ struct parsed_yaml {
 
 			auto &keys=*key;
 
-			std::transform(
-				keys.begin(),
-				keys.end(),
-				keys.begin(),
-				[]
-				(char c)
-				{
-					if (c >= 'A' && c <= 'Z')
-						c += 'a'-'A';
-					return c;
-				});
+			lc(keys);
+
 			if (!key_value(keys,
 				       yaml_document_get_node(&doc, b->value),
 				       error))
@@ -608,7 +614,9 @@ struct parsed_yaml {
 		std::string &command,
 		time_t &timeout,
 		std::unordered_set<std::string> &before,
-		std::unordered_set<std::string> &after)
+		std::unordered_set<std::string> &after,
+		proc_containerObj &new_container,
+		bool (proc_containerObj::*set_type)(const std::string &))
 	{
 		bool found_command=false;
 		bool found_timeout=false;
@@ -712,6 +720,20 @@ struct parsed_yaml {
 						hier_name,
 						after
 					);
+				}
+
+				if (key == "type")
+				{
+					auto v=parse_scalar(
+						n,
+						name + "/type",
+						error);
+
+					if (!v)
+						return false;
+
+					lc(*v);
+					return (new_container.*set_type)(*v);
 				}
 				return true;
 			},
@@ -911,7 +933,11 @@ proc_new_container_set proc_load(
 						    nc->new_container
 						    ->starting_timeout,
 						    nc->starting_before,
-						    nc->starting_after);
+						    nc->starting_after,
+						    *nc->new_container,
+						    &proc_containerObj
+						    ::set_start_type
+					    );
 				    }
 
 				    if (key == "stopping")
@@ -926,7 +952,12 @@ proc_new_container_set proc_load(
 						    nc->new_container
 						    ->stopping_timeout,
 						    nc->stopping_before,
-						    nc->stopping_after);
+						    nc->stopping_after,
+						    *nc->new_container,
+						    &proc_containerObj
+						    ::set_stop_type
+					    );
+
 				    }
 				    return true;
 			    },

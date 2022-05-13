@@ -24,6 +24,10 @@ void loadtest()
 	{
 		auto &name=n->new_container->name;
 
+		std::cout << name
+			  << ":start=" << n->new_container->get_start_type()
+			  << ":stop=" << n->new_container->get_stop_type()
+			  << "\n";
 		for (const auto &r:n->dep_requires)
 			std::cout << name << ":requires " << r << "\n";
 		for (const auto &r:n->dep_required_by)

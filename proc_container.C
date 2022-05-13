@@ -74,6 +74,63 @@ proc_containerObj::~proc_containerObj()
 {
 }
 
+bool proc_containerObj::set_start_type(const std::string &value)
+{
+	if (value == "forking")
+	{
+		start_type=start_type_t::forking;
+		return true;
+	}
+
+	if (value == "oneshot")
+	{
+		start_type=start_type_t::oneshot;
+		return true;
+	}
+	return false;
+}
+
+bool proc_containerObj::set_stop_type(const std::string &value)
+{
+	if (value == "automatic")
+	{
+		stop_type=stop_type_t::automatic;
+		return true;
+	}
+
+	if (value == "manual")
+	{
+		stop_type=stop_type_t::manual;
+		return true;
+	}
+
+	return false;
+}
+
+const char *proc_containerObj::get_start_type() const
+{
+	switch (start_type) {
+	case start_type_t::forking:
+		return "forking";
+	case start_type_t::oneshot:
+		return "oneshot";
+	}
+
+	return "UNKNOWN";
+}
+
+const char *proc_containerObj::get_stop_type() const
+{
+	switch (stop_type) {
+	case stop_type_t::automatic:
+		return "automatic";
+	case stop_type_t::manual:
+		return "manual";
+	}
+
+	return "UNKNOWN";
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 void current_containers_infoObj::install_requires_dependency(
@@ -166,7 +223,7 @@ typedef std::unordered_map<pid_t,
 
 static current_runners runners;
 
-static void started(const current_container &, bool);
+static state_started &started(const current_container &, bool);
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -1545,13 +1602,14 @@ void current_containers_infoObj::do_start_runner(
 		auto runner=create_runner(
 			shared_from_this(),
 			pc, pc->starting_command,
-			[]
+			[oneshot=pc->start_type == start_type_t::oneshot]
 			(const auto &info, int status)
 			{
 				auto &[me, cc]=info;
 
-
-				me->starting_command_finished(cc, status);
+				me->starting_command_finished(cc,
+							      oneshot,
+							      status);
 				me->find_start_or_stop_to_do();
 			}
 		);
@@ -1567,6 +1625,12 @@ void current_containers_infoObj::do_start_runner(
 		runners[runner->pid]=runner;
 		starting.starting_runner=runner;
 
+		if (pc->start_type == start_type_t::oneshot)
+		{
+			started(cc, starting.dependency)
+				.starting_runner_oneshot=runner;
+			return;
+		}
 		if (pc->starting_timeout > 0)
 		{
 			// Set a timeout
@@ -1609,6 +1673,7 @@ void current_containers_infoObj::do_start_runner(
 
 void current_containers_infoObj::starting_command_finished(
 	const current_container &cc,
+	bool oneshot,
 	int status)
 {
 	bool for_dependency=true; // Unless told otherwise
@@ -1626,12 +1691,15 @@ void current_containers_infoObj::starting_command_finished(
 
 	if (status == 0)
 	{
-		started(cc, for_dependency);
+		if (!oneshot)
+			started(cc, for_dependency);
 	}
 	else
 	{
 		log_container_failed_process(cc->first, status);
-		stop_with_all_requirements(cc);
+
+		if (!oneshot)
+			stop_with_all_requirements(cc);
 	}
 }
 
@@ -1893,6 +1961,13 @@ void current_containers_infoObj::do_remove(const current_container &cc)
 				false
 			);
 		});
+
+	if (is_stopped(cc->first))
+	{
+		// The container stopped already, no more processes
+
+		stopped(cc->first->name);
+	}
 }
 
 // Timer to send sigkill has expired.
@@ -1916,13 +1991,15 @@ void current_containers_infoObj::send_sigkill(const current_container &cc)
 
 // The container has started.
 
-static void started(const current_container &cc, bool for_dependency)
+static state_started &started(const current_container &cc, bool for_dependency)
 {
 	auto &[pc, run_info] = *cc;
 
-	run_info.state.emplace<state_started>(for_dependency);
+	auto &started = run_info.state.emplace<state_started>(for_dependency);
 
 	log_state_change(pc, run_info.state);
+
+	return started;
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -1943,6 +2020,36 @@ void current_containers_infoObj::stopped(const std::string &s)
 		return;
 
 	auto &[pc, run_info] = *cc;
+
+	if (cc->first->stop_type == stop_type_t::manual)
+	{
+		// Only after we're already in the removal phase
+		if (!std::visit(
+			    [&]
+			    (auto &s)
+			    {
+				    if constexpr(std::is_same_v<
+						 std::remove_cvref_t<decltype(s)
+						 >, state_stopping>) {
+					    return std::holds_alternative<
+						    stop_removing
+						    >(s.phase);
+				    }
+				    else
+				    {
+					    return false;
+				    }
+			    }, run_info.state))
+			return;
+	}
+	else
+	{
+		if (!std::holds_alternative<state_stopping>(run_info.state))
+		{
+			stop(pc->name);
+			return;
+		}
+	}
 
 	run_info.state.emplace<state_stopped>();
 

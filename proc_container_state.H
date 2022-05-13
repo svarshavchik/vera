@@ -47,6 +47,9 @@ struct state_started {
 
 	//! Human readable label.
 	operator std::string() const;
+
+	//! Oneshot timer.
+	proc_container_runner starting_runner_oneshot;
 };
 
 //! A \ref state_stopping "state_stopping container" that's waiting to be able to begin stopping
