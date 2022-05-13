@@ -1904,6 +1904,86 @@ void automaticstopearly2()
 	}
 }
 
+void testgroup()
+{
+	auto b=std::make_shared<proc_new_containerObj>("beforegroup");
+
+	b->dep_required_by.insert("graphical runlevel");
+
+	b->dep_requires.insert("group");
+	b->dep_requires.insert("final");
+
+	auto c=std::make_shared<proc_new_containerObj>("group/1");
+	auto d=std::make_shared<proc_new_containerObj>("group/2");
+
+	c->new_container->starting_command="startc";
+	d->new_container->starting_command="startd";
+
+	auto e=std::make_shared<proc_new_containerObj>("final");
+	e->starting_before.insert("group");
+
+	proc_containers_install({
+			b, c, d, e
+		});
+
+	if (!proc_container_runlevel("default").empty())
+		throw "Unexpected error starting default runlevel";
+
+	if (logged_state_changes.size() >= 8)
+	{
+		std::sort(&logged_state_changes[1],
+			  &logged_state_changes[5]);
+
+		std::sort(logged_state_changes.begin()+6,
+			  logged_state_changes.end());
+	}
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting graphical runlevel",
+			"beforegroup: start pending (dependency)",
+			"final: start pending (dependency)",
+			"group/1: start pending (dependency)",
+			"group/2: start pending (dependency)",
+			"final: started (dependency)",
+			"group/1: starting (dependency)",
+			"group/2: starting (dependency)",
+		})
+	{
+		throw "Unexpected state changes after start (1)";
+	}
+
+	for (auto &l:logged_runners)
+	{
+		l.erase(std::find(l.begin(), l.end(), '('), l.end());
+	}
+
+	std::sort(logged_runners.begin(), logged_runners.end());
+	if (logged_runners != std::vector<std::string>{
+			"group/1: startc ",
+			"group/2: startd "
+		})
+	{
+		throw "Unexpected runners";
+	}
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(1, 0);
+	runner_finished(2, 0);
+
+	std::sort(logged_state_changes.begin(),
+		  logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"beforegroup: started (dependency)",
+			"group/1: started (dependency)",
+			"group/2: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes after start (2)";
+	}
+
+}
+
 int main()
 {
 	alarm(60);
@@ -2017,6 +2097,10 @@ int main()
 		test_reset();
 		test="automaticstopearly2";
 		automaticstopearly2();
+
+		test_reset();
+		test="testgroup";
+		testgroup();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

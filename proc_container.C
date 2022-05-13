@@ -312,12 +312,48 @@ void current_containers_infoObj::install(
 			);
 	}
 
-	for (const auto &c:new_containers)
+	// A dependency on "unit" will also pull in every "unit/subunit".
+	//
+	// Here we see "unit/subunit".
+	//
+	// Create a lookup table that has this container include as part of
+	// an entry for "unit" and "unit/subunit".
+
+	struct new_containers_lookup_t : std::unordered_multimap<
+		std::string, proc_new_container_set::iterator
+		> {
+
+		iterator add(proc_new_container_set::iterator new_iter)
+		{
+
+			auto b=(*new_iter)->new_container->name.begin(),
+				e=(*new_iter)->new_container->name.end(), p=b;
+
+			iterator final_iter;
+
+			do
+			{
+				if (p != b) ++p;
+
+				p=std::find(p, e, '/');
+
+				final_iter=emplace(std::string{b, p}, new_iter);
+			} while (p != e);
+
+			return final_iter;
+		}
+	};
+
+	new_containers_lookup_t new_containers_lookup;
+
+	for (auto b=new_containers.begin(), e=new_containers.end(); b != e; ++b)
 	{
 		new_current_containers.emplace(
-			c->new_container,
+			(*b)->new_container,
 			std::in_place_type_t<state_stopped>{}
 		);
+
+		new_containers_lookup.add(b);
 	}
 
 	// Merge dep_requires and dep_required_by container declarations.
@@ -478,9 +514,10 @@ void current_containers_infoObj::install(
 				// does not exist we create a "synthesized"
 				// container.
 
-				auto iter=new_containers.find(dep);
+				auto [first, last] =
+					new_containers_lookup.equal_range(dep);
 
-				if (iter == new_containers.end())
+				if (first == last)
 				{
 					auto newc=std::make_shared<
 						proc_new_containerObj>(dep);
@@ -489,49 +526,62 @@ void current_containers_infoObj::install(
 						proc_container_type::synthesized
 						;
 
-					iter=new_containers.insert(newc).first;
+					auto iter=new_containers.insert(newc)
+						.first;
 					new_current_containers.emplace(
 						newc->new_container,
 						std::in_place_type_t<
 						state_stopped>{}
 					);
+
+					first=new_containers_lookup.add(iter);
+					last=first;
+					++last;
 				}
 
-				other_proc_container=&*iter;
-
-				// Do not allow this dependency to specify
-				// a runlevel, only "required_by" is allowed
-				// to do this.
-
-				if (disallow_for_runlevel &&
-				    (*iter)->new_container->type ==
-				    proc_container_type::runlevel)
+				while (first != last)
 				{
-					log_message(
-						_("Disallowed dependency "
-						  "on a runlevel: ")
-						+ c->new_container->name
-						+ " -> "
-						+ (*iter)->new_container->name);
-					continue;
+					auto iter=first->second;
+					++first;
+
+					other_proc_container=&*iter;
+
+					// Do not allow this dependency to
+					// specify a runlevel, only
+					// "required_by" is allowed to do this.
+
+					if (disallow_for_runlevel &&
+					    (*iter)->new_container->type ==
+					    proc_container_type::runlevel)
+					{
+						log_message(
+							_("Disallowed "
+							  "dependency "
+							  "on a runlevel: ")
+							+ c->new_container->name
+							+ " -> "
+							+ (*iter)->new_container
+							->name);
+						continue;
+					}
+					if (skip_for_runlevel &&
+					    (*iter)->new_container->type ==
+					    proc_container_type::runlevel)
+						continue;
+
+					auto &requiring=(**requiring_ptr)
+						->new_container;
+					auto &requirement=(**requirement_ptr)
+						->new_container;
+
+					install_requires_dependency(
+						new_all_dependency_info,
+						forward_dependency,
+						backward_dependency,
+						requiring,
+						requirement
+					);
 				}
-				if (skip_for_runlevel &&
-				    (*iter)->new_container->type ==
-				    proc_container_type::runlevel)
-					continue;
-
-				auto &requiring=
-					(**requiring_ptr)->new_container;
-				auto &requirement=
-					(**requirement_ptr)->new_container;
-
-				install_requires_dependency(
-					new_all_dependency_info,
-					forward_dependency,
-					backward_dependency,
-					requiring,
-					requirement
-				);
 			}
 		}
 	}
