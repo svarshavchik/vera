@@ -68,11 +68,11 @@ void proc_gc(const std::string &config_global,
 //!
 //! - the opened file from where the container configuration gets loaded.
 //!
-//! - whether these containers are flagged as disabled
-//!
 //! - the filename, for logging purposes
 //!
 //! - the relative path, in the global or the local configuration directory
+//!
+//! - whether these containers are flagged as enabled
 //!
 //! - a callback that gets invoked to report loading errors.
 //!
@@ -81,9 +81,9 @@ void proc_gc(const std::string &config_global,
 
 proc_new_container_set proc_load(
 	std::istream &input_file,
-	bool disabled,
 	const std::string &filename,
 	const std::filesystem::path &relative_path,
+	bool enabled,
 	const std::function<void (const std::string &)> &error);
 
 //! Different kinds of overrides.
@@ -102,7 +102,7 @@ enum class proc_override {
 //!
 //! - the relative path in the override directory
 //!
-//! - "none", "mask", or "disabled".
+//! - "none", "mask", or "enabled".
 //!
 //! - a callback that gets invoked to report errors.
 

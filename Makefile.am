@@ -3,7 +3,7 @@ SUBDIRS = po
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = -std=c++20 @YAMLCPPFLAGS@
 
-LC_ALL=C
+export LC_ALL=C
 
 noinst_PROGRAMS=\
 	testcontroller						\

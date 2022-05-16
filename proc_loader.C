@@ -752,9 +752,9 @@ struct parsed_yaml {
 
 proc_new_container_set proc_load(
 	std::istream &input_file,
-	bool disabled,
 	const std::string &filename,
 	const std::filesystem::path &relative_path,
+	bool enabled,
 	const std::function<void (const std::string &)> &error)
 {
 	proc_new_container_set results;
@@ -940,11 +940,10 @@ proc_new_container_set proc_load(
 				    // "required-by" loads dep_required_by
 				    //
 				    // "enabled" is functionally equivalent
-				    // to "required-by", but "disabled"
-				    // disables "runlevel", it gets ignored.
+				    // to "required-by".
 
 				    if ((key == "required-by" ||
-					 (key == "enabled" && !disabled)
+					 (key == "enabled" && enabled)
 					) &&
 					!parsed.parse_requirements(
 						n,
@@ -1038,7 +1037,7 @@ void proc_set_override(
 		return;
 	}
 
-	if (override_type != "mask" && override_type != "disabled")
+	if (override_type != "masked" && override_type != "enabled")
 	{
 		error(override_type + _(": unknown override type"));
 		return;
@@ -1062,8 +1061,7 @@ void proc_set_override(
 		return;
 	}
 
-	if (override_type == "disabled")
-		o << "disabled\n" << std::flush;
+	o << override_type << "\n";
 	o.close();
 
 	if (o.fail() ||
@@ -1095,7 +1093,7 @@ proc_new_container_set proc_load_all(
 		   const auto &override_path,
 		   const auto &relative_path)
 		  {
-			  bool disabled=false;
+			  bool enabled=false;
 
 			  if (override_path)
 			  {
@@ -1113,11 +1111,11 @@ proc_new_container_set proc_load_all(
 
 				  std::getline(i, s);
 
-				  if (s.empty())
+				  if (s == "masked")
 					  return;
 
-				  if (s == "disabled")
-					  disabled=true;
+				  if (s == "enabled")
+					  enabled=true;
 			  }
 
 			  std::string name{
@@ -1132,8 +1130,8 @@ proc_new_container_set proc_load_all(
 				  return;
 			  }
 			  containers.merge(
-				  proc_load(i, disabled, name,
-					    relative_path, error)
+				  proc_load(i, name, relative_path,
+					    enabled, error)
 			  );
 		  },
 		  [&]

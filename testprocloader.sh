@@ -384,7 +384,7 @@ cat >loadtest.txt <<EOF
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
-$VALGRIND ./testprocloader setoverride overridedir sub/dir mask
+$VALGRIND ./testprocloader setoverride overridedir sub/dir masked
 
 test -f overridedir/sub/dir
 
@@ -392,10 +392,10 @@ $VALGRIND ./testprocloader setoverride overridedir sub/dir none
 
 test ! -f overridedir/sub/dir
 
-$VALGRIND ./testprocloader setoverride overridedir sub/dir disabled
+$VALGRIND ./testprocloader setoverride overridedir sub/dir enabled
 
 cat >loadtest.txt <<EOF
-disabled
+enabled
 EOF
 diff -U 3 loadtest.txt overridedir/sub/dir
 
@@ -440,11 +440,9 @@ EOF
 
 >globaldir/.temporary
 
-cat >overridedir/unit4-disabled <<EOF
-disabled
-EOF
-
->overridedir/unit5-masked
+$VALGRIND ./testprocloader setoverride overridedir unit2-runlevel1 enabled >loadtest.out
+$VALGRIND ./testprocloader setoverride overridedir unit3-runlevel2 enabled >loadtest.out
+$VALGRIND ./testprocloader setoverride overridedir unit5-masked masked >loadtest.out
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir >loadtest.out
 

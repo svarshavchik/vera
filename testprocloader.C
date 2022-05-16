@@ -66,9 +66,9 @@ void loadtest(const proc_new_container_set &res)
 	}
 }
 
-void loadtest(bool disabled, const std::string &name)
+void loadtest(const std::string &name, bool enabled)
 {
-	loadtest(proc_load(std::cin, disabled, "(built-in)", name,
+	loadtest(proc_load(std::cin, "(built-in)", name, enabled,
 			   []
 			   (const std::string &error)
 			   {
@@ -135,19 +135,19 @@ int main(int argc, char **argv)
 
 	if (args.size() == 2 && args[1] == "loadtest")
 	{
-		loadtest(false, "built-in");
+		loadtest("built-in", true);
 		return 0;
 	}
 
 	if (args.size() == 2 && args[1] == "disabledloadtest")
 	{
-		loadtest(true, "built-in");
+		loadtest("built-in", false);
 		return 0;
 	}
 
 	if (args.size() == 3 && args[1] == "loadtest")
 	{
-		loadtest(false, args[2]);
+		loadtest(args[2], true);
 		return 0;
 	}
 
