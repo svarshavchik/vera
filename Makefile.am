@@ -5,7 +5,11 @@ AM_CXXFLAGS = -std=c++20 @YAMLCPPFLAGS@
 
 LC_ALL=C
 
-noinst_PROGRAMS=testcontroller testdepcomputations testprocloader
+noinst_PROGRAMS=\
+	testcontroller						\
+	testdepcomputations 					\
+	testpoller						\
+	testprocloader
 EXTRA_DIST=testprocloader.sh
 
 noinst_LIBRARIES=libvera.a
@@ -30,6 +34,8 @@ libvera_a_SOURCES=						\
 	proc_container_timerfwd.H				\
 	proc_loader.C						\
 	proc_loader.H						\
+	poller.C						\
+	poller.H						\
 	unit_test.H
 
 testcontroller_SOURCES=testcontroller.C
@@ -41,7 +47,11 @@ testdepcomputations_LDADD=libvera.a @YAMLLIBS@
 testprocloader_SOURCES=testprocloader.C
 testprocloader_LDADD=libvera.a @YAMLLIBS@
 
+testpoller_SOURCES=testpoller.C
+testpoller_LDADD=libvera.a @YAMLLIBS@
+
 check:
 	$(VALGRIND) ./testdepcomputations
 	$(VALGRIND) ./testcontroller
 	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testprocloader.sh
+	$(VALGRIND) ./testpoller

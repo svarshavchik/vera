@@ -884,6 +884,14 @@ proc_new_container_set proc_load(
 		}
 
 		std::string name{unit_path};
+
+		if (name.size()+1 > NAME_MAX)
+		{
+			error(name + _(": maximum container size exceeded"));
+			results.clear();
+			return results;
+		}
+
 		auto nc=std::make_shared<proc_new_containerObj>(name);
 
 		if (!results.insert(nc).second)
