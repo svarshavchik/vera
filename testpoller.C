@@ -308,6 +308,42 @@ void testinotify4()
 		throw "Somehow temp was installed";
 }
 
+void testinotify5()
+{
+	std::filesystem::remove_all("testpollerdir");
+	mkdir("testpollerdir", 0755);
+
+	{
+		inotify_watch_handler temp{
+			"testpollerdir",
+			inotify_watch_handler::mask_dir,
+			[&]
+			(const char *filename, uint32_t mask)
+			{
+			}
+		};
+	}
+
+	{
+		bool called=false;
+
+		inotify_watch_handler temp{
+			"testpollerdir",
+			inotify_watch_handler::mask_dir,
+			[&]
+			(const char *filename, uint32_t mask)
+			{
+				called=true;
+			}
+		};
+
+		do_poll(0);
+		if (!called)
+			throw "Did not see expected delayed call";
+	}
+	do_poll(0);
+}
+
 void testmonitor1()
 {
 	std::filesystem::remove_all("testpollerdir");
@@ -480,6 +516,8 @@ int main(int argc, char **argv)
 		testinotify3();
 		test_name="inotify4";
 		testinotify4();
+		test_name="inotify5";
+		testinotify5();
 		test_name="monitor1";
 		testmonitor1();
 		test_name="monitor2";

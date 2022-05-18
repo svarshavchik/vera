@@ -10,6 +10,8 @@
 #include "unit_test.H"
 
 #include "proc_loader.H"
+#include <unistd.h>
+#include <sys/stat.h>
 
 void test_proc_new_container_set()
 {
@@ -40,6 +42,7 @@ void test_start_and_stop()
 
 	auto a=std::make_shared<proc_new_containerObj>("a");
 
+	a->new_container->stopping_command="/bin/true";
 	pcs.insert(a);
 	proc_containers_install(pcs);
 
@@ -72,7 +75,8 @@ void test_start_and_stop()
 			"a: start pending",
 			"a: started",
 			"a: stop pending",
-			"a: removing",
+			"a: cgroup created",
+			"a: stopping",
 		})
 	{
 		throw "unexpected state changes after stop";
@@ -85,6 +89,7 @@ void test_start_and_stop()
 	if (err.empty())
 		throw "proc_container_start didn't fail for a stopping unit";
 
+	test_advance(DEFAULT_STOPPING_TIMEOUT);
 	test_advance(SIGTERM_TIMEOUT);
 
 	proc_container_stopped("a");
@@ -96,7 +101,12 @@ void test_start_and_stop()
 			+ err;
 
 	if (logged_state_changes != std::vector<std::string>{
+			"a: stop process timed out",
+			"a: removing",
+			"a: sending SIGTERM",
 			"a: force-removing",
+			"a: sending SIGKILL",
+			"a: cgroup removed",
 			"a: stopped"
 		})
 	{
@@ -124,6 +134,7 @@ void test_happy_start_stop_common(const std::string &name)
 
 	if (logged_state_changes != std::vector<std::string>{
 			name + ": start pending",
+			name + ": cgroup created",
 			name + ": starting"
 		})
 	{
@@ -143,6 +154,7 @@ void test_happy_start_stop_common(const std::string &name)
 
 	if (logged_state_changes != std::vector<std::string>{
 			name + ": start pending",
+			name + ": cgroup created",
 			name + ": starting"
 		})
 	{
@@ -153,6 +165,7 @@ void test_happy_start_stop_common(const std::string &name)
 
 	if (logged_state_changes != std::vector<std::string>{
 			name + ": start pending",
+			name + ": cgroup created",
 			name + ": starting",
 			name + ": started"
 		})
@@ -164,6 +177,7 @@ void test_happy_start_stop_common(const std::string &name)
 
 	if (logged_state_changes != std::vector<std::string>{
 			name + ": start pending",
+			name + ": cgroup created",
 			name + ": starting",
 			name + ": started"
 		})
@@ -215,6 +229,7 @@ void test_happy_start()
 			"happy_start: stop pending",
 			"happy_start: stopping",
 			"happy_start: removing",
+			"happy_start: sending SIGTERM",
 		})
 	{
 		throw "unexpected state changes after stopping";
@@ -226,6 +241,7 @@ void test_happy_start()
 			"happy_start: stop pending",
 			"happy_start: stopping",
 			"happy_start: removing",
+			"happy_start: sending SIGTERM",
 		})
 	{
 		throw "more unexpected state changes after stopping";
@@ -236,6 +252,8 @@ void test_happy_start()
 			"happy_start: stop pending",
 			"happy_start: stopping",
 			"happy_start: removing",
+			"happy_start: sending SIGTERM",
+			"happy_start: cgroup removed",
 			"happy_start: stopped",
 		})
 	{
@@ -265,8 +283,11 @@ void test_start_failed_fork()
 	proc_container_stopped("failed_fork");
 	if (logged_state_changes != std::vector<std::string>{
 			"failed_fork: start pending",
+			"failed_fork: cgroup created",
 			"failed_fork: fork() failed",
 			"failed_fork: removing",
+			"failed_fork: sending SIGTERM",
+			"failed_fork: cgroup removed",
 			"failed_fork: stopped",
 		})
 	{
@@ -292,6 +313,7 @@ void test_start_failed()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_failed: start pending",
+			"start_failed: cgroup created",
 			"start_failed: starting",
 		})
 	{
@@ -303,9 +325,12 @@ void test_start_failed()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_failed: start pending",
+			"start_failed: cgroup created",
 			"start_failed: starting",
 			"start_failed: termination signal: 1",
 			"start_failed: removing",
+			"start_failed: sending SIGTERM",
+			"start_failed: cgroup removed",
 			"start_failed: stopped",
 		})
 	{
@@ -331,6 +356,7 @@ void test_start_timeout()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_timeout: start pending",
+			"start_timeout: cgroup created",
 			"start_timeout: starting",
 		})
 	{
@@ -341,9 +367,11 @@ void test_start_timeout()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_timeout: start pending",
+			"start_timeout: cgroup created",
 			"start_timeout: starting",
 			"start_timeout: start process timed out",
 			"start_timeout: removing",
+			"start_timeout: sending SIGTERM",
 		})
 	{
 		throw "unexpected state change after timeout";
@@ -353,6 +381,7 @@ void test_start_timeout()
 
 	proc_container_stopped("start_timeout");
 	if (logged_state_changes != std::vector<std::string>{
+			"start_timeout: cgroup removed",
 			"start_timeout: stopped",
 		})
 	{
@@ -375,6 +404,7 @@ void test_stop_failed_fork()
 			"stop_failed_fork: stop pending",
 			"stop_failed_fork: fork() failed",
 			"stop_failed_fork: removing",
+			"stop_failed_fork: sending SIGTERM",
 		})
 	{
 		throw "unexpected state change after failed stop fork";
@@ -397,6 +427,7 @@ void test_stop_failed()
 			"stop_failed: stopping",
 			"stop_failed: termination signal: 1",
 			"stop_failed: removing",
+			"stop_failed: sending SIGTERM",
 		})
 	{
 		throw "unexpected state change after failed stop process";
@@ -419,6 +450,7 @@ void test_stop_timeout()
 			"stop_timeout: stopping",
 			"stop_timeout: stop process timed out",
 			"stop_timeout: removing",
+			"stop_timeout: sending SIGTERM",
 		})
 	{
 		throw "unexpected state change after timed out stop process";
@@ -459,7 +491,7 @@ void test_requires1()
 	if (!err.empty())
 		throw "proc_container_start failed";
 
-	logged_state_changes.resize(5);
+	logged_state_changes.resize(6);
 
 	std::sort(logged_state_changes.begin(), logged_state_changes.begin()+3);
 
@@ -467,6 +499,7 @@ void test_requires1()
 			"requires1a: start pending",
 			"requires1b: start pending (dependency)",
 			"requires1c: start pending (dependency)",
+			"requires1c: cgroup created",
 			"requires1c: starting (dependency)",
 			""
 		})
@@ -478,6 +511,7 @@ void test_requires1()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"requires1c: started (dependency)",
+			"requires1b: cgroup created",
 			"requires1b: starting (dependency)",
 		})
 	{
@@ -488,6 +522,7 @@ void test_requires1()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"requires1b: started (dependency)",
+			"requires1a: cgroup created",
 			"requires1a: starting",
 		})
 	{
@@ -529,7 +564,8 @@ void test_requires1()
 	test_advance(DEFAULT_STOPPING_TIMEOUT);
 	if (logged_state_changes != std::vector<std::string>{
 			"requires1a: stop process timed out",
-			"requires1a: removing"
+			"requires1a: removing",
+			"requires1a: sending SIGTERM",
 		})
 	{
 		throw "unexpected 1st timeout test";
@@ -537,8 +573,10 @@ void test_requires1()
 	logged_state_changes.clear();
 	proc_container_stopped("requires1a");
 	if (logged_state_changes != std::vector<std::string>{
+			"requires1a: cgroup removed",
 			"requires1a: stopped",
-			"requires1b: removing"
+			"requires1b: removing",
+			"requires1b: sending SIGTERM",
 		})
 	{
 		throw "unexpected second stop sequence";
@@ -547,7 +585,8 @@ void test_requires1()
 	logged_state_changes.clear();
 	test_advance(DEFAULT_STOPPING_TIMEOUT);
 	if (logged_state_changes != std::vector<std::string>{
-			"requires1b: force-removing"
+			"requires1b: force-removing",
+			"requires1b: sending SIGKILL",
 		})
 	{
 		throw "unexpected 2nd timeout test";
@@ -556,8 +595,10 @@ void test_requires1()
 	logged_state_changes.clear();
 	proc_container_stopped("requires1b");
 	if (logged_state_changes != std::vector<std::string>{
+			"requires1b: cgroup removed",
 			"requires1b: stopped",
-			"requires1c: removing"
+			"requires1c: removing",
+			"requires1c: sending SIGTERM",
 		})
 	{
 		throw "unexpected third stop sequence";
@@ -567,6 +608,7 @@ void test_requires1()
 	proc_container_stopped("requires1c");
 
 	if (logged_state_changes != std::vector<std::string>{
+			"requires1c: cgroup removed",
 			"requires1c: stopped",
 		})
 	{
@@ -658,7 +700,9 @@ void test_requires2()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"requires2a: removing",
+			"requires2a: stopped",
 			"requires2b: removing",
+			"requires2b: sending SIGTERM",
 			"requires2c: stop pending"
 		})
 	{
@@ -841,35 +885,24 @@ void test_requires4()
 	if (!err.empty())
 		throw "Unexpected error stopping requires4a";
 
-	if (logged_state_changes.size() > 2)
+	if (logged_state_changes.size() >= 6)
+	{
 		std::sort(&logged_state_changes[0], &logged_state_changes[2]);
+		std::sort(&logged_state_changes[2], &logged_state_changes[6]);
+	}
 
 	if (logged_state_changes != std::vector<std::string>{
 			"requires4a: stop pending",
 			"requires4d: stop pending",
 			"requires4a: removing",
+			"requires4a: stopped",
+			"requires4d: removing",
+			"requires4d: stopped",
 		})
 	{
 		throw "Unexpected sequence of events after stopping 4a (1)";
 	}
 
-	logged_state_changes.clear();
-	proc_container_stopped("requires4a");
-	if (logged_state_changes != std::vector<std::string>{
-			"requires4a: stopped",
-			"requires4d: removing",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 4a (2)";
-	}
-	logged_state_changes.clear();
-	proc_container_stopped("requires4d");
-	if (logged_state_changes != std::vector<std::string>{
-			"requires4d: stopped",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 4a (3)";
-	}
 	verify_container_state(
 		{
 			"requires4a: stopped",
@@ -903,35 +936,21 @@ void test_requires5()
 	if (!err.empty())
 		throw "Unexpected error stopping requires5a";
 
-	if (logged_state_changes.size() > 2)
+	if (logged_state_changes.size() >= 6)
+	{
 		std::sort(&logged_state_changes[0], &logged_state_changes[2]);
-
+		std::sort(&logged_state_changes[2], &logged_state_changes[6]);
+	}
 	if (logged_state_changes != std::vector<std::string>{
 			"requires5a: stop pending",
 			"requires5d: stop pending",
 			"requires5a: removing",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 5a (1)";
-	}
-
-	logged_state_changes.clear();
-	proc_container_stopped("requires5a");
-	if (logged_state_changes != std::vector<std::string>{
 			"requires5a: stopped",
 			"requires5d: removing",
-		})
-	{
-		throw "Unexpected sequence of events after stopping 5a (2)";
-	}
-	logged_state_changes.clear();
-
-	proc_container_stopped("requires5d");
-	if (logged_state_changes != std::vector<std::string>{
 			"requires5d: stopped",
 		})
 	{
-		throw "Unexpected sequence of events after stopping 5a (3)";
+		throw "Unexpected sequence of events after stopping 5a (1)";
 	}
 
 	logged_state_changes.clear();
@@ -1089,22 +1108,6 @@ void test_circular()
 	if (!err.empty())
 		throw "proc_container_stop failed";
 
-	for (int i=0; i<3; ++i)
-	{
-		for (const auto &[pc, s] : get_proc_containers())
-		{
-			if (pc->type == proc_container_type::runlevel)
-				continue;
-			if (std::holds_alternative<stop_removing>(
-				    std::get<state_stopping>(s).phase
-			    ))
-			{
-				proc_container_stopped(pc->name);
-				break;
-			}
-		}
-	}
-
 	std::sort(logged_state_changes.begin(),
 		  logged_state_changes.end());
 
@@ -1196,12 +1199,6 @@ void test_runlevels()
 			"Stopping graphical runlevel",
 			"runlevel1prog: stop pending",
 			"runlevel1prog: removing",
-		})
-		throw "Unexpected state changes for runlevel2 (1)";
-
-	logged_state_changes.clear();
-	proc_container_stopped("runlevel1prog");
-	if (logged_state_changes != std::vector<std::string>{
 			"runlevel1prog: stopped",
 			"Starting multi-user runlevel",
 			"runlevel2prog: start pending (dependency)",
@@ -1254,43 +1251,21 @@ void test_before_after1()
 	if (!proc_container_runlevel("multi-user").empty())
 		throw "Unexpected error starting runlevel2";
 
-	if (logged_state_changes.size() > 3)
+	if (logged_state_changes.size() > 4)
+	{
 		std::sort(&logged_state_changes[1],
 			  &logged_state_changes[4]);
-
+	}
 	if (logged_state_changes != std::vector<std::string>{
 			"Stopping graphical runlevel",
 			"testbefore_after_1: stop pending",
 			"testbefore_after_2: stop pending",
 			"testbefore_after_3: stop pending",
-			"testbefore_after_1: removing"
-		})
-	{
-		throw "Unexpected state change after stopping runlevel1";
-	}
-
-	logged_state_changes.clear();
-	proc_container_stopped("testbefore_after_1");
-	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_1: removing",
 			"testbefore_after_1: stopped",
-			"testbefore_after_2: removing"
-		})
-	{
-		throw "Unexpected state change after first container stopped";
-	}
-
-	logged_state_changes.clear();
-	proc_container_stopped("testbefore_after_2");
-	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_2: removing",
 			"testbefore_after_2: stopped",
-			"testbefore_after_3: removing"
-		})
-	{
-		throw "Unexpected state change after first container stopped";
-	}
-	logged_state_changes.clear();
-	proc_container_stopped("testbefore_after_3");
-	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_3: removing",
 			"testbefore_after_3: stopped",
 			"Starting multi-user runlevel"
 		})
@@ -1352,34 +1327,11 @@ void test_before_after2()
 			"testbefore_after_1: stop pending",
 			"testbefore_after_2: stop pending",
 			"testbefore_after_3: stop pending",
-			"testbefore_after_3: removing"
-		})
-	{
-		throw "Unexpected state change after stopping runlevel1";
-	}
-
-	logged_state_changes.clear();
-	proc_container_stopped("testbefore_after_3");
-	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_3: removing",
 			"testbefore_after_3: stopped",
-			"testbefore_after_2: removing"
-		})
-	{
-		throw "Unexpected state change after first container stopped";
-	}
-
-	logged_state_changes.clear();
-	proc_container_stopped("testbefore_after_2");
-	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_2: removing",
 			"testbefore_after_2: stopped",
-			"testbefore_after_1: removing"
-		})
-	{
-		throw "Unexpected state change after first container stopped";
-	}
-	logged_state_changes.clear();
-	proc_container_stopped("testbefore_after_1");
-	if (logged_state_changes != std::vector<std::string>{
+			"testbefore_after_1: removing",
 			"testbefore_after_1: stopped",
 			"Starting multi-user runlevel"
 		})
@@ -1423,6 +1375,7 @@ void test_failed_fork_with_dependencies()
 			"Starting graphical runlevel",
 			"dep_fail_forkb: start pending (dependency)",
 			"dep_fail_forkc: start pending (dependency)",
+			"dep_fail_forkd: cgroup created",
 			"dep_fail_forkd: start pending (dependency)",
 			"dep_fail_forkd: starting (dependency)",
 			"dep_fail_forke: start pending (dependency)",
@@ -1448,10 +1401,13 @@ void test_failed_fork_with_dependencies()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_fail_forkd: started (dependency)",
+			"dep_fail_forkc: cgroup created",
 			"dep_fail_forkc: fork() failed",
 			"dep_fail_forkc: removing",
+			"dep_fail_forkc: sending SIGTERM",
 			"dep_fail_forkd: stop pending",
 			"dep_fail_forkb: removing",
+			"dep_fail_forkb: stopped",
 		})
 	{
 		throw "Unexpected sequence of events after failed fork";
@@ -1460,9 +1416,6 @@ void test_failed_fork_with_dependencies()
 	logged_state_changes.clear();
 
 	proc_container_stopped("dep_fail_forkc");
-	if (logged_runners != std::vector<std::string>{})
-		throw "Unexpected runner start after container stop";
-	proc_container_stopped("dep_fail_forkb");
 
 	if (logged_runners != std::vector<std::string>{
 			"dep_fail_forkd: stop_d (pid 1)"
@@ -1470,8 +1423,8 @@ void test_failed_fork_with_dependencies()
 		throw "Missing runner start after container stop";
 
 	if (logged_state_changes != std::vector<std::string>{
+			"dep_fail_forkc: cgroup removed",
 			"dep_fail_forkc: stopped",
-			"dep_fail_forkb: stopped",
 			"dep_fail_forkd: stopping"
 		})
 	{
@@ -1484,6 +1437,7 @@ void test_failed_fork_with_dependencies()
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_fail_forkd: termination signal: 1",
 			"dep_fail_forkd: removing",
+			"dep_fail_forkd: sending SIGTERM",
 		})
 	{
 		throw "Unexpected sequence of events after stop runner (1)";
@@ -1492,6 +1446,7 @@ void test_failed_fork_with_dependencies()
 	proc_container_stopped("dep_fail_forkd");
 
 	if (logged_state_changes != std::vector<std::string>{
+			"dep_fail_forkd: cgroup removed",
 			"dep_fail_forkd: stopped",
 		})
 	{
@@ -1528,6 +1483,7 @@ void test_timeout_with_dependencies()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_timeoutd: started (dependency)",
+			"dep_timeoutc: cgroup created",
 			"dep_timeoutc: starting (dependency)",
 		})
 	{
@@ -1540,8 +1496,10 @@ void test_timeout_with_dependencies()
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_timeoutc: start process timed out",
 			"dep_timeoutc: removing",
+			"dep_timeoutc: sending SIGTERM",
 			"dep_timeoutd: stop pending",
 			"dep_timeoutb: removing",
+			"dep_timeoutb: stopped",
 		})
 	{
 		throw "Unexpected sequence of events after failed fork";
@@ -1550,9 +1508,6 @@ void test_timeout_with_dependencies()
 	logged_state_changes.clear();
 
 	proc_container_stopped("dep_timeoutc");
-	if (logged_runners != std::vector<std::string>{})
-		throw "Unexpected runner start after container stop";
-	proc_container_stopped("dep_timeoutb");
 
 	if (logged_runners != std::vector<std::string>{
 			"dep_timeoutd: stop_d (pid 3)"
@@ -1560,8 +1515,8 @@ void test_timeout_with_dependencies()
 		throw "Missing runner start after container stop";
 
 	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutc: cgroup removed",
 			"dep_timeoutc: stopped",
-			"dep_timeoutb: stopped",
 			"dep_timeoutd: stopping"
 		})
 	{
@@ -1574,6 +1529,7 @@ void test_timeout_with_dependencies()
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_timeoutd: termination signal: 1",
 			"dep_timeoutd: removing",
+			"dep_timeoutd: sending SIGTERM",
 		})
 	{
 		throw "Unexpected sequence of events after stop runner (1)";
@@ -1582,6 +1538,7 @@ void test_timeout_with_dependencies()
 	proc_container_stopped("dep_timeoutd");
 
 	if (logged_state_changes != std::vector<std::string>{
+			"dep_timeoutd: cgroup removed",
 			"dep_timeoutd: stopped",
 		})
 	{
@@ -1618,6 +1575,7 @@ void test_startfail_with_dependencies()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_startfaild: started (dependency)",
+			"dep_startfailc: cgroup created",
 			"dep_startfailc: starting (dependency)",
 		})
 	{
@@ -1630,8 +1588,10 @@ void test_startfail_with_dependencies()
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_startfailc: termination signal: 1",
 			"dep_startfailc: removing",
+			"dep_startfailc: sending SIGTERM",
 			"dep_startfaild: stop pending",
 			"dep_startfailb: removing",
+			"dep_startfailb: stopped",
 		})
 	{
 		throw "Unexpected sequence of events after failed fork";
@@ -1640,9 +1600,6 @@ void test_startfail_with_dependencies()
 	logged_state_changes.clear();
 
 	proc_container_stopped("dep_startfailc");
-	if (logged_runners != std::vector<std::string>{})
-		throw "Unexpected runner start after container stop";
-	proc_container_stopped("dep_startfailb");
 
 	if (logged_runners != std::vector<std::string>{
 			"dep_startfaild: stop_d (pid 3)"
@@ -1650,8 +1607,8 @@ void test_startfail_with_dependencies()
 		throw "Missing runner start after container stop";
 
 	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfailc: cgroup removed",
 			"dep_startfailc: stopped",
-			"dep_startfailb: stopped",
 			"dep_startfaild: stopping"
 		})
 	{
@@ -1664,6 +1621,7 @@ void test_startfail_with_dependencies()
 	if (logged_state_changes != std::vector<std::string>{
 			"dep_startfaild: termination signal: 1",
 			"dep_startfaild: removing",
+			"dep_startfaild: sending SIGTERM",
 		})
 	{
 		throw "Unexpected sequence of events after stop runner (1)";
@@ -1672,6 +1630,7 @@ void test_startfail_with_dependencies()
 	proc_container_stopped("dep_startfaild");
 
 	if (logged_state_changes != std::vector<std::string>{
+			"dep_startfaild: cgroup removed",
 			"dep_startfaild: stopped",
 		})
 	{
@@ -1704,6 +1663,7 @@ void happy_oneshot()
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting graphical runlevel",
 			"happyoneshotb: start pending (dependency)",
+			"happyoneshotb: cgroup created",
 			"happyoneshotb: started (dependency)",
 		})
 	{
@@ -1743,6 +1703,7 @@ void sad_oneshot()
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting graphical runlevel",
 			"sadoneshotb: start pending (dependency)",
+			"sadoneshotb: cgroup created",
 			"sadoneshotb: started (dependency)",
 		})
 	{
@@ -1802,7 +1763,6 @@ void manualstopearly()
 		throw "Unexpected state changes after early container stop";
 	}
 
-	stopped_containers.insert("manualstopearly");
 	proc_container_stop("manualstopearly");
 
 	if (logged_state_changes != std::vector<std::string>{
@@ -1839,7 +1799,6 @@ void automaticstopearly1()
 	}
 
 	logged_state_changes.clear();
-	stopped_containers.insert("automaticstopearly1");
 	proc_container_stopped("automaticstopearly1");
 
 	if (logged_state_changes != std::vector<std::string>{
@@ -1881,17 +1840,20 @@ void automaticstopearly2()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"automaticstopearly2: stop pending",
+			"automaticstopearly2: cgroup created",
 			"automaticstopearly2: stopping",
 		})
 	{
 		throw "Unexpected state changes after automatic container stop";
 	}
 	logged_state_changes.clear();
-	stopped_containers.insert("automaticstopearly2");
 	runner_finished(1, 0);
+	proc_container_stopped("automaticstopearly2");
 
 	if (logged_state_changes != std::vector<std::string>{
 			"automaticstopearly2: removing",
+			"automaticstopearly2: sending SIGTERM",
+			"automaticstopearly2: cgroup removed",
 			"automaticstopearly2: stopped",
 		})
 	{
@@ -1940,7 +1902,9 @@ void testgroup()
 			"group/1: start pending (dependency)",
 			"group/2: start pending (dependency)",
 			"final: started (dependency)",
+			"group/1: cgroup created",
 			"group/1: starting (dependency)",
+			"group/2: cgroup created",
 			"group/2: starting (dependency)",
 		})
 	{
@@ -1977,6 +1941,123 @@ void testgroup()
 		throw "Unexpected state changes after start (2)";
 	}
 
+}
+
+void testfailcgroupcreate()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+
+	a->dep_required_by.insert("graphical runlevel");
+	a->dep_requires.insert("b");
+	a->new_container->starting_command="startfailure";
+
+	auto b=std::make_shared<proc_new_containerObj>("b");
+
+	proc_containers_install({
+			a, b
+		});
+
+	symlink("non/existent/path",
+		proc_container_group_data::get_cgroupfs_base_path());
+
+	if (!proc_container_runlevel("default").empty())
+		throw "Unexpected error starting default runlevel";
+
+	if (logged_state_changes.size() > 2)
+		std::sort(&logged_state_changes[1], &logged_state_changes[3]);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting graphical runlevel",
+			"a: start pending (dependency)",
+			"b: start pending (dependency)",
+			"b: started (dependency)",
+			"testcgroup/a: No such file or directory",
+			"a: removing",
+			"a: stopped",
+			"b: stop pending",
+			"b: removing",
+			"b: stopped"
+		})
+	{
+		throw "Unexpected state changes.";
+	}
+}
+
+void testfailcgroupdelete()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+
+	a->dep_required_by.insert("graphical runlevel");
+	a->new_container->starting_command="startok";
+
+	proc_containers_install({
+			a
+		});
+
+	if (!proc_container_runlevel("default").empty())
+		throw "Unexpected error starting default runlevel";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting graphical runlevel",
+			"a: start pending (dependency)",
+			"a: cgroup created",
+			"a: starting (dependency)",
+		})
+	{
+		throw "Unexpected state changes.";
+	}
+	logged_state_changes.clear();
+	populated(a->new_container, true);
+	do_poll(0);
+	runner_finished(1, 0);
+	if (logged_state_changes != std::vector<std::string>{
+			"a: started (dependency)",
+		})
+	{
+		throw "Unexpected state changes.";
+	}
+
+	logged_state_changes.clear();
+
+	proc_container_stop("a");
+	if (logged_state_changes != std::vector<std::string>{
+			"a: stop pending",
+			"a: removing",
+			"a: sending SIGTERM",
+		})
+	{
+		throw "Unexpected state change after stopping.";
+	}
+
+	logged_state_changes.clear();
+
+	populated(a->new_container, false);
+
+	std::string p{proc_container_group_data::get_cgroupfs_base_path()};
+
+	rename((p + "/a:").c_str(), (p + "/b:").c_str());
+	close(open((p + "/a:").c_str(), O_RDWR|O_CREAT|O_TRUNC, 0644));
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+			"a: cannot delete cgroup: Not a directory"
+		})
+	{
+		throw "Unexpected state change after stopping.";
+	}
+	logged_state_changes.clear();
+	unlink((p+"/a:").c_str());
+	rename((p + "/b:").c_str(), (p + "/a:").c_str());
+	populated(a->new_container, true);
+	do_poll(0);
+	populated(a->new_container, false);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+			"a: cgroup removed",
+			"a: stopped",
+		})
+	{
+		throw "Unexpected state change after 2nd stopping attempt.";
+	}
 }
 
 int main()
@@ -2096,6 +2177,16 @@ int main()
 		test_reset();
 		test="testgroup";
 		testgroup();
+
+		test_reset();
+		test="testfailcgroupcreate";
+		testfailcgroupcreate();
+
+		test_reset();
+		test="testfailcgroupdelete";
+		testfailcgroupdelete();
+
+		test_reset();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

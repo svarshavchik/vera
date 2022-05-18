@@ -79,6 +79,9 @@ time_t run_timers()
 			continue;
 
 		timer->done(info);
+
+		// We might find something to do.
+		me->find_start_or_stop_to_do();
 	}
 
 	return 60 * 60;

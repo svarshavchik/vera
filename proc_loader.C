@@ -26,7 +26,11 @@
 
 static bool proc_validpath(const std::string &path)
 {
-	if (path.size() == 0 || SPECIAL(*path.c_str()))
+	// cgroup directories are formed by replacing all /s with : and
+	// appending one more :, so the maximum path.size() is NAME_MAX-1.
+
+	if (path.size() == 0 || path.size() >= NAME_MAX
+	    || SPECIAL(*path.c_str()))
 		return false;
 
 	char lastchar=0;

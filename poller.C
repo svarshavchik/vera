@@ -363,12 +363,18 @@ void global_inotify::do_inotify()
 
 		delink::update(ptr, wd);
 
-		installed.emplace(wd, std::tuple{
+		auto new_iter=installed.emplace(wd, std::tuple{
 				std::move(cb),
 				ptr
-			});
+			}).first;
 
 		pending_adds.erase(iter);
+
+		auto &[installed_cb, installed_ptr]=new_iter->second;
+
+		// This was a delayed install. Things could've changed.
+
+		installed_cb(nullptr, 0);
 	}
 }
 #if 0
@@ -379,6 +385,8 @@ void global_inotify::do_inotify()
 const uint32_t inotify_watch_handler::mask_dir=
 	IN_CREATE | IN_CLOSE_WRITE | IN_DELETE | IN_DELETE_SELF | IN_ONLYDIR
 	| IN_MOVED_FROM | IN_MOVED_TO;
+
+const uint32_t inotify_watch_handler::mask_filemodify=IN_MODIFY;
 
 inotify_watch_handler::inotify_watch_handler(
 	const std::string &pathname,

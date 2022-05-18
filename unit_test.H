@@ -51,8 +51,6 @@ static pid_t get_next_pid(const proc_container &container,
 #define UNIT_TEST_RUNNER (get_next_pid(container, argv))
 #endif
 
-std::unordered_set<std::string> stopped_containers;
-
 #define UNIT_TEST() UNIT_TEST_RUNNER
 #include "proc_container_runner.C"
 #undef UNIT_TEST
@@ -66,9 +64,12 @@ void test_reset()
 
 	logged_state_changes.clear();
 	logged_runners.clear();
-	stopped_containers.clear();
 	next_pid=1;
 	fake_time=1;
+
+	std::filesystem::remove_all(
+		proc_container_group_data::get_cgroupfs_base_path()
+	);
 }
 
 void test_advance(time_t interval)
@@ -76,4 +77,7 @@ void test_advance(time_t interval)
 	fake_time += interval;
 	run_timers();
 }
+
+void populated(const proc_container &container, bool isit);
+
 #endif

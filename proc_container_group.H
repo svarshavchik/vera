@@ -6,7 +6,8 @@
 #define proc_container_group_h
 
 #include "poller.H"
-
+#include "proc_containerfwd.H"
+#include <tuple>
 #include <string>
 
 /*! Movable POD for a proc_container_group.
@@ -28,7 +29,35 @@ struct proc_container_group_data {
 
 	int stdouterrpipe[2]={-1, -1};
 
+	//! The poller for the read end of the stdouterrpipe
+
 	polledfd stdouterrpoller;
+
+	//! The container this group is for.
+
+	proc_container container;
+
+	static const char *get_cgroupfs_base_path();
+
+	//! Return the cgroups directory.
+
+	std::string cgroups_dir();
+
+	//! Create a cgroups directory and return an fd to its cgroup.events
+
+	//! And its full pathname.
+	std::tuple<int, std::string> cgroups_dir_create();
+
+	//! cgroup.events file descriptor
+	int cgroup_eventsfd{-1};
+
+	//! The cgroup_eventsfd poller
+
+	inotify_watch_handler cgroup_eventsfdhandler;
+
+	//! Register the forked process in the cgroup.
+
+	void cgroups_register();
 };
 
 struct group_create_info;
@@ -69,6 +98,13 @@ public:
 	proc_container_group &operator=(const proc_container_group &)=delete;
 
 	proc_container_group &operator=(proc_container_group &&);
+
+	//! Try to rmdir my cgroups directory.
+	bool cgroups_try_rmdir();
+
+	//! Send a signal to all processes in the group
+
+	void cgroups_sendsig(int);
 };
 
 #endif

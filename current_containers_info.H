@@ -276,14 +276,14 @@ private:
 	bool do_stop(const current_container_lookup_t &);
 
 	void do_stop_runner(const current_container &);
-	void do_remove(const current_container &);
+	void do_remove(const current_container &, bool send_sigkill);
+
 	void starting_command_finished(const current_container &cc,
 				       bool oneshot,
 				       int status);
 	proc_container_timer create_sigkill_timer(
 		const proc_container &pc
 	);
-	void send_sigkill(const current_container &cc);
 
 public:
 	std::vector<std::tuple<proc_container, proc_container_state>> get();
@@ -306,6 +306,8 @@ private:
 	);
 public:
 	void stopped(const std::string &s);
+
+	void populated(const std::string &s, bool);
 
 	//! Log a message on behalf of a container
 

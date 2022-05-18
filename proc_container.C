@@ -19,6 +19,7 @@
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <string.h>
 
 state_stopped::operator std::string() const
 {
@@ -721,20 +722,20 @@ void current_containers_infoObj::install(
 		if (std::holds_alternative<state_stopped>(b->second.state))
 			continue;
 
-		// Kill the removed container immediately, then set its
-		// autoremove flag, and keep it.
-
-		send_sigkill(b);
-
 		b->second.autoremove=true;
 
 		// This is getting added after all the dependency work.
 		// As such, any containers with the autoremove flag get
 		// added without any dependenies, guaranteed.
 
-		new_current_containers.emplace(
+		auto new_iter=new_current_containers.emplace(
 			b->first,
-			std::move(b->second));
+			std::move(b->second)).first;
+
+		// Kill the removed container immediately, then set its
+		// autoremove flag, and keep it.
+
+		do_remove(new_iter, true);
 	}
 
 	// Move new_all_dependency_info into prepared_dependency_info
@@ -1880,9 +1881,6 @@ void current_containers_infoObj::do_start_runner(
 						_("start process timed out")
 					);
 					me->stop_with_all_requirements(cc);
-
-					me->find_start_or_stop_to_do();
-					// We might find something to do.
 				}
 			);
 		}
@@ -1968,7 +1966,7 @@ struct current_containers_infoObj::stop_or_terminate_helper {
 
 	template<typename T> void operator()(T &) const
 	{
-		me.do_remove(cc);
+		me.do_remove(cc, false);
 	}
 };
 
@@ -2066,7 +2064,7 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 
 	if (pc->stopping_command.empty())
 	{
-		do_remove(cc);
+		do_remove(cc, false);
 		return;
 	}
 
@@ -2088,14 +2086,14 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 			{
 				log_container_failed_process(cc->first, status);
 			}
-			me->do_remove(cc);
+			me->do_remove(cc, false);
 			me->find_start_or_stop_to_do();
 		}
 	);
 
 	if (!runner)
 	{
-		do_remove(cc);
+		do_remove(cc, false);
 		return;
 	}
 
@@ -2126,10 +2124,7 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 							_("stop process "
 							  "timed out")
 						);
-						me->do_remove(cc);
-						me->find_start_or_stop_to_do();
-						// We might find something
-						// to do.
+						me->do_remove(cc, false);
 					}
 				)
 			);
@@ -2151,9 +2146,7 @@ proc_container_timer current_containers_infoObj::create_sigkill_timer(
 		{
 			const auto &[me, cc]=info;
 
-			me->send_sigkill(cc);
-			me->find_start_or_stop_to_do();
-			// We might find something to do.
+			me->do_remove(cc, true);
 		});
 }
 
@@ -2174,9 +2167,13 @@ proc_container_timer current_containers_infoObj::create_sigkill_timer(
 // All paths into do_remove must come via stop_with_all_requirements
 // to ensure that all dependencies are observed.
 
-void current_containers_infoObj::do_remove(const current_container &cc)
+void current_containers_infoObj::do_remove(const current_container &cc,
+					   bool send_sigkill)
 {
 	auto &[pc, run_info] = *cc;
+
+	// Formally switch into a stopping state, and set up a timer
+	// to send a sigkill, after a timeout.
 
 	initiate_stopping(
 		cc,
@@ -2186,35 +2183,28 @@ void current_containers_infoObj::do_remove(const current_container &cc)
 			return state.emplace<state_stopping>(
 				std::in_place_type_t<stop_removing>{},
 				create_sigkill_timer(pc),
-				false
+				send_sigkill
 			);
 		});
 
-	if (is_stopped(cc->first))
+	// However if the container group does not exist already, we're
+	// fully stopped.
+
+	if (!run_info.group)
 	{
-		// The container stopped already, no more processes
-
 		stopped(cc->first->name);
+		return;
 	}
-}
 
-// Timer to send sigkill has expired.
+	// Then send a signal to the processes in the cgroup.
 
-void current_containers_infoObj::send_sigkill(const current_container &cc)
-{
-	auto &[pc, run_info] = *cc;
+	log_container_message(cc->first,
+			      send_sigkill ? _("sending SIGKILL")
+			      : _("sending SIGTERM"));
 
-	initiate_stopping(
-		cc,
-		[&]
-		(proc_container_state &state) -> state_stopping &
-		{
-			return state.emplace<state_stopping>(
-				std::in_place_type_t<stop_removing>{},
-				create_sigkill_timer(pc),
-				true
-			);
-		});
+	run_info.group->cgroups_sendsig(
+		send_sigkill ? SIGKILL:SIGTERM
+	);
 }
 
 // The container has started.
@@ -2236,7 +2226,23 @@ static state_started &started(const current_container &cc, bool for_dependency)
 
 void proc_container_stopped(const std::string &s)
 {
-	get_containers_info(nullptr)->stopped(s);
+	get_containers_info(nullptr)->populated(s, false);
+}
+
+void current_containers_infoObj::populated(const std::string &s,
+					   bool is_populated)
+{
+	if (is_populated)
+		return;
+
+	auto cc=containers.find(s);
+
+	if (cc == containers.end() ||
+	    cc->first->type != proc_container_type::loaded)
+		return;
+
+	stopped(cc->first->name);
+	find_start_or_stop_to_do();
 }
 
 void current_containers_infoObj::stopped(const std::string &s)
@@ -2248,6 +2254,25 @@ void current_containers_infoObj::stopped(const std::string &s)
 		return;
 
 	auto &[pc, run_info] = *cc;
+
+	if (run_info.group)
+	{
+		if (run_info.group->cgroups_try_rmdir())
+		{
+			cc->second.group.reset();
+			log_container_message(
+				pc, _("cgroup removed")
+			);
+		}
+		else
+		{
+			log_container_message(
+				pc, std::string{_("cannot delete cgroup: ")}
+				+ strerror(errno)
+			);
+			return;
+		}
+	}
 
 	if (cc->first->stop_type == stop_type_t::manual)
 	{
@@ -2269,7 +2294,9 @@ void current_containers_infoObj::stopped(const std::string &s)
 					    return false;
 				    }
 			    }, run_info.state))
+		{
 			return;
+		}
 	}
 	else
 	{
@@ -2286,13 +2313,15 @@ void current_containers_infoObj::stopped(const std::string &s)
 	}
 
 	run_info.state.emplace<state_stopped>();
-	run_info.group.reset();
-
 	log_state_change(pc, run_info.state);
 
 	if (run_info.autoremove)
 	{
 		// This container was removed from the configuration.
+
+		log_container_message(
+			pc, _("removed")
+		);
 
 		containers.erase(cc);
 	}

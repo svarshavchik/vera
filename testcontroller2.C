@@ -32,8 +32,10 @@ void test_failedexec()
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting graphical runlevel",
 			"failedexec: start pending (dependency)",
+			"failedexec: cgroup created",
 			"failedexec: ./failedexec: No such file or directory",
 			"failedexec: removing",
+			"failedexec: sending SIGTERM",
 		})
 		throw "Did not see expected state changes";
 
@@ -69,12 +71,24 @@ void test_capture()
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting graphical runlevel",
 			"capture: start pending (dependency)",
+			"capture: cgroup created",
 			"capture: started (dependency)",
 			"capture: foo",
 			"capture: bar",
 		})
 		throw "Did not see expected state changes";
 
+	logged_state_changes.clear();
+	populated(b->new_container, false);
+	do_poll(0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"capture: cgroup removed",
+			"capture: stop pending",
+			"capture: removing",
+			"capture: stopped"
+		})
+		throw "Did not see expected state changes";
 }
 
 int main()
@@ -113,6 +127,7 @@ int main()
 		test="testcapture";
 		test_capture();
 
+		test_reset();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

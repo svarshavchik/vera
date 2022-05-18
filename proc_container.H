@@ -48,6 +48,8 @@ std::string proc_container_start(const std::string &s);
 std::string proc_container_stop(const std::string &s);
 
 //! All processes in the container have exited.
+
+//! Or maybe not. is_populated comes from cgroup.events. Some entry paths
 void proc_container_stopped(const std::string &s);
 
 //! A running process has finished.

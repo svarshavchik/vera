@@ -109,6 +109,12 @@ public:
 
 	static const uint32_t mask_dir;
 
+	//! Value for the mask parameter to the constructor
+
+	//! Specifies that pathname is a file whose changes we want to modify.
+
+	static const uint32_t mask_filemodify;
+
 	//! Movable object
 	inotify_watch_handler(inotify_watch_handler &&);
 
