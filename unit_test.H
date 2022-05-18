@@ -19,7 +19,7 @@ static std::vector<std::string> logged_runners;
 static pid_t next_pid=1;
 
 static pid_t get_next_pid(const proc_container &container,
-			  const std::string &command)
+			  std::vector<std::vector<char>> &argv)
 {
 	pid_t pid=next_pid++;
 
@@ -28,7 +28,17 @@ static pid_t get_next_pid(const proc_container &container,
 
 	std::ostringstream o;
 
-	o << container->name << ": " << command << " (pid " << pid << ")";
+	o << container->name << ":";
+
+	const char *sep=" ";
+
+	for (auto &c:argv)
+	{
+		o << sep << c.data();
+		sep="|";
+	}
+
+	o << " (pid " << pid << ")";
 
 	logged_runners.push_back(o.str());
 
@@ -37,7 +47,7 @@ static pid_t get_next_pid(const proc_container &container,
 
 std::unordered_set<std::string> stopped_containers;
 
-#define UNIT_TEST() (get_next_pid(container, command))
+#define UNIT_TEST() (get_next_pid(container, argv))
 #include "proc_container_runner.C"
 #undef UNIT_TEST
 

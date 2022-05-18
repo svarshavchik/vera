@@ -2135,7 +2135,8 @@ void current_containers_infoObj::stopped(const std::string &s)
 
 	if (cc->first->stop_type == stop_type_t::manual)
 	{
-		// Only after we're already in the removal phase
+		// A manual stop: if the container is state_stopping in the
+		// removal phase we can proceed to a stopped state.
 		if (!std::visit(
 			    [&]
 			    (auto &s)
@@ -2156,6 +2157,11 @@ void current_containers_infoObj::stopped(const std::string &s)
 	}
 	else
 	{
+		// Automatic stop: if the container is in any stopping
+		// phase it can move into the stopped state.
+		//
+		// Otherwise this results in stop() getting formally called.
+
 		if (!std::holds_alternative<state_stopping>(run_info.state))
 		{
 			stop(pc->name);

@@ -1693,7 +1693,7 @@ void happy_oneshot()
 
 	b->new_container->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert("graphical runlevel");
-	b->new_container->starting_command="happyoneshot";
+	b->new_container->starting_command="happyoneshot*";
 	proc_containers_install({
 			b,
 		});
@@ -1711,7 +1711,7 @@ void happy_oneshot()
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"happyoneshotb: happyoneshot (pid 1)"
+			"happyoneshotb: /bin/sh|-c|happyoneshot* (pid 1)"
 		})
 	{
 		throw "did not schedule a start runner";
@@ -1732,7 +1732,7 @@ void sad_oneshot()
 
 	b->new_container->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert("graphical runlevel");
-	b->new_container->starting_command="sadoneshot";
+	b->new_container->starting_command="sadoneshot verysad";
 	proc_containers_install({
 			b,
 		});
@@ -1750,7 +1750,7 @@ void sad_oneshot()
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"sadoneshotb: sadoneshot (pid 1)"
+			"sadoneshotb: sadoneshot|verysad (pid 1)"
 		})
 	{
 		throw "did not schedule a start runner";

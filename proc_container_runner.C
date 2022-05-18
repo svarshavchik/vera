@@ -7,6 +7,9 @@
 #include "proc_container_runner.H"
 #include "current_containers_info.H"
 #include "log.H"
+#include "messages.H"
+#include <string.h>
+#include <fcntl.h>
 
 proc_container_runnerObj::proc_container_runnerObj(
 	pid_t pid,
@@ -44,7 +47,67 @@ proc_container_runner create_runner(
 				  int)> &done
 )
 {
+	std::vector<std::vector<char>> argv;
+
+	if (command.find_first_of("\"'*?~$&|#;\n\r()") ==
+	    command.npos)
+	{
+		auto b=command.begin(), e=command.end();
+
+		while (b != e)
+		{
+			auto p=b;
+
+			b=std::find_if(
+				b, e,
+				[](char c)
+				{
+					return c == ' ' || c == '\t';
+				});
+
+			if (p == b)
+			{
+				++b;
+				continue;
+			}
+
+			std::vector<char> cmd;
+
+			cmd.reserve(b-p+1);
+			cmd.insert(cmd.end(), p, b);
+			cmd.push_back(0);
+			argv.push_back(std::move(cmd));
+		}
+	}
+	else
+	{
+		static const char binsh[]="/bin/sh";
+		static const char optc[]="-c";
+
+		argv.reserve(3);
+
+		argv.push_back(std::vector<char>{
+				binsh, binsh+sizeof(binsh)
+			});
+
+		argv.push_back(std::vector<char>{
+				optc, optc+sizeof(optc)
+			});
+		argv.push_back(std::vector<char>{
+				command.c_str(),
+				command.c_str()+command.size()+1
+			});
+	}
+
 	const auto &[container, run_info]=*cc;
+
+	int exec_pipe[2];
+
+	if (pipe2(exec_pipe, O_CLOEXEC) < 0)
+	{
+		log_container_error(container, _("pipe2() failed"));
+		return {};
+	}
 
 #ifdef UNIT_TEST
 	pid_t p=UNIT_TEST();
@@ -54,15 +117,49 @@ proc_container_runner create_runner(
 
 	if (p == -1)
 	{
-		log_container_error(container, "fork() failed");
+		log_container_error(container, _("fork() failed"));
 		return {};
 	}
 
 	if (p == 0)
 	{
-		// TODO
+		close(exec_pipe[0]);
+
+		if (argv.empty())
+			_exit(0); // Nothing to do.
+
+		std::vector<char *> charvec;
+
+		charvec.reserve(argv.size()+1);
+
+		for (auto &v:argv)
+			charvec.push_back(v.data());
+
+		charvec.push_back(nullptr);
+
+		execv(charvec[0], charvec.data());
+
+		int n=errno;
+
+		write(exec_pipe[1], &n, sizeof(n));
 		_exit(1);
 	}
+
+	close(exec_pipe[1]);
+
+	int n;
+
+	if (read(exec_pipe[0], reinterpret_cast<char *>(&n), sizeof(n))
+	    == sizeof(n))
+	{
+		close(exec_pipe[0]);
+		// child process exits upon an empty command.
+		log_container_error( container,
+				     std::string{argv[0].data()} + ": "
+				     + strerror(n));
+		return {};
+	}
+	close(exec_pipe[0]);
 
 	return std::make_shared<proc_container_runnerObj>(
 		p, all_containers, container, done);
