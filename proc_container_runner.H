@@ -38,19 +38,6 @@ public:
 	void invoke(int wstatus) const;
 };
 
-//! Create a running process.
-
-//! The passed-in closure gets called when the process finishes. The
-//! closure is responsible for calling find_start_or_stop_to_do().
-
-proc_container_runner create_runner(
-	const current_containers_info &all_containers,
-	const proc_container &container,
-	const std::string &command,
-	const std::function<void (const current_containers_callback_info &,
-				  int)> &done
-);
-
 //! Check if this container has any processes.
 
 bool is_stopped(const proc_container &container);

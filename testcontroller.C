@@ -11,11 +11,6 @@
 
 #include "proc_loader.H"
 
-current_containers_infoObj::current_containers_infoObj()
-	: runlevel_configuration{default_runlevels()}
-{
-}
-
 void test_proc_new_container_set()
 {
 	proc_new_container_set pcs;

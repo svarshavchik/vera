@@ -9,16 +9,10 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <memory>
-#include "current_containers_info.H"
 #include "proc_loader.H"
 #include <filesystem>
 #include <algorithm>
 #include "poller.C"
-
-current_containers_infoObj::current_containers_infoObj()
-	: runlevel_configuration{default_runlevels()}
-{
-}
 
 void testpolledfd1()
 {

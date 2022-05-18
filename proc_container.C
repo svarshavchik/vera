@@ -134,6 +134,13 @@ const char *proc_containerObj::get_stop_type() const
 
 //////////////////////////////////////////////////////////////////////////////
 
+proc_container_run_info::proc_container_run_info(
+	proc_container_run_info &&move_from)
+	: proc_container_run_info{}
+{
+	*this=std::move(move_from);
+}
+
 void current_containers_infoObj::install_requires_dependency(
 
 	//! Where to record dependencies
@@ -597,7 +604,7 @@ void current_containers_infoObj::install(
 		{
 			// Still exists, preserve the running state,
 			// but clear the autoremove flag.
-			iter->second=b->second;
+			iter->second=std::move(b->second);
 			iter->second.autoremove=false;
 			continue;
 		}
@@ -618,7 +625,9 @@ void current_containers_infoObj::install(
 		// As such, any containers with the autoremove flag get
 		// added without any dependenies, guaranteed.
 
-		new_current_containers.emplace(b->first, b->second);
+		new_current_containers.emplace(
+			b->first,
+			std::move(b->second));
 	}
 
 	// Move new_all_dependency_info into prepared_dependency_info
@@ -1704,7 +1713,7 @@ void current_containers_infoObj::do_start_runner(
 
 		auto runner=create_runner(
 			shared_from_this(),
-			pc, pc->starting_command,
+			cc, pc->starting_command,
 			[oneshot=pc->start_type == start_type_t::oneshot]
 			(const auto &info, int status)
 			{
@@ -1949,7 +1958,7 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 
 	auto runner=create_runner(
 		shared_from_this(),
-		pc, pc->stopping_command,
+		cc, pc->stopping_command,
 		[]
 		(const auto &info, int status)
 		{

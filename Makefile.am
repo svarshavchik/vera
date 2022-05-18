@@ -38,16 +38,16 @@ libvera_a_SOURCES=						\
 	poller.H						\
 	unit_test.H
 
-testcontroller_SOURCES=testcontroller.C
+testcontroller_SOURCES=testcontroller.C unit_test.C
 testcontroller_LDADD=libvera.a @YAMLLIBS@
 
-testdepcomputations_SOURCES=testdepcomputations.C
+testdepcomputations_SOURCES=testdepcomputations.C unit_test.C
 testdepcomputations_LDADD=libvera.a @YAMLLIBS@
 
-testprocloader_SOURCES=testprocloader.C
+testprocloader_SOURCES=testprocloader.C unit_test.C
 testprocloader_LDADD=libvera.a @YAMLLIBS@
 
-testpoller_SOURCES=testpoller.C
+testpoller_SOURCES=testpoller.C unit_test.C
 testpoller_LDADD=libvera.a @YAMLLIBS@
 
 check:

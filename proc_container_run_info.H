@@ -28,6 +28,29 @@ struct proc_container_run_info {
 						   proc_container_run_info>>>
 	proc_container_run_info(T &&t) : state{std::forward<T>(t)} {}
 
+	//! Default constructor
+
+	proc_container_run_info()=default;
+
+	//! Destructor
+	~proc_container_run_info()=default;
+
+	/*! Move assignment operator
+
+	  install() updates the list of managed containers, creating
+	  new_current_containers, then moves the existing containers'
+	  run state to the new_current_containers.
+	 */
+	proc_container_run_info &operator=(proc_container_run_info &&)=default;
+
+	/*!
+	  Move constructor
+
+	  Based on the move-assignment operator.
+	*/
+	proc_container_run_info(proc_container_run_info &&);
+
+
 	//! Do something if the process container is in a specific state.
 
 	//! If so, invoke the passed-in callable object with the state as

@@ -5,7 +5,6 @@
 
 #include "config.h"
 #include "proc_loader.H"
-#include "current_containers_info.H"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -13,10 +12,6 @@
 #include <fstream>
 #include <errno.h>
 #include <string.h>
-
-current_containers_infoObj::current_containers_infoObj()
-{
-}
 
 void loadtest(const proc_new_container_set &res)
 {

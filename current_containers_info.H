@@ -6,6 +6,7 @@
 #define current_containers_info_h
 
 #include "current_containers_infofwd.H"
+#include "proc_container_runnerfwd.H"
 #include "proc_container.H"
 #include <type_traits>
 #include <functional>
@@ -313,5 +314,19 @@ struct current_containers_callback_info {
 	const current_containers_info &all_containers;
 	current_container cc;
 };
+
+
+//! Create a running process.
+
+//! The passed-in closure gets called when the process finishes. The
+//! closure is responsible for calling find_start_or_stop_to_do().
+
+proc_container_runner create_runner(
+	const current_containers_info &all_containers,
+	const current_container &cc,
+	const std::string &command,
+	const std::function<void (const current_containers_callback_info &,
+				  int)> &done
+);
 
 #endif

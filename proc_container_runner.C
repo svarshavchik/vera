@@ -38,12 +38,14 @@ void proc_container_runnerObj::invoke(int wstatus) const
 
 proc_container_runner create_runner(
 	const current_containers_info &all_containers,
-	const proc_container &container,
+	const current_container &cc,
 	const std::string &command,
 	const std::function<void (const current_containers_callback_info &,
 				  int)> &done
 )
 {
+	const auto &[container, run_info]=*cc;
+
 #ifdef UNIT_TEST
 	pid_t p=UNIT_TEST();
 #else
