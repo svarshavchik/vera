@@ -125,7 +125,6 @@ void polledfd::destroy()
 		sleep(5);
 	}
 	ep.callbacks.erase(fd);
-	close(fd);
 	fd= -1;
 }
 
@@ -176,6 +175,7 @@ void do_poll(int timeout)
 
 			iter->second(iter->first);
 		}
+		timeout=0; // Drain, but don't wait any more.
 	}
 }
 

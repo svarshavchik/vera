@@ -60,11 +60,10 @@ void test_capture()
 		throw "Did not start a process";
 	}
 
-	int wstatus;
-
-	if (wait4(next_pid, &wstatus, 0, 0) != next_pid)
-		throw "Wait for process failed";
-
+	while (kill(next_pid, 0) == 0)
+	{
+		do_poll(500);
+	}
 	do_poll(0);
 
 	if (logged_state_changes != std::vector<std::string>{

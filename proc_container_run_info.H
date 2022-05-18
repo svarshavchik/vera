@@ -120,6 +120,9 @@ struct proc_container_run_info {
 		}, state);
 	}
 
+	//! Active cgroup
+
+	//! Object that tracks the cgroup.
 	std::optional<proc_container_group> group;
 };
 

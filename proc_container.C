@@ -10,11 +10,15 @@
 #include "proc_loader.H"
 #include "messages.H"
 #include "log.H"
+#include "poller.H"
 #include <unordered_map>
 #include <unordered_set>
 #include <set>
 #include <type_traits>
 #include <iostream>
+#include <sys/signalfd.h>
+#include <sys/wait.h>
+#include <signal.h>
 
 state_stopped::operator std::string() const
 {
@@ -211,11 +215,109 @@ void current_containers_infoObj::install_requires_dependency(
 
 //! Information about a container's running state.
 
-//! All current process containers.
+//! Return a singleton for all current process containers.
 
-static current_containers_info containers_info{
-	std::make_shared<current_containers_infoObj>()
+const current_containers_info &get_containers_info(
+	current_containers_info *replacement
+)
+{
+	static current_containers_info containers_info{
+		std::make_shared<current_containers_infoObj>()
+	};
+
+	if (replacement)
+		containers_info= *replacement;
+	return containers_info;
+}
+
+//! A signal file descriptor that catches and handles SIGCHLD
+
+//! The singleton blocks SIGCHLD and sets up a poller on a signal file
+//! descriptor.
+
+namespace {
+#if 0
+}
+#endif
+
+struct sigchld_poller {
+
+	int fd;
+
+	polledfd handler;
+
+	sigchld_poller()
+	{
+		// Block SIGCHLD
+
+		sigset_t ss;
+
+		sigemptyset(&ss);
+		sigaddset(&ss, SIGCHLD);
+
+		while (sigprocmask(SIG_BLOCK, &ss, NULL) < 0)
+		{
+			perror("sigprocmask");
+			sleep(5);
+		}
+
+		while ((fd=signalfd(-1, &ss, SFD_NONBLOCK|SFD_CLOEXEC)) < 0)
+		{
+			perror("signalfd");
+			sleep(5);
+		}
+
+		// Install a handler for the file descriptor
+
+		handler=polledfd{fd,
+			[]
+			(int fd)
+			{
+				signalfd_siginfo buffer[4];
+
+				ssize_t n;
+
+				while ((n=read(fd, reinterpret_cast<char *>(
+						       buffer
+					       ), sizeof(buffer))) > 0)
+				{
+					n /= sizeof(signalfd_siginfo);
+
+					for (ssize_t i=0; i<n; ++i)
+					{
+						if (buffer[i].ssi_signo !=
+						    SIGCHLD)
+							continue;
+
+						int wstatus;
+
+						wait4(buffer[i].ssi_pid,
+						      &wstatus, 0, 0);
+
+
+						runner_finished(
+							buffer[i].ssi_pid,
+							wstatus);
+					}
+				}
+			}};
+	}
+
+	~sigchld_poller()
+	{
+		handler=polledfd{};
+		close(fd);
+	}
 };
+
+void install_sighandlers()
+{
+	static sigchld_poller singleton;
+}
+#if 0
+{
+#endif
+}
 
 //! Unordered map for all current runners.
 
@@ -240,7 +342,7 @@ static state_started &started(const current_container &, bool);
 std::vector<std::tuple<proc_container, proc_container_state>
 	    > get_proc_containers()
 {
-	return containers_info->get();
+	return get_containers_info(nullptr)->get();
 }
 
 std::vector<std::tuple<proc_container, proc_container_state>
@@ -264,7 +366,11 @@ std::vector<std::tuple<proc_container, proc_container_state>
 
 void proc_containers_reset()
 {
-	containers_info=std::make_shared<current_containers_infoObj>();
+	auto replacement=std::make_shared<current_containers_infoObj>();
+
+	// This is used by unit tests
+
+	get_containers_info(&replacement);
 }
 
 void proc_containers_install(const proc_new_container_set &new_containers)
@@ -276,7 +382,8 @@ void proc_containers_install(const proc_new_container_set &new_containers)
 
 void proc_containers_install(proc_new_container_set &&new_containers)
 {
-	containers_info->install(new_containers);
+	install_sighandlers();
+	get_containers_info(nullptr)->install(new_containers);
 }
 
 void current_containers_infoObj::install(
@@ -695,7 +802,7 @@ void current_containers_infoObj::install(
 
 std::string proc_container_runlevel(const std::string &new_runlevel)
 {
-	return containers_info->runlevel(new_runlevel);
+	return get_containers_info(nullptr)->runlevel(new_runlevel);
 }
 
 std::string current_containers_infoObj::runlevel(const std::string &runlevel)
@@ -735,7 +842,7 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 
 std::string proc_container_start(const std::string &name)
 {
-	return containers_info->start(name);
+	return get_containers_info(nullptr)->start(name);
 }
 
 //! Determine eligibility of containers for starting them
@@ -877,7 +984,7 @@ std::string current_containers_infoObj::start(const std::string &name)
 
 std::string proc_container_stop(const std::string &name)
 {
-	return containers_info->stop(name);
+	return get_containers_info(nullptr)->stop(name);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -2129,7 +2236,7 @@ static state_started &started(const current_container &cc, bool for_dependency)
 
 void proc_container_stopped(const std::string &s)
 {
-	containers_info->stopped(s);
+	get_containers_info(nullptr)->stopped(s);
 }
 
 void current_containers_infoObj::stopped(const std::string &s)

@@ -14,12 +14,8 @@
 
 //! A polled file descriptor
 
-//! The file descripto gets owned and gets passed to the constructor.
-//! polledfd takes ownership of it, and automatically close()s it when it
-//! gets destroyed.
-//!
 //! The file descriptor should have O_NONBLOCK and O_CLOEXEC set, before
-//! pollefd is constructed.
+//! polledfd is constructed.
 //!
 //! The 2nd parameter to the constructor is a callable object that
 //! do_poll() invokes whenever the file descriptor is readable, and it
