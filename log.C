@@ -49,6 +49,14 @@ void log_container_error(const proc_container &pc, const std::string &msg)
 #endif
 }
 
+void log_container_message(const proc_container &pc, const std::string &msg)
+{
+#ifdef UNIT_TEST
+	logged_state_changes.push_back(pc->name +": " + msg);
+	std::cout << pc->name << ": " << msg << "\n";
+#endif
+}
+
 void log_message(const std::string &msg)
 {
 #ifdef UNIT_TEST

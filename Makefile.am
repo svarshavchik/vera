@@ -7,6 +7,8 @@ export LC_ALL=C
 
 noinst_PROGRAMS=\
 	testcontroller						\
+	testcontroller2						\
+	testcontroller2fdleak					\
 	testdepcomputations 					\
 	testpoller						\
 	testprocloader
@@ -24,6 +26,8 @@ libvera_a_SOURCES=						\
 	proc_container.C					\
 	proc_container.H					\
 	proc_containerfwd.H					\
+	proc_container_group.C					\
+	proc_container_group.H					\
 	proc_container_runner.C					\
 	proc_container_runner.H					\
 	proc_container_runnerfwd.H				\
@@ -41,6 +45,11 @@ libvera_a_SOURCES=						\
 testcontroller_SOURCES=testcontroller.C unit_test.C
 testcontroller_LDADD=libvera.a @YAMLLIBS@
 
+testcontroller2_SOURCES=testcontroller2.C unit_test.C
+testcontroller2_LDADD=libvera.a @YAMLLIBS@
+
+testcontroller2fdleak_SOURCES=testcontroller2fdleak.C
+
 testdepcomputations_SOURCES=testdepcomputations.C unit_test.C
 testdepcomputations_LDADD=libvera.a @YAMLLIBS@
 
@@ -55,3 +64,4 @@ check:
 	$(VALGRIND) ./testcontroller
 	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testprocloader.sh
 	$(VALGRIND) ./testpoller
+	./testcontroller2

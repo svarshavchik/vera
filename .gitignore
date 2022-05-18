@@ -20,6 +20,8 @@ install-sh
 missing
 stamp-h1
 testcontroller
+testcontroller2
+testcontroller2fdleak
 testdepcomputations
 testpoller
 testprocloader

@@ -109,6 +109,21 @@ proc_container_runner create_runner(
 		return {};
 	}
 
+	// Create the container group if it does not exist already.
+
+	if (!cc->second.group)
+	{
+		auto &new_group=cc->second.group.emplace();
+
+		if (!new_group.create({all_containers, cc}))
+		{
+			cc->second.group.reset();
+			return {};
+		}
+	}
+
+	auto &group=*cc->second.group;
+
 #ifdef UNIT_TEST
 	pid_t p=UNIT_TEST();
 #else
@@ -125,19 +140,22 @@ proc_container_runner create_runner(
 	{
 		close(exec_pipe[0]);
 
-		if (argv.empty())
-			_exit(0); // Nothing to do.
+		if (group.forked())
+		{
+			if (argv.empty())
+				_exit(0); // Nothing to do.
 
-		std::vector<char *> charvec;
+			std::vector<char *> charvec;
 
-		charvec.reserve(argv.size()+1);
+			charvec.reserve(argv.size()+1);
 
-		for (auto &v:argv)
-			charvec.push_back(v.data());
+			for (auto &v:argv)
+				charvec.push_back(v.data());
 
-		charvec.push_back(nullptr);
+			charvec.push_back(nullptr);
 
-		execv(charvec[0], charvec.data());
+			execvp(charvec[0], charvec.data());
+		}
 
 		int n=errno;
 

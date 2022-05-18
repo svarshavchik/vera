@@ -7,8 +7,10 @@
 
 #include <type_traits>
 #include <functional>
+#include <optional>
 
 #include "proc_container_state.H"
+#include "proc_container_group.H"
 
 struct proc_container_run_info {
 	//! The actual state
@@ -117,6 +119,8 @@ struct proc_container_run_info {
 			}
 		}, state);
 	}
+
+	std::optional<proc_container_group> group;
 };
 
 #endif

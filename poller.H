@@ -29,9 +29,12 @@
 
 class polledfd {
 
-	int fd;
+	int fd{-1};
+
+	void destroy();
 
 public:
+	polledfd()=default;
 	polledfd(int fd, const std::function<void (int)> &callback);
 
 	polledfd(int fd, std::function<void (int)> &&callback);
@@ -40,6 +43,7 @@ public:
 
 	polledfd(polledfd &&);
 
+	polledfd &operator=(polledfd &&);
 	polledfd &operator=(const polledfd &)=delete;
 };
 
@@ -152,6 +156,8 @@ public:
 	using inotify_watch_handler::operator bool;
 };
 
+//! Return a file descriptor for /dev/null
 
+int devnull();
 
 #endif

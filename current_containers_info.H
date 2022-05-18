@@ -306,6 +306,12 @@ private:
 	);
 public:
 	void stopped(const std::string &s);
+
+	//! Log a message on behalf of a container
+
+	//! The pipe attached its processes's standard output and error
+	//! winds up here.
+	void log(const std::string &name, const std::string &message);
 };
 
 //! Information used by callback from timers and processes
@@ -328,5 +334,18 @@ proc_container_runner create_runner(
 	const std::function<void (const current_containers_callback_info &,
 				  int)> &done
 );
+
+/*! Data passed to proc_container_group::create()
+
+The parameter to create() must be forward-declared, to avoid circular
+dependencies. This is what really goes there.
+
+ */
+
+struct group_create_info {
+	const current_containers_info &all_containers;
+	const current_container &cc;
+};
+
 
 #endif

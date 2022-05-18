@@ -943,6 +943,15 @@ std::string current_containers_infoObj::stop(const std::string &name)
 	return "";
 }
 
+void current_containers_infoObj::log(const std::string &name,
+				     const std::string &message)
+{
+	auto iter=containers.find(name);
+
+	if (iter != containers.end())
+		log_container_message(iter->first, message);
+}
+
 //////////////////////////////////////////////////////////////////////////
 //
 // We want to stop a container.
@@ -2170,6 +2179,7 @@ void current_containers_infoObj::stopped(const std::string &s)
 	}
 
 	run_info.state.emplace<state_stopped>();
+	run_info.group.reset();
 
 	log_state_change(pc, run_info.state);
 

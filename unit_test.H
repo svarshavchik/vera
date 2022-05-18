@@ -16,7 +16,10 @@ time_t fake_time;
 #undef UNIT_TEST
 
 static std::vector<std::string> logged_runners;
+
 static pid_t next_pid=1;
+
+#ifndef UNIT_TEST_RUNNER
 
 static pid_t get_next_pid(const proc_container &container,
 			  std::vector<std::vector<char>> &argv)
@@ -45,9 +48,12 @@ static pid_t get_next_pid(const proc_container &container,
 	return pid;
 }
 
+#define UNIT_TEST_RUNNER (get_next_pid(container, argv))
+#endif
+
 std::unordered_set<std::string> stopped_containers;
 
-#define UNIT_TEST() (get_next_pid(container, argv))
+#define UNIT_TEST() UNIT_TEST_RUNNER
 #include "proc_container_runner.C"
 #undef UNIT_TEST
 

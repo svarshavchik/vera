@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <tuple>
+#include <algorithm>
 
 namespace {
 #if 0
@@ -70,6 +71,7 @@ global_epoll::~global_epoll()
 	devnull= -1;
 	epollfd= -1;
 }
+
 #if 0
 {
 #endif
@@ -104,6 +106,11 @@ polledfd::polledfd(int fd, std::function<void (int)> &&callback)
 
 polledfd::~polledfd()
 {
+	destroy();
+}
+
+void polledfd::destroy()
+{
 	auto &ep=get_epoll();
 
 	if (fd < 0 || ep.epollfd < 0)
@@ -112,16 +119,36 @@ polledfd::~polledfd()
 	epoll_event ev{};
 	while (epoll_ctl(ep.epollfd, EPOLL_CTL_DEL, fd, &ev) < 0)
 	{
-		log_message(_("EPOLL_CTL_ADD failed, trying again..."));
+		if (errno == EBADF)
+			break;
+		log_message(_("EPOLL_CTL_DEL failed, trying again..."));
 		sleep(5);
 	}
 	ep.callbacks.erase(fd);
 	close(fd);
+	fd= -1;
 }
 
-polledfd::polledfd(polledfd &&moved_from) : fd{moved_from.fd}
+polledfd::polledfd(polledfd &&moved_from) : polledfd{}
 {
-	moved_from.fd= -1;
+	operator=(std::move(moved_from));
+}
+
+polledfd &polledfd::operator=(polledfd &&moved_from)
+{
+	destroy();
+	std::swap(fd, moved_from.fd);
+	return *this;
+}
+
+int devnull()
+{
+	auto &ep=get_epoll();
+
+	if (ep.epollfd < 0)
+		return -1;
+
+	return ep.devnull;
 }
 
 void do_poll(int timeout)
