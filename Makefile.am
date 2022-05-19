@@ -19,6 +19,7 @@ noinst_LIBRARIES=libvera.a
 libvera_a_SOURCES=						\
 	current_containers_infofwd.H				\
 	current_containers_info.H				\
+	external_filedesc.H					\
 	log.C 							\
 	log.H							\
 	log_current_time.C					\

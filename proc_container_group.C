@@ -216,10 +216,15 @@ bool proc_container_group::create(const group_create_info &create_info)
 	return cgroup_eventsfdhandler;
 }
 
-bool proc_container_group::forked()
+bool proc_container_group::forked(int fd)
 {
-	if (dup2(stdouterrpipe[1], 1) != 1 ||
-	    dup2(stdouterrpipe[1], 2) != 2 ||
+	if (fd < 0)
+	{
+		fd=stdouterrpipe[1];
+	}
+
+	if (dup2(fd, 1) != 1 ||
+	    dup2(fd, 2) != 2 ||
 	    dup2(devnull(), 0) != 0)
 		return false;
 

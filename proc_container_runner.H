@@ -38,8 +38,4 @@ public:
 	void invoke(int wstatus) const;
 };
 
-//! Check if this container has any processes.
-
-bool is_stopped(const proc_container &container);
-
 #endif

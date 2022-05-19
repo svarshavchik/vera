@@ -11,8 +11,12 @@
 #include "unit_test.H"
 
 #include <sys/wait.h>
+#include <unistd.h>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
+#include <string>
+#include <iterator>
 #include <vector>
 
 void test_failedexec()
@@ -20,7 +24,7 @@ void test_failedexec()
 	auto b=std::make_shared<proc_new_containerObj>("failedexec");
 
 	b->dep_required_by.insert("graphical runlevel");
-	b->new_container->starting_command="./failedexec";
+	b->new_container->starting_command="/no/such/path/failedexec";
 
 	proc_containers_install({
 			b,
@@ -33,7 +37,7 @@ void test_failedexec()
 			"Starting graphical runlevel",
 			"failedexec: start pending (dependency)",
 			"failedexec: cgroup created",
-			"failedexec: ./failedexec: No such file or directory",
+			"failedexec: /no/such/path/failedexec: No such file or directory",
 			"failedexec: removing",
 			"failedexec: sending SIGTERM",
 		})
@@ -91,6 +95,157 @@ void test_capture()
 		throw "Did not see expected state changes";
 }
 
+std::tuple<int, std::string> restart_or_reload(
+	const std::function<int (int)> &cb
+)
+{
+	int fd=open("testrestart.log", O_RDWR|O_CREAT|O_TRUNC, 0644);
+
+	int ret=cb(fd);
+
+	close(fd);
+
+	std::ifstream o{"testrestart.log"};
+
+	std::string s{std::istreambuf_iterator{o.rdbuf()},
+		std::istreambuf_iterator<char>{}};
+
+	o.close();
+	unlink("testrestart.log");
+
+	return std::tuple{ret, std::move(s)};
+}
+
+std::tuple<int, std::string> do_test_or_restart(
+	const std::function<void (external_filedesc &,
+				  const std::function<void (int)>)> &callback)
+{
+	int fd=open("testrestartreload.out", O_RDWR|O_CREAT|O_TRUNC, 0644);
+
+	if (fd < 0)
+		throw "Cannot create testrestartreload.out";
+
+	std::ifstream i{"testrestartreload.out"};
+
+	if (!i)
+		throw "Cannot open testrestartreload.out";
+
+	unlink("testrestartreload.out");
+
+	auto ef=std::make_shared<external_filedescObj>(fd);
+
+	int exitcode_received=0;
+	bool exited=false;
+
+	callback(ef,
+		 [&]
+		 (int exitcode)
+		 {
+			 exitcode_received=exitcode;
+			 exited=true;
+		 });
+
+	while (!exited)
+		do_poll(1000);
+
+	ef=nullptr;
+
+	std::string ret{std::istreambuf_iterator{i},
+		std::istreambuf_iterator<char>{}};
+
+	i.close();
+
+	return {exitcode_received, std::move(ret)};
+}
+
+void test_restart()
+{
+	auto b=std::make_shared<proc_new_containerObj>("restart");
+
+	b->dep_required_by.insert("graphical runlevel");
+
+	b->new_container->restarting_command="echo restarting; exit 10";
+	b->new_container->reloading_command="echo reloading; exit 9";
+
+	proc_containers_install({
+			b,
+		});
+
+	auto ret=do_test_or_restart(
+		[]
+		(external_filedesc &filedesc,
+		 const std::function<void (int)> &cb)
+		{
+			proc_container_restart("nonexistent", filedesc, cb);
+		});
+
+	auto &[exitcode, message]=ret;
+
+	if (WEXITSTATUS(exitcode) != 1 ||
+	    message != "nonexistent: unknown unit\n")
+		throw "Unexpected result of nonexistent start";
+
+	ret=do_test_or_restart(
+		[]
+		(external_filedesc &filedesc,
+		 const std::function<void (int)> &cb)
+		{
+			proc_container_restart("restart", filedesc, cb);
+		});
+
+	if (WEXITSTATUS(exitcode) != 1 ||
+	    message != "restart: is not currently started\n")
+		throw "Unexpected result of non-started restart";
+
+	proc_container_start("restart");
+
+	ret=do_test_or_restart(
+		[]
+		(external_filedesc &filedesc,
+		 const std::function<void (int)> &cb)
+		{
+			proc_container_restart("restart", filedesc, cb);
+		});
+
+	if (WEXITSTATUS(exitcode) != 10 ||
+	    message != "restarting\n")
+		throw "Unexpected result of a successful restart";
+
+	ret=do_test_or_restart(
+		[]
+		(external_filedesc &filedesc,
+		 const std::function<void (int)> &cb)
+		{
+			proc_container_reload("restart", filedesc, cb);
+
+			auto ret2=do_test_or_restart(
+				[]
+				(external_filedesc &filedesc2,
+				 const std::function<void (int)> &cb2)
+				{
+					proc_container_restart("restart",
+							       filedesc2,
+							       cb2);
+				});
+
+			auto &[exitcode, message] = ret2;
+
+			if (WEXITSTATUS(exitcode) != 1 ||
+			    message != "restart: is already in the middle of "
+			    "another reload or restart\n")
+			{
+				throw "Unexpected result of an in-progress"
+					" error";
+			}
+
+		});
+
+	if (WEXITSTATUS(exitcode) != 9 ||
+	    message != "reloading\n")
+		throw "Unexpected result of a successful reload";
+}
+
+
 int main()
 {
 	alarm(60);
@@ -126,6 +281,10 @@ int main()
 		test_reset();
 		test="testcapture";
 		test_capture();
+
+		test_reset();
+		test="testrestart";
+		test_restart();
 
 		test_reset();
 	} catch (const char *e)

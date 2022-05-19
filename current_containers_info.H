@@ -294,7 +294,22 @@ public:
 
 	std::string start(const std::string &name);
 
+	void restart(const std::string &name,
+		     const external_filedesc &,
+		     const std::function<void (int)> &completed);
+
+	void reload(const std::string &name,
+		    const external_filedesc &,
+		    const std::function<void (int)> &completed);
+
 private:
+	void reload_or_restart(
+		const std::string &name,
+		const external_filedesc &filedesc,
+		const std::function<void (int)> &completed,
+		std::string proc_containerObj::*command,
+		const char *no_command_error);
+
 	struct start_eligibility;
 	struct stop_eligibility;
 public:
@@ -328,13 +343,16 @@ struct current_containers_callback_info {
 
 //! The passed-in closure gets called when the process finishes. The
 //! closure is responsible for calling find_start_or_stop_to_do().
-
+//!
+//! Standard output/error is redirected to the given file descriptor (defaults
+//! to the container's log descriptor.
 proc_container_runner create_runner(
 	const current_containers_info &all_containers,
 	const current_container &cc,
 	const std::string &command,
 	const std::function<void (const current_containers_callback_info &,
-				  int)> &done
+				  int)> &done,
+	int stdouterr_filedesc=-1
 );
 
 /*! Data passed to proc_container_group::create()

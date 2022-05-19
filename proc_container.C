@@ -20,6 +20,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <string.h>
+#include <string_view>
 
 state_stopped::operator std::string() const
 {
@@ -319,20 +320,6 @@ void install_sighandlers()
 {
 #endif
 }
-
-//! Unordered map for all current runners.
-
-//! Each runner's handle is owned by its current state, which is stored in
-//! the current containers.
-//!
-//! current_runners is a map of weak pointers, so when the runner's state
-//! no longer cares about the runner (timeout), it gets destroyed.
-
-typedef std::unordered_map<pid_t,
-			   std::weak_ptr<const proc_container_runnerObj>
-			   > current_runners;
-
-static current_runners runners;
 
 static state_started &started(const current_container &, bool);
 
@@ -1284,34 +1271,6 @@ void current_containers_infoObj::stop_with_all_requirements(
 		do_stop_or_terminate(iter);
 }
 
-///////////////////////////////////////////////////////////////////////////
-//
-// Some running process finished. Figure out what it is, and take appropriate
-// action.
-
-void runner_finished(pid_t pid, int wstatus)
-{
-	// Do we know this runner?
-
-	auto iter=runners.find(pid);
-
-	if (iter == runners.end())
-		return;
-
-	// Retrieve the runner's handler.
-
-	auto runner=iter->second.lock();
-
-	runners.erase(iter);
-
-	// A destroyed handler gets ignored, otherwise it gets invoked.
-
-	if (!runner)
-		return;
-
-	runner->invoke(wstatus);
-}
-
 //////////////////////////////////////////////////////////////////////
 
 void current_containers_infoObj::find_start_or_stop_to_do()
@@ -1851,7 +1810,6 @@ void current_containers_infoObj::do_start_runner(
 
 		// Log the runner.
 
-		runners[runner->pid]=runner;
 		starting.starting_runner=runner;
 
 		if (pc->start_type == start_type_t::oneshot)
@@ -2097,8 +2055,6 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 		return;
 	}
 
-	runners[runner->pid]=runner;
-
 	initiate_stopping(
 		cc,
 		[&]
@@ -2223,6 +2179,9 @@ static state_started &started(const current_container &cc, bool for_dependency)
 /////////////////////////////////////////////////////////////////////////
 //
 // The container completely stopped, it has no more processes.
+//
+// proc_container_stopped() is called by unit tests. The cgroups.events
+// handler calls populated() directly.
 
 void proc_container_stopped(const std::string &s)
 {
@@ -2327,4 +2286,103 @@ void current_containers_infoObj::stopped(const std::string &s)
 	}
 
 	find_start_or_stop_to_do(); // We might find something to do.
+}
+
+void proc_container_restart(const std::string &name,
+			    external_filedesc filedesc,
+			    const std::function<void (int)> &completed)
+{
+	get_containers_info(nullptr)->restart(name, filedesc, completed);
+}
+
+void proc_container_reload(const std::string &name,
+			   external_filedesc filedesc,
+			   const std::function<void (int)> &completed)
+{
+	get_containers_info(nullptr)->reload(name, filedesc, completed);
+}
+
+void current_containers_infoObj::restart(
+	const std::string &name,
+	const external_filedesc &filedesc,
+	const std::function<void (int)> &completed)
+{
+	reload_or_restart(name, filedesc, completed,
+			  &proc_containerObj::restarting_command,
+			  _(": is not restartable\n"));
+}
+
+void current_containers_infoObj::reload(
+	const std::string &name,
+	const external_filedesc &filedesc,
+	const std::function<void (int)> &completed)
+{
+	reload_or_restart(name, filedesc, completed,
+			  &proc_containerObj::reloading_command,
+			  _(": is not reloadable\n"));
+}
+
+void current_containers_infoObj::reload_or_restart(
+	const std::string &name,
+	const external_filedesc &filedesc,
+	const std::function<void (int)> &completed,
+	std::string proc_containerObj::*command,
+	const char *no_command_error)
+{
+	auto iter=containers.find(name);
+
+	if (iter == containers.end() ||
+	    iter->first->type != proc_container_type::loaded)
+	{
+		filedesc->write_all(name + _(": unknown unit\n"));
+		completed(1 << 8);
+		return;
+	}
+
+	auto &[pc, run_info] = *iter;
+
+	if (!std::holds_alternative<state_started>(run_info.state))
+	{
+		filedesc->write_all(name + _(": is not currently started\n"));
+		completed(1 << 8);
+		return;
+	}
+
+	auto &started=std::get<state_started>(run_info.state);
+
+	if (started.reload_or_restart_runner)
+	{
+		filedesc->write_all(name + _(": is already in the middle of "
+					     "another reload or restart\n"));
+		completed(1 << 8);
+		return;
+	}
+
+	if (((*pc).*command).empty())
+	{
+		filedesc->write_all(name + no_command_error);
+		completed(1 << 8);
+		return;
+	}
+	started.reload_or_restart_runner=create_runner(
+		shared_from_this(),
+		iter,
+		(*pc).*command,
+		[filedesc, completed]
+		(auto &callback_info,
+		 int exit_status)
+		{
+			auto &[me, cc]=callback_info;
+
+			auto &[pc, run_info]=*cc;
+
+			if (!std::holds_alternative<state_started>(
+				    run_info.state))
+				return;
+			auto &started=std::get<state_started>(run_info.state);
+
+			started.reload_or_restart_runner=nullptr;
+			completed(exit_status);
+		},
+		filedesc->fd);
 }

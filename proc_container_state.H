@@ -50,6 +50,10 @@ struct state_started {
 
 	//! Oneshot timer.
 	proc_container_runner starting_runner_oneshot;
+
+	//! Currently running reload or restart command
+
+	proc_container_runner reload_or_restart_runner;
 };
 
 //! A \ref state_stopping "state_stopping container" that's waiting to be able to begin stopping

@@ -17,6 +17,7 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "proc_container_state.H"
+#include "external_filedesc.H"
 
 //! Container type
 
@@ -133,6 +134,12 @@ public:
 
 	time_t stopping_timeout=DEFAULT_STOPPING_TIMEOUT;
 
+	//! The restart command
+	std::string restarting_command;
+
+	//! The reload command
+	std::string reloading_command;
+
 	//! Constructor
 	proc_containerObj(const std::string &name);
 
@@ -208,6 +215,11 @@ typedef std::unordered_map<std::string,
 
 void proc_containers_install(const proc_new_container_set &new_containers);
 void proc_containers_install(proc_new_container_set &&new_containers);
+
+void proc_container_restart(const std::string &, external_filedesc,
+			    const std::function<void (int)> &);
+void proc_container_reload(const std::string &, external_filedesc,
+			   const std::function<void (int)> &);
 
 //! For unit tests
 void proc_containers_reset();

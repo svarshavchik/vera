@@ -998,6 +998,36 @@ proc_new_container_set proc_load(
 
 				    }
 				    return true;
+
+				    if (key == "restart")
+				    {
+					    auto s=parsed.parse_scalar(
+						    n,
+						    name,
+						    error);
+
+					    if (!s)
+						    return false;
+
+					    nc->new_container
+						    ->restarting_command=*s;
+				    }
+
+				    if (key == "reload")
+				    {
+					    auto s=parsed.parse_scalar(
+						    n,
+						    name,
+						    error);
+
+					    if (!s)
+						    return false;
+
+					    nc->new_container
+						    ->reloading_command=*s;
+				    }
+
+				    return true;
 			    },
 			    error))
 		{

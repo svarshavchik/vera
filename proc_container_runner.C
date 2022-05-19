@@ -11,6 +11,22 @@
 #include <string.h>
 #include <fcntl.h>
 
+//! Unordered map for all current runners.
+
+//! Each runner's handle is owned by its current state, which is stored in
+//! the current containers.
+//!
+//! current_runners is a map of weak pointers, so when the runner's state
+//! no longer cares about the runner (timeout), it gets destroyed. The
+//! process still exists somewhere, so it'll eventually terminate, get
+//! wait()ed for, and we find a null weak pointer here which we'll remove.
+
+typedef std::unordered_map<pid_t,
+			   std::weak_ptr<const proc_container_runnerObj>
+			   > current_runners;
+
+static current_runners runners;
+
 proc_container_runnerObj::proc_container_runnerObj(
 	pid_t pid,
 	const current_containers_info &all_containers,
@@ -44,7 +60,8 @@ proc_container_runner create_runner(
 	const current_container &cc,
 	const std::string &command,
 	const std::function<void (const current_containers_callback_info &,
-				  int)> &done
+				  int)> &done,
+	int stdouterr_filedesc
 )
 {
 	std::vector<std::vector<char>> argv;
@@ -79,11 +96,13 @@ proc_container_runner create_runner(
 			argv.push_back(std::move(cmd));
 		}
 	}
-	else
+
+	if (argv.empty() || argv[0][0] != '/')
 	{
 		static const char binsh[]="/bin/sh";
 		static const char optc[]="-c";
 
+		argv.clear();
 		argv.reserve(3);
 
 		argv.push_back(std::vector<char>{
@@ -141,7 +160,7 @@ proc_container_runner create_runner(
 	{
 		close(exec_pipe[0]);
 
-		if (group.forked())
+		if (group.forked(stdouterr_filedesc))
 		{
 			if (argv.empty())
 				_exit(0); // Nothing to do.
@@ -180,6 +199,38 @@ proc_container_runner create_runner(
 	}
 	close(exec_pipe[0]);
 
-	return std::make_shared<proc_container_runnerObj>(
+	auto runner=std::make_shared<proc_container_runnerObj>(
 		p, all_containers, container, done);
+
+	runners[runner->pid]=runner;
+
+	return runner;
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+// Some running process finished. Figure out what it is, and take appropriate
+// action.
+
+void runner_finished(pid_t pid, int wstatus)
+{
+	// Do we know this runner?
+
+	auto iter=runners.find(pid);
+
+	if (iter == runners.end())
+		return;
+
+	// Retrieve the runner's handler.
+
+	auto runner=iter->second.lock();
+
+	runners.erase(iter);
+
+	// A destroyed handler gets ignored, otherwise it gets invoked.
+
+	if (!runner)
+		return;
+
+	runner->invoke(wstatus);
 }

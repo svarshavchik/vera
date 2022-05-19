@@ -142,7 +142,7 @@ void test_happy_start_stop_common(const std::string &name)
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			name + ": start (pid 1)"
+			name + ": /bin/sh|-c|start (pid 1)"
 		})
 	{
 		throw "did not schedule a start runner";
@@ -207,7 +207,7 @@ void test_happy_start()
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"happy_start: stop (pid 2)"
+			"happy_start: /bin/sh|-c|stop (pid 2)"
 		})
 	{
 		throw "did not schedule a stop runner";
@@ -1391,8 +1391,8 @@ void test_failed_fork_with_dependencies()
 	runner_finished(1, 0);
 
 	if (logged_runners != std::vector<std::string>{
-			"dep_fail_forkd: start_d (pid 1)",
-			"dep_fail_forkc: start_c (pid -1)"
+			"dep_fail_forkd: /bin/sh|-c|start_d (pid 1)",
+			"dep_fail_forkc: /bin/sh|-c|start_c (pid -1)"
 		})
 	{
 		throw "Unexpected runners after starting containers";
@@ -1418,7 +1418,7 @@ void test_failed_fork_with_dependencies()
 	proc_container_stopped("dep_fail_forkc");
 
 	if (logged_runners != std::vector<std::string>{
-			"dep_fail_forkd: stop_d (pid 1)"
+			"dep_fail_forkd: /bin/sh|-c|stop_d (pid 1)"
 		})
 		throw "Missing runner start after container stop";
 
@@ -1474,7 +1474,7 @@ void test_timeout_with_dependencies()
 	runner_finished(1, 0);
 
 	if (logged_runners != std::vector<std::string>{
-			"dep_timeoutc: start_c (pid 2)",
+			"dep_timeoutc: /bin/sh|-c|start_c (pid 2)",
 		})
 	{
 		throw "Unexpected runners after starting containers";
@@ -1510,7 +1510,7 @@ void test_timeout_with_dependencies()
 	proc_container_stopped("dep_timeoutc");
 
 	if (logged_runners != std::vector<std::string>{
-			"dep_timeoutd: stop_d (pid 3)"
+			"dep_timeoutd: /bin/sh|-c|stop_d (pid 3)"
 		})
 		throw "Missing runner start after container stop";
 
@@ -1566,7 +1566,7 @@ void test_startfail_with_dependencies()
 	runner_finished(1, 0);
 
 	if (logged_runners != std::vector<std::string>{
-			"dep_startfailc: start_c (pid 2)",
+			"dep_startfailc: /bin/sh|-c|start_c (pid 2)",
 		})
 	{
 		throw "Unexpected runners after starting containers";
@@ -1602,7 +1602,7 @@ void test_startfail_with_dependencies()
 	proc_container_stopped("dep_startfailc");
 
 	if (logged_runners != std::vector<std::string>{
-			"dep_startfaild: stop_d (pid 3)"
+			"dep_startfaild: /bin/sh|-c|stop_d (pid 3)"
 		})
 		throw "Missing runner start after container stop";
 
@@ -1652,7 +1652,7 @@ void happy_oneshot()
 
 	b->new_container->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert("graphical runlevel");
-	b->new_container->starting_command="happyoneshot*";
+	b->new_container->starting_command="/happyoneshot echo *";
 	proc_containers_install({
 			b,
 		});
@@ -1671,7 +1671,7 @@ void happy_oneshot()
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"happyoneshotb: /bin/sh|-c|happyoneshot* (pid 1)"
+			"happyoneshotb: /bin/sh|-c|/happyoneshot echo * (pid 1)"
 		})
 	{
 		throw "did not schedule a start runner";
@@ -1711,7 +1711,7 @@ void sad_oneshot()
 	}
 
 	if (logged_runners != std::vector<std::string>{
-			"sadoneshotb: sadoneshot|verysad (pid 1)"
+			"sadoneshotb: /bin/sh|-c|sadoneshot verysad (pid 1)"
 		})
 	{
 		throw "did not schedule a start runner";
@@ -1918,8 +1918,8 @@ void testgroup()
 
 	std::sort(logged_runners.begin(), logged_runners.end());
 	if (logged_runners != std::vector<std::string>{
-			"group/1: startc ",
-			"group/2: startd "
+			"group/1: /bin/sh|-c|startc ",
+			"group/2: /bin/sh|-c|startd "
 		})
 	{
 		throw "Unexpected runners";
