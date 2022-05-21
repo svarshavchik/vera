@@ -1798,7 +1798,6 @@ void current_containers_infoObj::do_start_runner(
 				me->starting_command_finished(cc,
 							      oneshot,
 							      status);
-				me->find_start_or_stop_to_do();
 			}
 		);
 
@@ -2045,7 +2044,6 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 				log_container_failed_process(cc->first, status);
 			}
 			me->do_remove(cc, false);
-			me->find_start_or_stop_to_do();
 		}
 	);
 
@@ -2288,43 +2286,38 @@ void current_containers_infoObj::stopped(const std::string &s)
 	find_start_or_stop_to_do(); // We might find something to do.
 }
 
-void proc_container_restart(const std::string &name,
-			    external_filedesc filedesc,
-			    const std::function<void (int)> &completed)
+std::string proc_container_restart(const std::string &name,
+				   const std::function<void (int)> &completed)
 {
-	get_containers_info(nullptr)->restart(name, filedesc, completed);
+	return get_containers_info(nullptr)->restart(name, completed);
 }
 
-void proc_container_reload(const std::string &name,
-			   external_filedesc filedesc,
-			   const std::function<void (int)> &completed)
+std::string proc_container_reload(const std::string &name,
+				  const std::function<void (int)> &completed)
 {
-	get_containers_info(nullptr)->reload(name, filedesc, completed);
+	return get_containers_info(nullptr)->reload(name, completed);
 }
 
-void current_containers_infoObj::restart(
+std::string current_containers_infoObj::restart(
 	const std::string &name,
-	const external_filedesc &filedesc,
 	const std::function<void (int)> &completed)
 {
-	reload_or_restart(name, filedesc, completed,
-			  &proc_containerObj::restarting_command,
-			  _(": is not restartable\n"));
+	return reload_or_restart(name, completed,
+				 &proc_containerObj::restarting_command,
+				 _(": is not restartable\n"));
 }
 
-void current_containers_infoObj::reload(
+std::string current_containers_infoObj::reload(
 	const std::string &name,
-	const external_filedesc &filedesc,
 	const std::function<void (int)> &completed)
 {
-	reload_or_restart(name, filedesc, completed,
+	return reload_or_restart(name, completed,
 			  &proc_containerObj::reloading_command,
 			  _(": is not reloadable\n"));
 }
 
-void current_containers_infoObj::reload_or_restart(
+std::string current_containers_infoObj::reload_or_restart(
 	const std::string &name,
-	const external_filedesc &filedesc,
 	const std::function<void (int)> &completed,
 	std::string proc_containerObj::*command,
 	const char *no_command_error)
@@ -2334,41 +2327,34 @@ void current_containers_infoObj::reload_or_restart(
 	if (iter == containers.end() ||
 	    iter->first->type != proc_container_type::loaded)
 	{
-		filedesc->write_all(name + _(": unknown unit\n"));
-		completed(1 << 8);
-		return;
+		return name + _(": unknown unit");
 	}
 
 	auto &[pc, run_info] = *iter;
 
 	if (!std::holds_alternative<state_started>(run_info.state))
 	{
-		filedesc->write_all(name + _(": is not currently started\n"));
-		completed(1 << 8);
-		return;
+		return name + _(": is not currently started");
 	}
 
 	auto &started=std::get<state_started>(run_info.state);
 
 	if (started.reload_or_restart_runner)
 	{
-		filedesc->write_all(name + _(": is already in the middle of "
-					     "another reload or restart\n"));
-		completed(1 << 8);
-		return;
+		return name + _(": is already in the middle of "
+				"another reload or restart");
 	}
 
 	if (((*pc).*command).empty())
 	{
-		filedesc->write_all(name + no_command_error);
-		completed(1 << 8);
-		return;
+		return name + no_command_error;
 	}
+
 	started.reload_or_restart_runner=create_runner(
 		shared_from_this(),
 		iter,
 		(*pc).*command,
-		[filedesc, completed]
+		[completed]
 		(auto &callback_info,
 		 int exit_status)
 		{
@@ -2383,6 +2369,7 @@ void current_containers_infoObj::reload_or_restart(
 
 			started.reload_or_restart_runner=nullptr;
 			completed(exit_status);
-		},
-		filedesc->fd);
+		});
+
+	return "";
 }

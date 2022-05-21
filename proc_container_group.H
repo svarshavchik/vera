@@ -91,10 +91,10 @@ public:
 
 	/*! This is a new child process
 
-	  Move it into the container group, and redirect the standard output
-	  and error to the given file descriptor.
+	  Move it into the container group, and redirect its standard output
+	  and error.
 	 */
-	bool forked(int fd);
+	bool forked();
 
 	proc_container_group &operator=(const proc_container_group &)=delete;
 

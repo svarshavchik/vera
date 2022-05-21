@@ -117,45 +117,26 @@ std::tuple<int, std::string> restart_or_reload(
 }
 
 std::tuple<int, std::string> do_test_or_restart(
-	const std::function<void (external_filedesc &,
-				  const std::function<void (int)>)> &callback)
+	const std::function<std::string (const std::function<void (int)>)>
+	&callback)
 {
-	int fd=open("testrestartreload.out", O_RDWR|O_CREAT|O_TRUNC, 0644);
-
-	if (fd < 0)
-		throw "Cannot create testrestartreload.out";
-
-	std::ifstream i{"testrestartreload.out"};
-
-	if (!i)
-		throw "Cannot open testrestartreload.out";
-
-	unlink("testrestartreload.out");
-
-	auto ef=std::make_shared<external_filedescObj>(fd);
-
 	int exitcode_received=0;
 	bool exited=false;
 
-	callback(ef,
-		 [&]
-		 (int exitcode)
-		 {
-			 exitcode_received=exitcode;
-			 exited=true;
-		 });
+	auto ret=callback([&]
+			  (int exitcode)
+			  {
+				  exitcode_received=exitcode;
+				  exited=true;
+			  });
+
+	if (!ret.empty())
+		return {1 << 8, std::move(ret)};
 
 	while (!exited)
 		do_poll(1000);
 
-	ef=nullptr;
-
-	std::string ret{std::istreambuf_iterator{i},
-		std::istreambuf_iterator<char>{}};
-
-	i.close();
-
-	return {exitcode_received, std::move(ret)};
+	return {exitcode_received, ""};
 }
 
 void test_restart()
@@ -173,75 +154,68 @@ void test_restart()
 
 	auto ret=do_test_or_restart(
 		[]
-		(external_filedesc &filedesc,
-		 const std::function<void (int)> &cb)
+		(const std::function<void (int)> &cb)
 		{
-			proc_container_restart("nonexistent", filedesc, cb);
+			return proc_container_restart("nonexistent",  cb);
 		});
 
 	auto &[exitcode, message]=ret;
 
 	if (WEXITSTATUS(exitcode) != 1 ||
-	    message != "nonexistent: unknown unit\n")
+	    message != "nonexistent: unknown unit")
 		throw "Unexpected result of nonexistent start";
 
 	ret=do_test_or_restart(
 		[]
-		(external_filedesc &filedesc,
-		 const std::function<void (int)> &cb)
+		(const std::function<void (int)> &cb)
 		{
-			proc_container_restart("restart", filedesc, cb);
+			return proc_container_restart("restart", cb);
 		});
 
 	if (WEXITSTATUS(exitcode) != 1 ||
-	    message != "restart: is not currently started\n")
+	    message != "restart: is not currently started")
 		throw "Unexpected result of non-started restart";
 
 	proc_container_start("restart");
 
 	ret=do_test_or_restart(
 		[]
-		(external_filedesc &filedesc,
-		 const std::function<void (int)> &cb)
+		(const std::function<void (int)> &cb)
 		{
-			proc_container_restart("restart", filedesc, cb);
+			return proc_container_restart("restart", cb);
 		});
 
-	if (WEXITSTATUS(exitcode) != 10 ||
-	    message != "restarting\n")
+	if (WEXITSTATUS(exitcode) != 10 || message != "")
 		throw "Unexpected result of a successful restart";
 
 	ret=do_test_or_restart(
 		[]
-		(external_filedesc &filedesc,
-		 const std::function<void (int)> &cb)
+		(const std::function<void (int)> &cb)
 		{
-			proc_container_reload("restart", filedesc, cb);
+			auto ret=proc_container_reload("restart", cb);
 
 			auto ret2=do_test_or_restart(
 				[]
-				(external_filedesc &filedesc2,
-				 const std::function<void (int)> &cb2)
+				(const std::function<void (int)> &cb2)
 				{
-					proc_container_restart("restart",
-							       filedesc2,
-							       cb2);
+					return proc_container_restart(
+						"restart",
+						cb2);
 				});
 
 			auto &[exitcode, message] = ret2;
 
 			if (WEXITSTATUS(exitcode) != 1 ||
 			    message != "restart: is already in the middle of "
-			    "another reload or restart\n")
+			    "another reload or restart")
 			{
 				throw "Unexpected result of an in-progress"
 					" error";
 			}
-
+			return ret;
 		});
 
-	if (WEXITSTATUS(exitcode) != 9 ||
-	    message != "reloading\n")
+	if (WEXITSTATUS(exitcode) != 9 || message != "")
 		throw "Unexpected result of a successful reload";
 }
 

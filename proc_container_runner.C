@@ -53,6 +53,7 @@ void proc_container_runnerObj::invoke(int wstatus) const
 		return;
 
 	done(info, wstatus);
+	me->find_start_or_stop_to_do();
 }
 
 proc_container_runner create_runner(
@@ -60,8 +61,7 @@ proc_container_runner create_runner(
 	const current_container &cc,
 	const std::string &command,
 	const std::function<void (const current_containers_callback_info &,
-				  int)> &done,
-	int stdouterr_filedesc
+				  int)> &done
 )
 {
 	std::vector<std::vector<char>> argv;
@@ -160,7 +160,7 @@ proc_container_runner create_runner(
 	{
 		close(exec_pipe[0]);
 
-		if (group.forked(stdouterr_filedesc))
+		if (group.forked())
 		{
 			if (argv.empty())
 				_exit(0); // Nothing to do.

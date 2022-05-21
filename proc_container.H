@@ -17,7 +17,6 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "proc_container_state.H"
-#include "external_filedesc.H"
 
 //! Container type
 
@@ -216,10 +215,22 @@ typedef std::unordered_map<std::string,
 void proc_containers_install(const proc_new_container_set &new_containers);
 void proc_containers_install(proc_new_container_set &&new_containers);
 
-void proc_container_restart(const std::string &, external_filedesc,
-			    const std::function<void (int)> &);
-void proc_container_reload(const std::string &, external_filedesc,
-			   const std::function<void (int)> &);
+//! Trigger a restart
+
+//! A non-empty error message gets returned if the triggering failed.
+//! Otherwise the passed-in callback gets invoked when the restart finishes
+//! and it receives the exit status.
+
+std::string proc_container_restart(const std::string &,
+				   const std::function<void (int)> &);
+
+//! Trigger a reload
+
+//! A non-empty error message gets returned if the triggering failed.
+//! Otherwise the passed-in callback gets invoked when the restart finishes
+//! and it receives the exit status.
+std::string proc_container_reload(const std::string &,
+				  const std::function<void (int)> &);
 
 //! For unit tests
 void proc_containers_reset();
