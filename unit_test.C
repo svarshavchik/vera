@@ -30,7 +30,7 @@ const char *proc_container_group_data::get_cgroupfs_base_path()
 // unchanged, but creating cgroup.events with O_CREAT. Leaving it as empty
 // is fine. The handler deals with it.
 
-std::tuple<int,std::string> proc_container_group_data::cgroups_dir_create()
+bool proc_container_group_data::cgroups_dir_create()
 {
 	auto dir=cgroups_dir();
 
@@ -38,15 +38,21 @@ std::tuple<int,std::string> proc_container_group_data::cgroups_dir_create()
 	if (mkdir(dir.c_str(), 0755) < 0)
 	{
 		if (errno != EEXIST)
-			return {-1, dir};
+			return false;
 	}
 
-	dir += "/cgroup.events";
+	return true;
+}
 
-	return {
-		open(dir.c_str(), O_RDWR|O_CREAT|O_CLOEXEC, 0644),
-		dir
-	};
+std::tuple<int, std::string>
+proc_container_group_data::cgroups_events_open(int fd)
+{
+	auto path=cgroups_dir() + "/cgroup.events";
+
+	if (fd < 0)
+		fd=open(path.c_str(), O_RDWR|O_CREAT|O_CLOEXEC, 0644);
+
+	return {fd, path};
 }
 
 // The registration process consists of manually writing "populated 1"

@@ -10,12 +10,13 @@
 #include <tuple>
 #include <string>
 
+struct group_create_info;
+
 /*! Movable POD for a proc_container_group.
 
 proc_container_group implements move semantics. This POD is the movable
 data
 */
-
 
 struct proc_container_group_data {
 
@@ -43,10 +44,16 @@ struct proc_container_group_data {
 
 	std::string cgroups_dir();
 
-	//! Create a cgroups directory and return an fd to its cgroup.events
+	//! Create a cgroups directory.
 
-	//! And its full pathname.
-	std::tuple<int, std::string> cgroups_dir_create();
+	bool cgroups_dir_create();
+
+	//! Return the path to the cgroup.events file, and open it.
+
+	//! Returns an existing passed-in file descriptor, and the path to
+	//! to cgroups.events file. Passing in a negative file descriptor
+	//! opens the cgroup.events file, and returns the opened descriptor.
+	std::tuple<int, std::string> cgroups_events_open(int);
 
 	//! cgroup.events file descriptor
 	int cgroup_eventsfd{-1};
@@ -58,9 +65,16 @@ struct proc_container_group_data {
 	//! Register the forked process in the cgroup.
 
 	void cgroups_register();
-};
 
-struct group_create_info;
+	//! Install the poller and the event handler.
+
+	//! Called from create().
+
+	bool install(
+		const std::string &cgroup_events_path,
+		const group_create_info &create_info
+	);
+};
 
 /*!
 

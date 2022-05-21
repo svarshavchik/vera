@@ -13,7 +13,6 @@
 #include <string.h>
 #include <sstream>
 #include <fcntl.h>
-
 #include <iostream>
 
 std::string proc_container_group_data::cgroups_dir()
@@ -77,6 +76,44 @@ proc_container_group &proc_container_group::operator=(
 	return *this;
 }
 
+// parse "populated" in cgroup.events, using a scratch buffer.
+
+static bool is_populated(int fd, std::string &buffer)
+{
+	// cgroups.events has changed, read it.
+
+	char buf[256];
+
+	if (lseek(fd, 0L, SEEK_SET) < 0)
+		return false;
+
+	ssize_t n;
+	buffer.clear();
+
+	while ((n=read(fd, buf, sizeof(buf))) > 0)
+	{
+		buffer.insert(buffer.end(), buf, buf+n);
+	}
+
+	std::istringstream i{std::move(buffer)};
+
+	std::string key, value;
+
+	// The logic takes into account unit tests which
+	// create an empty file here, initially.
+
+	bool populated=false;
+	while (i >> key >> value)
+	{
+		if (key == "populated")
+		{
+			populated= value != "0";
+		}
+	}
+
+	return populated;
+}
+
 bool proc_container_group::create(const group_create_info &create_info)
 {
 	container=create_info.cc->first;
@@ -103,6 +140,31 @@ bool proc_container_group::create(const group_create_info &create_info)
 		return false;
 	}
 
+	if (!cgroups_dir_create())
+	{
+		// path ends with a colon
+		log_message(cgroups_dir() + " " + strerror(errno));
+		return false;
+	}
+
+	auto [fd, path]=cgroups_events_open(-1);
+
+	if (fd < 0)
+	{
+		// path ends with a colon
+		log_message(cgroups_dir() + " " + strerror(errno));
+		return false;
+	}
+
+	cgroup_eventsfd=fd;
+
+	return install(path, create_info);
+}
+
+bool proc_container_group_data::install(
+	const std::string &cgroup_events_path,
+	const group_create_info &create_info)
+{
 	stdouterrpoller=polledfd{
 		stdouterrpipe[0],
 		[all_containers=std::weak_ptr<current_containers_infoObj>{
@@ -145,61 +207,22 @@ bool proc_container_group::create(const group_create_info &create_info)
 			}
 		}};
 
-	auto [fd, path]=cgroups_dir_create();
-
-	if (fd < 0)
-	{
-		// path ends with a colon
-		log_message(path + " " + strerror(errno));
-		return false;
-	}
-
-	cgroup_eventsfd=fd;
-
 	cgroup_eventsfdhandler=inotify_watch_handler{
-		path,
+		cgroup_events_path,
 		inotify_watch_handler::mask_filemodify,
 		[all_containers=std::weak_ptr<current_containers_infoObj>{
 				create_info.all_containers
 			},
-			fd,
+			fd=cgroup_eventsfd,
 			name=container->name,
 			buffer=std::string{},
 			populated=false]
 		(auto, auto)
 		mutable
 		{
-			// cgroups.events has changed, read it.
-
-			char buf[256];
-
-			if (lseek(fd, 0L, SEEK_SET) < 0)
-				return;
-
-			ssize_t n;
-			buffer.clear();
-
-			while ((n=read(fd, buf, sizeof(buf))) > 0)
-			{
-				buffer.insert(buffer.end(), buf, buf+n);
-			}
-
-			std::istringstream i{std::move(buffer)};
-
-			std::string key, value;
-
 			bool old_populated=populated;
 
-			// The logic takes into account unit tests which
-			// create an empty file here, initially.
-			populated=false;
-			while (i >> key >> value)
-			{
-				if (key == "populated")
-				{
-					populated= value != "0";
-				}
-			}
+			populated=is_populated(fd, buffer);
 
 			// Did it really change?
 			if (old_populated == populated)
