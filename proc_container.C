@@ -691,6 +691,8 @@ void current_containers_infoObj::install(
 	// We now take the existing containers we have, and copy over their
 	// current running state.
 
+	std::vector<proc_container> to_remove;
+
 	for (auto b=containers.begin(), e=containers.end(); b != e; ++b)
 	{
 		auto iter=new_current_containers.find(b->first);
@@ -701,6 +703,14 @@ void current_containers_infoObj::install(
 			// but clear the autoremove flag.
 			iter->second=std::move(b->second);
 			iter->second.autoremove=false;
+
+			// Edge case: we removed a container but it's now
+			// a synthesized dependency. Kill it.
+
+			if (iter->first->type !=
+			    proc_container_type::loaded)
+				to_remove.push_back(iter->first);
+
 			continue;
 		}
 
@@ -715,14 +725,11 @@ void current_containers_infoObj::install(
 		// As such, any containers with the autoremove flag get
 		// added without any dependenies, guaranteed.
 
-		auto new_iter=new_current_containers.emplace(
+		new_current_containers.emplace(
 			b->first,
-			std::move(b->second)).first;
+			std::move(b->second));
 
-		// Kill the removed container immediately, then set its
-		// autoremove flag, and keep it.
-
-		do_remove(new_iter, true);
+		to_remove.push_back(b->first);
 	}
 
 	// Move new_all_dependency_info into prepared_dependency_info
@@ -737,6 +744,20 @@ void current_containers_infoObj::install(
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
 	runlevel_containers=std::move(new_runlevel_containers);
+
+
+	for (auto &c:to_remove)
+	{
+		auto iter=containers.find(c);
+
+		if (iter == containers.end())
+			continue;
+
+		if (std::holds_alternative<state_stopped>(iter->second.state))
+			continue;
+
+		do_remove(iter, true);
+	}
 
 	/////////////////////////////////////////////////////////////
 	//

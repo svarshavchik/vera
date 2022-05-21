@@ -1014,28 +1014,28 @@ void test_install()
 			"installc: started"
 		}, "unexpected state after starting containers");
 
+	logged_state_changes.clear();
+
 	proc_containers_install({
 			std::make_shared<proc_new_containerObj>("installa"),
 			std::make_shared<proc_new_containerObj>("installc"),
 			std::make_shared<proc_new_containerObj>("installd"),
 		});
 
+	if (logged_state_changes != std::vector<std::string>{
+			"installb: force-removing",
+			"installb: stopped",
+			"installb: removed",
+		})
+		throw "unexpected sequence of events after replacing"
+			" containers";
 	verify_container_state(
 		{
 			"installa: stopped",
-			"installb: force-removing",
 			"installc: started",
 			"installd: stopped",
 		}, "unexpected state after replacing containers (1)");
 
-	proc_container_stopped("installb");
-
-	verify_container_state(
-		{
-			"installa: stopped",
-			"installc: started",
-			"installd: stopped",
-		}, "unexpected state after replacing containers (2)");
 }
 
 void test_circular()
