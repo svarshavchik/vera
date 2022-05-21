@@ -55,7 +55,9 @@ static pid_t get_next_pid(const proc_container &container,
 #include "proc_container_runner.C"
 #undef UNIT_TEST
 
-void test_reset()
+extern std::function<void ()> reexec_handler;
+
+void test_reset(bool keep_cgroupfs=false)
 {
 	proc_containers_reset();
 
@@ -67,9 +69,17 @@ void test_reset()
 	next_pid=1;
 	fake_time=1;
 
-	std::filesystem::remove_all(
-		proc_container_group_data::get_cgroupfs_base_path()
-	);
+	if (!keep_cgroupfs)
+	{
+		std::filesystem::remove_all(
+			proc_container_group_data::get_cgroupfs_base_path()
+		);
+	}
+
+	reexec_handler=[]
+	{
+		throw "unexpected call to reexec.";
+	};
 }
 
 void test_advance(time_t interval)

@@ -43,6 +43,9 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 	proc_container new_runlevel;
 
 public:
+	//! A re-exec has been requested
+	bool reexec_requested=false;
+
 	//! The constructor only loads the runlevel configuration.
 
 	current_containers_infoObj();
@@ -288,7 +291,8 @@ private:
 public:
 	std::vector<std::tuple<proc_container, proc_container_state>> get();
 
-	void install(proc_new_container_set &new_containers);
+	void install(proc_new_container_set &new_containers,
+		     container_install mode);
 
 	std::string runlevel(const std::string &new_runlevel);
 
@@ -326,6 +330,24 @@ public:
 	//! The pipe attached its processes's standard output and error
 	//! winds up here.
 	void log(const std::string &name, const std::string &message);
+
+	//! Reexec ourselves
+
+	//! If a reexec was requested. This is called from the main
+	//! event loop.
+	void check_reexec();
+
+
+private:
+
+	//! Check if we've just been re-executed
+
+	//! This gets called by initial_install to check to see if this
+	//! has been re-execed. Returns a vector of placeholder containers
+	//! with a recovered run_info. An empty vector gets returned if this
+	//! is not a re-execution.
+	std::vector<proc_container> restore_reexec();
+
 };
 
 //! Information used by callback from timers and processes

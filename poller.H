@@ -132,6 +132,16 @@ private:
 	void destroy();
 };
 
+/*! Whether the poller is in a state that will survive a re-exec.
+
+We won't re-exec when there are pending removes or deletes. There's
+nothing inherent that actually prevents it. The re-exec-ed process
+will rewatch everything, this is just an extra safety measure.
+
+ */
+
+bool poller_is_transferrable();
+
 /*! Monitor a directory for changes.
 
  */

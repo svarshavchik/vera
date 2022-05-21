@@ -207,6 +207,8 @@ bool proc_container_group_data::install(
 			}
 		}};
 
+	std::string scratch_buffer;
+
 	cgroup_eventsfdhandler=inotify_watch_handler{
 		cgroup_events_path,
 		inotify_watch_handler::mask_filemodify,
@@ -216,7 +218,11 @@ bool proc_container_group_data::install(
 			fd=cgroup_eventsfd,
 			name=container->name,
 			buffer=std::string{},
-			populated=false]
+
+			// This might be called after re-execing, in which case
+			// we need to get the current state.
+			populated=is_populated(cgroup_eventsfd,
+					       scratch_buffer)]
 		(auto, auto)
 		mutable
 		{
@@ -249,4 +255,73 @@ bool proc_container_group::forked()
 	cgroups_register();
 
 	return true;
+}
+
+void proc_container_group::save_transfer_info(std::ostream &o)
+{
+	o << stdouterrpipe[0] << " " << stdouterrpipe[1] << " "
+	  << cgroup_eventsfd << "\n";
+}
+
+void proc_container_group::prepare_to_transfer()
+{
+	fcntl(stdouterrpipe[0], F_SETFD, 0);
+	fcntl(stdouterrpipe[1], F_SETFD, 0);
+	fcntl(cgroup_eventsfd, F_SETFD, 0);
+	log_message(container->name + _(": container prepared to re-exec"));
+}
+
+bool proc_container_group::restored(
+	std::istream &i,
+	const group_create_info &create_info)
+{
+	std::string s;
+
+	if (!std::getline(i, s))
+		return false;
+
+	std::istringstream is{std::move(s)};
+
+	if (!(is >> stdouterrpipe[0] >> stdouterrpipe[1] >> cgroup_eventsfd))
+		return false;
+
+	if (fcntl(stdouterrpipe[0], F_SETFD, FD_CLOEXEC) < 0 ||
+	    fcntl(stdouterrpipe[1], F_SETFD, FD_CLOEXEC) < 0 ||
+	    fcntl(cgroup_eventsfd, F_SETFD, FD_CLOEXEC) < 0)
+		return false;
+
+	container=create_info.cc->first;
+
+	auto [fd, path]=cgroups_events_open(cgroup_eventsfd);
+
+	if (!install(path, create_info))
+		return false;
+
+	log_message(container->name + _(": restored after re-exec"));
+
+	return true;
+
+}
+
+void proc_container_group::all_restored(const group_create_info &create_info)
+{
+	// Obscure race condition. Make sure we note that if something is not
+	// populated.
+
+	std::string scratch_buffer;
+
+	auto populated=is_populated(cgroup_eventsfd, scratch_buffer);
+
+	create_info.all_containers->populated(
+		create_info.cc->first->name,
+		populated);
+
+	if (populated)
+	{
+		log_message(container->name + _(": reactived after re-exec"));
+	}
+	else
+	{
+		log_message(container->name + _(": not active after re-exec"));
+	}
 }

@@ -18,6 +18,8 @@
 #include <string>
 #include <iterator>
 #include <vector>
+#include <sys/socket.h>
+#include <fcntl.h>
 
 void test_failedexec()
 {
@@ -28,7 +30,7 @@ void test_failedexec()
 
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -56,7 +58,7 @@ void test_capture()
 
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -150,7 +152,7 @@ void test_restart()
 
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	auto ret=do_test_or_restart(
 		[]
@@ -219,10 +221,158 @@ void test_restart()
 		throw "Unexpected result of a successful reload";
 }
 
-
-int main()
+void test_reexec_nofork()
 {
-	alarm(60);
+	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
+
+	a->dep_required_by.insert("networking runlevel");
+
+	proc_containers_install({
+			a,
+			std::make_shared<proc_new_containerObj>("reexec_b"),
+		}, container_install::update);
+
+	while (!poller_is_transferrable())
+		do_poll(0);
+
+	if (!proc_container_runlevel("networking").empty())
+		throw "unexpected error starting runlevel";
+
+	proc_request_reexec();
+
+	bool caught=false;
+
+	try {
+		reexec_handler=[]
+		{
+			throw 0;
+		};
+		proc_check_reexec();
+	} catch (int)
+	{
+		caught=true;
+	}
+
+	if (!caught)
+		throw "failed to attempt to reexec";
+}
+
+static int common_reexec_setup()
+{
+	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
+
+	int sockets[2];
+
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		throw "socketpair() failed";
+
+	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0)
+		throw "cloexec failed";
+
+	a->dep_required_by.insert("networking runlevel");
+
+	{
+		std::ostringstream cmd;
+
+		cmd.imbue(std::locale{"C"});
+
+		cmd << "./testcontroller2 server " << sockets[1];
+
+		a->new_container->starting_command=cmd.str();
+	}
+
+	proc_containers_install({
+			a,
+			std::make_shared<proc_new_containerObj>("reexec_b"),
+		}, container_install::update);
+
+	while (!poller_is_transferrable())
+		do_poll(0);
+
+	if (!proc_container_runlevel("networking").empty())
+		throw "unexpected error starting runlevel";
+
+	if (next_pid == 1)
+		throw "did not start a process.";
+
+	proc_request_reexec();
+	proc_check_reexec();
+
+	close(sockets[1]);
+
+	// server waits until it reads a byte before forking and exiting.
+
+	char c=0;
+
+	if (write(sockets[0], &c, 1) != 1)
+		throw "could not write to socket";
+
+	// Confirmation of a fork+exec
+
+	if (read(sockets[0], &c, 1) != 1 || c != '1')
+		throw "server did not start";
+
+	while (kill(next_pid, 0) == 0)
+	{
+		do_poll(0);
+	}
+
+	{
+		inotify_watch_handler iw{
+			".",
+			inotify_watch_handler::mask_dir,
+			[&]
+			(const char *filename, uint32_t mask)
+			{
+			}
+		};
+	}
+
+	proc_check_reexec();
+	do_poll(500);
+
+	if (fcntl(sockets[0], F_SETFD, 0) < 0)
+		throw "cloexec failed";
+
+	return sockets[0];
+}
+
+void test_reexec_before()
+{
+	int fd=common_reexec_setup();
+
+	bool caught=false;
+
+	logged_state_changes.clear();
+	try {
+		reexec_handler=[]
+		{
+			throw 0;
+		};
+		proc_check_reexec();
+	} catch (int)
+	{
+		caught=true;
+	}
+
+	if (!caught)
+		throw "failed to attempt to reexec";
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"reexec_a: container prepared to re-exec",
+			"reexec_a: preserving state: started (dependency)",
+			"reexec_b: preserving state: stopped"
+		})
+		throw "Unexpected messages when attempting to reexec";
+	close(fd);
+}
+
+std::string test;
+
+static void regular_tests()
+{
 	std::string test;
 
 	std::vector<int> opened_fds;
@@ -247,18 +397,155 @@ int main()
 	for (auto fd:opened_fds)
 		close(fd);
 
+	test_reset();
+	test="testfailedexec";
+	test_failedexec();
+
+	test_reset();
+	test="testcapture";
+	test_capture();
+
+	test_reset();
+	test="testrestart";
+	test_restart();
+
+	test_reset();
+	test="testreexec_before";
+	test_reexec_before();
+}
+
+void test_reexec_do(const std::string &command)
+{
+	int fd=common_reexec_setup();
+
+	std::ostringstream formatted_command;
+
+	formatted_command.imbue(std::locale{"C"});
+
+	formatted_command << "set -e; " << command << " testreexec_after "
+			  << fd;
+
+	reexec_handler=[command=formatted_command.str()]
+	{
+		char binsh[]="/bin/sh";
+		char c[]="-c";
+
+		std::vector<char> commandbuf;
+
+		commandbuf.insert(commandbuf.end(), command.begin(),
+				  command.end());
+		commandbuf.push_back(0);
+
+		execl(binsh, binsh, c, commandbuf.data(), nullptr);
+		throw "exec failed.";
+	};
+	proc_check_reexec();
+	throw "Unexpected return from proc_check_reexec";
+}
+
+void testreexec_after(const std::string &socket_str)
+{
+	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
+
+	a->dep_required_by.insert("networking runlevel");
+	a->new_container->starting_command="exit 0";
+
+	proc_containers_install({
+			a,
+			std::make_shared<proc_new_containerObj>("reexec_b"),
+		}, container_install::initial);
+
+	std::istringstream i{socket_str};
+	int socketfd;
+
+	i.imbue(std::locale{"C"});
+
+	if (!(i >> socketfd))
+		throw "cannot parse socket file descriptor parameter";
+
+	write(socketfd, "2", 1);
+
+	while (logged_state_changes.empty() || logged_state_changes.back()
+	       != "reexec_a: test")
+		do_poll(1000);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"reexec: networking runlevel",
+			"re-exec: reexec_a",
+			"reexec_a: restored preserved state: started (dependency)",
+			"reexec_a: restored after re-exec",
+			"re-exec: reexec_b",
+			"reexec_b: restored preserved state: stopped",
+			"reexec_a: reactived after re-exec",
+			"reexec_a: test",
+		})
+		throw "Unexpected state change after reexec";
+	close(socketfd);
+}
+
+void server(const std::string &filedesc)
+{
+	std::istringstream i{filedesc};
+
+	i.imbue(std::locale{"C"});
+
+	int fd;
+
+	if (!(i >> fd))
+		return;
+
+	char c;
+
+	read(fd, &c, 1);
+
+	if (fork() != 0)
+		return;
+
+	c='1';
+	write(fd, &c, 1);
+
+	while (read(fd, &c, 1) > 0)
+	{
+		if (c == '2')
+			write(1, "test\n", 5);
+	}
+
+	close(fd);
+}
+
+int main(int argc, char **argv)
+{
+	std::vector<std::string> args{argv, argv+argc};
+
+	alarm(60);
 	try {
-		test_reset();
-		test="testfailedexec";
-		test_failedexec();
-
-		test_reset();
-		test="testcapture";
-		test_capture();
-
-		test_reset();
-		test="testrestart";
-		test_restart();
+		if (args.size() == 2 && args[1] == "testreexec_nofork")
+		{
+			test="testreexec_nofork";
+			test_reset();
+			test_reexec_nofork();
+		}
+		else if (args.size() == 3 && args[1] == "server")
+		{
+			server(args[2]);
+			return 0;
+		}
+		else if (args.size() == 3 && args[1] == "testreexec_do")
+		{
+			test="testreexec_do";
+			test_reset();
+			test_reexec_do(args[2]);
+		}
+		else if (args.size() == 3 && args[1] == "testreexec_after")
+		{
+			test="testreexec_after";
+			test_reset(true);
+			testreexec_after(args[2]);
+		}
+		else
+		{
+			regular_tests();
+		}
 
 		test_reset();
 	} catch (const char *e)

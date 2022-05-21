@@ -120,6 +120,35 @@ public:
 	//! Send a signal to all processes in the group
 
 	void cgroups_sendsig(int);
+
+	//! Record an updated container definition.
+
+	void updated(const proc_container &pc)
+	{
+		container=pc;
+	}
+
+	///////////////////////////////////////////////////////////////////
+	//
+	// Saving and restoring state for a re-exec.
+
+	//! Serialize our open file descriptors into the given output stream.
+	void save_transfer_info(std::ostream &);
+
+	//! Everything has been serialized, remove their close-on-exec flag.
+	void prepare_to_transfer();
+
+	//! Restore the serialized file descriptors, set their close-on-exec.
+
+	//! Called in lieu of create() after a re-exec. Returns false if there
+	//! was a problem.
+
+	bool restored(std::istream &,
+		      const group_create_info &create_info);
+
+	//! Called after all containers are restored.
+
+	void all_restored(const group_create_info &create_info);
 };
 
 #endif

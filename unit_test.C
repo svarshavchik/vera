@@ -8,10 +8,13 @@
 #include "proc_container_group.H"
 #include "log.H"
 #include <unistd.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sstream>
 #include <fstream>
+#include <iostream>
 
 current_containers_infoObj::current_containers_infoObj()
 	: runlevel_configuration{default_runlevels()}
@@ -103,4 +106,12 @@ void populated(const proc_container &container, bool isit)
 
 void proc_container_group::cgroups_sendsig(int sig)
 {
+}
+
+std::function<void ()> reexec_handler;
+
+void reexec()
+{
+	reexec_handler();
+	throw "unexpected return from reexec_handler";
 }

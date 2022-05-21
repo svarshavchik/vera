@@ -66,3 +66,5 @@ check:
 	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testprocloader.sh
 	$(VALGRIND) ./testpoller
 	./testcontroller2
+	$(VALGRIND) ./testcontroller2 testreexec_nofork
+	./testcontroller2 testreexec_do '$(VALGRIND) ./testcontroller2'

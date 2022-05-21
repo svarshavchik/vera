@@ -382,6 +382,16 @@ void global_inotify::do_inotify()
 #endif
 }
 
+bool poller_is_transferrable()
+{
+	auto &in=get_inotify();
+
+	if (in.fd < 0)
+		return true; // Why not?
+
+	return in.pending_rms.empty() && in.pending_adds.empty();
+}
+
 const uint32_t inotify_watch_handler::mask_dir=
 	IN_CREATE | IN_CLOSE_WRITE | IN_DELETE | IN_DELETE_SELF | IN_ONLYDIR
 	| IN_MOVED_FROM | IN_MOVED_TO;

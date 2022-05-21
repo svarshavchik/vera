@@ -48,9 +48,6 @@ struct state_started {
 	//! Human readable label.
 	operator std::string() const;
 
-	//! Oneshot timer.
-	proc_container_runner starting_runner_oneshot;
-
 	//! Currently running reload or restart command
 
 	proc_container_runner reload_or_restart_runner;

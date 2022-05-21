@@ -11,13 +11,17 @@
 #include "messages.H"
 #include "log.H"
 #include "poller.H"
+#include <stdio.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <sstream>
+#include <locale>
 #include <set>
 #include <type_traits>
 #include <iostream>
 #include <sys/signalfd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <string.h>
 #include <string_view>
@@ -145,6 +149,185 @@ proc_container_run_info::proc_container_run_info(
 	: proc_container_run_info{}
 {
 	*this=std::move(move_from);
+}
+
+void proc_container_run_info::updated(const proc_container &pc)
+{
+	if (group)
+		group->updated(pc);
+}
+
+namespace {
+#if 0
+}
+#endif
+
+// All containers must be state_stopped or state_started
+
+// This object visits the container's state and produces the container's
+// state description and the serialized representation of its state, and
+// the visitor returns true.
+//
+// The visitor returns false for any state other than state_started or
+// state_stopped.
+//
+// restored() takes the produced serialized state, and restores the
+// container state.
+
+struct is_transferrable_helper {
+
+	std::string &description;
+	std::string &serialized;
+
+	bool operator()(state_stopped &s) const
+	{
+		description="stopped";
+		serialized="stopped";
+		return true;
+	}
+
+	bool operator()(state_started &started) const
+	{
+		if (started.reload_or_restart_runner)
+			return false;
+
+		if (started.dependency)
+		{
+			description="started (dependency)";
+			serialized="started 1";
+		}
+		else
+		{
+			description="started";
+			serialized="started 0";
+		}
+		return true;
+	}
+
+	template<typename T>
+	bool operator()(T &t) const
+	{
+		return false;
+	}
+
+	//! New container states are stopped by default, we ass-ume that.
+
+	void restored(std::istream &i, proc_container_state &stopped_state)
+		const
+	{
+		std::string s;
+
+		i >> s;
+
+		if (s != "started")
+			return;
+
+		int flag=false;
+
+		i >> flag;
+
+		stopped_state.emplace<state_started>(
+			flag != 0
+		);
+	}
+};
+
+#if 0
+{
+#endif
+}
+
+bool proc_container_run_info::is_transferrable(std::ostream &o)
+{
+	std::string description, serialized;
+
+	if (!std::visit(is_transferrable_helper{description, serialized},
+			state))
+		return false;
+
+	// Follow the serialized state with either 0 or 1 indicating whether
+	// the container is active, or not.
+
+	if (!group)
+	{
+		o << serialized << " 0\n";
+		return true;
+	}
+
+	o << serialized << " 1\n";
+
+	// And let the proc_container_group dump its own brains, by itself.
+
+	group->save_transfer_info(o);
+
+	return true;
+}
+
+void proc_container_run_info::prepare_to_transfer(const proc_container &pc)
+{
+	// Log a message, for diagnostic purposes. All preparations are handled
+	// by the proc_container_group, we just log a message here.
+
+	std::string description, serialized;
+
+	std::visit(is_transferrable_helper{description, serialized}, state);
+
+	log_message(pc->name + _(": preserving state: ") + description);
+	if (group)
+		group->prepare_to_transfer();
+}
+
+void proc_container_run_info::restored(std::istream &i,
+				       const group_create_info &create_info)
+{
+	std::string description, serialized;
+
+	std::string s;
+
+	if (std::getline(i, s))
+	{
+		// Restore the container state, visit it to get its description
+		// forlogging purposes.
+		{
+			std::istringstream i{s};
+
+			i.imbue(std::locale{"C"});
+
+			is_transferrable_helper helper{description,
+				serialized};
+
+			helper.restored(i, state);
+
+			std::visit(helper, state);
+
+			log_message(create_info.cc->first->name +
+				    _(": restored preserved state: ") +
+				    description);
+			int n=0;
+
+			i >> n;
+
+			if (!n)
+				return;
+		}
+		// There's a container group, restore it.
+
+		if (group.emplace().restored(i, create_info))
+			return;
+
+		group.reset();
+	}
+	log_container_error(
+		create_info.cc->first,
+		_("cannot restore container group")
+	);
+}
+
+void proc_container_run_info::all_restored(
+	const group_create_info &create_info)
+{
+	if (group)
+		group->all_restored(create_info);
 }
 
 void current_containers_infoObj::install_requires_dependency(
@@ -325,6 +508,200 @@ static state_started &started(const current_container &, bool);
 
 ///////////////////////////////////////////////////////////////////////////
 //
+// Handle re-exec requests.
+
+void proc_request_reexec()
+{
+	auto containers=get_containers_info(nullptr);
+
+	containers->reexec_requested=true;
+}
+
+void proc_check_reexec()
+{
+	get_containers_info(nullptr)->check_reexec();
+}
+
+void current_containers_infoObj::check_reexec()
+{
+	if (!reexec_requested)
+		return;
+
+	if (!poller_is_transferrable())
+		return;
+
+	// Chances are everything is transferrable, so we'll go through all
+	// the containers, if something is not is_transferrable we bail out,
+	// otherwise we'll collect the whole thing.
+	std::string s;
+
+	{
+		std::ostringstream o;
+
+		o.imbue(std::locale{"C"});
+
+		for (auto &[pc, run_info] : containers)
+		{
+			if (pc->type != proc_container_type::loaded)
+				continue;
+
+			o << pc->name << "\n";
+			if (!run_info.is_transferrable(o))
+				return;
+		}
+
+		s=o.str();
+	}
+
+	// Create a temporary file, write to it the version tag, "1",
+	// the current runlevel, and then the serialized container states.
+
+	FILE *fp=tmpfile();
+
+	if (fp)
+	{
+		fprintf(fp, "1\n%s\n", current_runlevel ?
+			current_runlevel->name.c_str():"default");
+
+		if (fwrite(s.data(), s.size(), 1, fp) != 1 ||
+		    fflush(fp) < 0 ||
+		    fseek(fp, 0L, SEEK_SET) < 0 || ferror(fp))
+		{
+			fclose(fp);
+			fp=NULL;
+		}
+	}
+
+	reexec_requested=false; // Don't keep trying.
+
+	if (!fp)
+	{
+		log_message(_("Cannot save state for a re-exec"));
+		return;
+	}
+
+	// close the temp file, after duping the file descriptor.
+
+	auto exp_fd=dup(fileno(fp));
+
+	if (exp_fd < 0)
+	{
+		log_message(_("dup failed when trying to save state"
+			      " for a re-exec"));
+		fclose(fp);
+	}
+
+	fclose(fp);
+
+	// Put the file descriptor into the environment.
+	std::ostringstream o;
+
+	o.imbue(std::locale{"C"});
+	o << exp_fd;
+
+	std::string os=o.str();
+
+	setenv("VERA_REEXEC_FD", os.c_str(), 1);
+
+	// Tell all container to prepare_to_transfer, then reexec.
+	for (auto &[pc, run_info] : containers)
+	{
+		if (pc->type != proc_container_type::loaded)
+			continue;
+
+		run_info.prepare_to_transfer(pc);
+	}
+
+	reexec();
+}
+
+std::vector<proc_container> current_containers_infoObj::restore_reexec()
+{
+	// Read the file descriptor for the temporary file from the
+	// environment.
+	std::vector<proc_container> restored_containers;
+
+	const char *p=getenv("VERA_REEXEC_FD");
+
+	if (!p || !*p) return restored_containers;
+
+	int fd;
+
+	{
+		std::istringstream i{p};
+
+		i.imbue(std::locale{"C"});
+
+		if (!(i >>fd))
+			return restored_containers;
+	}
+
+	// Just read the entire temp file into a string.
+
+	std::string s;
+
+	{
+		char buf[1024];
+		ssize_t n;
+
+		while ((n=read(fd, buf, sizeof(buf))) > 0)
+		{
+			s.insert(s.end(), buf, buf+n);
+		}
+
+		close(fd);
+	}
+	unsetenv("VERA_REEXEC_FD");
+
+	std::istringstream i{std::move(s)};
+
+	if (!std::getline(i, s))
+		return restored_containers;
+
+	// Check the version number. Restore the current runlevel.
+
+	int version;
+
+	if (!(std::istringstream{s} >> version) || version != 1)
+		return restored_containers;
+
+	if (!std::getline(i, s))
+		return restored_containers;
+
+	auto runlevel=std::make_shared<proc_containerObj>(s);
+
+	runlevel->type=proc_container_type::runlevel;
+
+	current_runlevel=runlevel;
+
+	log_message(_("reexec: ") + s);
+
+	// Now, restore the containers.
+
+	auto me=shared_from_this();
+
+	while (std::getline(i, s))
+	{
+		auto temp_container=std::make_shared<proc_containerObj>(s);
+
+		restored_containers.push_back(temp_container);
+
+		log_message(_("re-exec: ") + s);
+
+		auto iter=containers.emplace(
+			temp_container,
+			proc_container_run_info{}).first;
+
+		group_create_info gci{me, iter};
+
+		iter->second.restored(i, gci);
+	}
+
+	return restored_containers;
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
 // Enumerate current process containers
 
 std::vector<std::tuple<proc_container, proc_container_state>
@@ -361,25 +738,35 @@ void proc_containers_reset()
 	get_containers_info(&replacement);
 }
 
-void proc_containers_install(const proc_new_container_set &new_containers)
+void proc_containers_install(const proc_new_container_set &new_containers,
+			     container_install mode)
 {
 	proc_new_container_set copy{new_containers};
 
-	proc_containers_install(std::move(copy));
+	proc_containers_install(std::move(copy), mode);
 }
 
-void proc_containers_install(proc_new_container_set &&new_containers)
+void proc_containers_install(proc_new_container_set &&new_containers,
+			     container_install mode)
 {
 	install_sighandlers();
-	get_containers_info(nullptr)->install(new_containers);
+	get_containers_info(nullptr)->install(new_containers, mode);
 }
 
 void current_containers_infoObj::install(
-	proc_new_container_set &new_containers
+	proc_new_container_set &new_containers,
+	container_install mode
 )
 {
 	current_containers new_current_containers;
 	new_all_dependency_info_t new_all_dependency_info;
+
+	// If this is the initial installation check if we were just re-execed.
+
+	std::vector<proc_container> restored_containers;
+
+	if (mode == container_install::initial)
+		restored_containers=restore_reexec();
 
 	// Generate stubs for runlevels.
 	//
@@ -741,10 +1128,14 @@ void current_containers_infoObj::install(
 	for (auto &[pc,info] : new_all_dependency_info)
 		prepared_dependency_info.emplace(pc, std::move(info));
 
+	// Make sure all the new current containers know their container
+	// objects, we just rebuilt them.
+	for (auto &[pc, info] : new_current_containers)
+		info.updated(pc);
+
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
 	runlevel_containers=std::move(new_runlevel_containers);
-
 
 	for (auto &c:to_remove)
 	{
@@ -757,6 +1148,24 @@ void current_containers_infoObj::install(
 			continue;
 
 		do_remove(iter, true);
+	}
+
+	// If we restored container states after a re-exec, finalize the
+	// restoral.
+
+	auto me=shared_from_this();
+
+	for (auto &c:restored_containers)
+	{
+		auto iter=containers.find(c);
+
+		if (iter == containers.end() ||
+		    iter->first->type != proc_container_type::loaded)
+			continue;
+
+		group_create_info gci{me, iter};
+
+		iter->second.all_restored(gci);
 	}
 
 	/////////////////////////////////////////////////////////////
@@ -1834,8 +2243,7 @@ void current_containers_infoObj::do_start_runner(
 
 		if (pc->start_type == start_type_t::oneshot)
 		{
-			started(cc, starting.dependency)
-				.starting_runner_oneshot=runner;
+			started(cc, starting.dependency);
 			return;
 		}
 		if (pc->starting_timeout > 0)

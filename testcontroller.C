@@ -44,7 +44,7 @@ void test_start_and_stop()
 
 	a->new_container->stopping_command="/bin/true";
 	pcs.insert(a);
-	proc_containers_install(pcs);
+	proc_containers_install(pcs, container_install::update);
 
 	auto err=proc_container_start("b");
 
@@ -125,7 +125,7 @@ void test_happy_start_stop_common(const std::string &name)
 	a->new_container->stopping_command="stop";
 
 	pcs.insert(a);
-	proc_containers_install(pcs);
+	proc_containers_install(pcs, container_install::update);
 
 	auto err=proc_container_start(name);
 
@@ -272,7 +272,7 @@ void test_start_failed_fork()
 	a->new_container->starting_command="start";
 
 	pcs.insert(a);
-	proc_containers_install(pcs);
+	proc_containers_install(pcs, container_install::update);
 
 	auto err=proc_container_start("failed_fork");
 
@@ -304,7 +304,7 @@ void test_start_failed()
 	a->new_container->starting_command="start";
 
 	pcs.insert(a);
-	proc_containers_install(pcs);
+	proc_containers_install(pcs, container_install::update);
 
 	auto err=proc_container_start("start_failed");
 
@@ -347,7 +347,7 @@ void test_start_timeout()
 	a->new_container->starting_command="start";
 
 	pcs.insert(a);
-	proc_containers_install(pcs);
+	proc_containers_install(pcs, container_install::update);
 
 	auto err=proc_container_start("start_timeout");
 
@@ -484,7 +484,8 @@ proc_new_container_set test_requires_common(std::string prefix)
 
 void test_requires1()
 {
-	proc_containers_install(test_requires_common("requires1"));
+	proc_containers_install(test_requires_common("requires1"),
+				container_install::update);
 
 	auto err=proc_container_start("requires1a");
 
@@ -654,7 +655,7 @@ void test_requires2()
 	d->new_container->stopping_command="stop_d";
 	pcs.insert(d);
 
-	proc_containers_install(pcs);
+	proc_containers_install(pcs, container_install::update);
 
 	std::unordered_map<std::string, proc_container_type> containers;
 
@@ -729,7 +730,7 @@ void test_requires_common2(std::string name)
 	d->dep_required_by.insert(name + "a");
 	c->dep_required_by.insert(name + "b");
 
-	proc_containers_install({a, b, c, d, e});
+	proc_containers_install({a, b, c, d, e}, container_install::update);
 
 	auto err=proc_container_start(name + "b");
 
@@ -985,7 +986,8 @@ void test_install()
 			std::make_shared<proc_new_containerObj>("installa"),
 			std::make_shared<proc_new_containerObj>("installb"),
 			std::make_shared<proc_new_containerObj>("installc"),
-		});
+		},
+		container_install::update);
 
 	auto err=proc_container_start("installb");
 
@@ -1020,7 +1022,8 @@ void test_install()
 			std::make_shared<proc_new_containerObj>("installa"),
 			std::make_shared<proc_new_containerObj>("installc"),
 			std::make_shared<proc_new_containerObj>("installd"),
-		});
+		},
+		container_install::update);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"installb: force-removing",
@@ -1050,7 +1053,7 @@ void test_circular()
 
 	proc_containers_install({
 			a, b, c
-		});
+		}, container_install::update);
 
 	auto err=proc_container_start("circularb");
 
@@ -1160,7 +1163,7 @@ void test_runlevels()
 
 	proc_containers_install({
 			c, d, e, f
-		});
+		}, container_install::update);
 
 	if (proc_container_runlevel("runlevel1prog").empty() ||
 	    !logged_state_changes.empty())
@@ -1225,7 +1228,7 @@ void test_before_after1()
 
 	proc_containers_install({
 			c, d, e
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
@@ -1292,7 +1295,7 @@ void test_before_after2()
 
 	proc_containers_install({
 			c, d, e
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
@@ -1359,7 +1362,7 @@ void test_failure_with_dependencies_common(const std::string &name)
 
 	proc_containers_install({
 			b, c, d, e
-		});
+		}, container_install::update);
 }
 
 void test_failed_fork_with_dependencies()
@@ -1655,7 +1658,7 @@ void happy_oneshot()
 	b->new_container->starting_command="/happyoneshot echo *";
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -1695,7 +1698,7 @@ void sad_oneshot()
 	b->new_container->starting_command="sadoneshot verysad";
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -1720,7 +1723,6 @@ void sad_oneshot()
 	runner_finished(1, 1);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"sadoneshotb: termination signal: 1"
 		})
 	{
 		throw "Unexpected state changes when starting process finished";
@@ -1741,7 +1743,7 @@ void manualstopearly()
 	b->dep_required_by.insert("graphical runlevel");
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -1784,7 +1786,7 @@ void automaticstopearly1()
 	b->dep_required_by.insert("graphical runlevel");
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -1821,7 +1823,7 @@ void automaticstopearly2()
 	b->dep_required_by.insert("graphical runlevel");
 	proc_containers_install({
 			b,
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -1881,7 +1883,7 @@ void testgroup()
 
 	proc_containers_install({
 			b, c, d, e
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("default").empty())
 		throw "Unexpected error starting default runlevel";
@@ -1955,7 +1957,7 @@ void testfailcgroupcreate()
 
 	proc_containers_install({
 			a, b
-		});
+		}, container_install::update);
 
 	symlink("non/existent/path",
 		proc_container_group_data::get_cgroupfs_base_path());
@@ -1992,7 +1994,7 @@ void testfailcgroupdelete()
 
 	proc_containers_install({
 			a
-		});
+		}, container_install::update);
 
 	if (!proc_container_runlevel("default").empty())
 		throw "Unexpected error starting default runlevel";

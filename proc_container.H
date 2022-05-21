@@ -210,10 +210,29 @@ An alias of "default" specifies the default runlevel.
 typedef std::unordered_map<std::string,
 			   std::unordered_set<std::string>> runlevels;
 
+//! Container installation mode.
+
+enum class container_install {
+
+	//! Updated list of containers
+
+	//! Replaces the current set of containers.
+	update,
+
+	/*! Initial list of containers
+
+	  This also checks if we have been re-execed, and if so restores
+	  the existing containers' state.
+	*/
+	initial,
+};
+
 //! Install process containers
 
-void proc_containers_install(const proc_new_container_set &new_containers);
-void proc_containers_install(proc_new_container_set &&new_containers);
+void proc_containers_install(const proc_new_container_set &new_containers,
+			     container_install mode);
+void proc_containers_install(proc_new_container_set &&new_containers,
+			     container_install mode);
 
 //! Trigger a restart
 
@@ -235,5 +254,13 @@ std::string proc_container_reload(const std::string &,
 //! For unit tests
 void proc_containers_reset();
 
+//! Request a re-exec
+void proc_request_reexec();
+
+//! Check if a re-exec has been requested, and call reexec() if so.
+void proc_check_reexec();
+
+//! exec() or bust.
+void reexec() __attribute__((noreturn));
 
 #endif
