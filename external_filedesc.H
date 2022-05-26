@@ -7,6 +7,7 @@
 
 #include <unistd.h>
 #include <memory>
+#include <string>
 #include <string_view>
 
 //! An externally-supplied file descriptor
@@ -21,29 +22,17 @@ struct external_filedescObj {
 	{
 	}
 
-	~external_filedescObj()
-	{
-		close(fd);
-	}
+	~external_filedescObj();
 
 	external_filedescObj(const external_filedescObj &)=delete;
 
-	void write_all(std::string_view msg)
-	{
-		auto p=msg.data();
-		auto s=msg.size();
+	void write_all(std::string_view msg);
 
-		while (s)
-		{
-			ssize_t n=write(fd, p, s);
+private:
+	std::string buffer;
 
-			if (n <= 0)
-				break;
-			p += n;
-			s -= n;
-		}
-	}
-
+public:
+	std::string readln();
 };
 
 typedef std::shared_ptr<external_filedescObj> external_filedesc;

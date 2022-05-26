@@ -20,10 +20,13 @@ libvera_a_SOURCES=						\
 	current_containers_infofwd.H				\
 	current_containers_info.H				\
 	external_filedesc.H					\
+	external_filedesc.C					\
 	log.C 							\
 	log.H							\
 	log_current_time.C					\
 	messages.H 						\
+	privrequest.C						\
+	privrequest.H						\
 	proc_container.C					\
 	proc_container.H					\
 	proc_containerfwd.H					\

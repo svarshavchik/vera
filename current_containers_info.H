@@ -8,6 +8,7 @@
 #include "current_containers_infofwd.H"
 #include "proc_container_runnerfwd.H"
 #include "proc_container.H"
+#include "external_filedesc.H"
 #include <type_traits>
 #include <functional>
 #include <unordered_map>
@@ -296,7 +297,8 @@ public:
 
 	std::string runlevel(const std::string &new_runlevel);
 
-	std::string start(const std::string &name);
+	void start(const std::string &name,
+		   external_filedesc requester);
 
 	std::string restart(const std::string &name,
 			    const std::function<void (int)> &completed);

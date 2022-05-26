@@ -11,6 +11,7 @@
 #include <functional>
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
+#include "external_filedesc.H"
 
 //! A process container that's not running
 struct state_stopped {
@@ -26,7 +27,13 @@ struct state_starting {
 
 	bool dependency;
 
-	state_starting(bool dependency) : dependency{dependency} {}
+	//! The connection that requested this container to get started.
+	external_filedesc requester;
+
+	state_starting(
+		bool dependency,
+		external_filedesc requester
+	) : dependency{dependency}, requester{requester} {}
 
 	//! Running start process.
 	proc_container_runner starting_runner;

@@ -8,6 +8,7 @@
 #include "proc_container_timer.H"
 
 #include "unit_test.H"
+#include "privrequest.H"
 
 #include "proc_loader.H"
 #include <unistd.h>
@@ -56,15 +57,26 @@ void test_start_and_stop()
 	if (err.empty())
 		throw "proc_container_stop didn't fail for a nonexistent unit";
 
-	err=proc_container_start("a");
+	auto [socketa, socketb] = create_fake_request();
+
+	send_start(socketa, "a");
+
+	proc_do_request(std::move(socketb));
+	socketb=nullptr;
+
+	err=get_start_status(socketa);
 
 	if (!err.empty())
 		throw "proc_container_start(1): " + err;
 
 	err=proc_container_start("a");
 
-	if (!err.empty())
-		throw "proc_container_start(2): " + err;
+	if (err != "a: cannot be started because it's not stopped")
+		throw "proc_container_start(2): did not get expected error: "
+			+ err;
+
+	if (!get_start_result(socketa))
+		throw "unexpected failure from get_start_result()";
 
 	err=proc_container_stop("a");
 
@@ -274,10 +286,20 @@ void test_start_failed_fork()
 	pcs.insert(a);
 	proc_containers_install(pcs, container_install::update);
 
-	auto err=proc_container_start("failed_fork");
+	auto [socketa, socketb] = create_fake_request();
+
+	send_start(socketa, "failed_fork");
+
+	proc_do_request(std::move(socketb));
+	socketb=nullptr;
+
+	auto err=get_start_status(socketa);
 
 	if (!err.empty())
 		throw "proc_container_start(1): " + err;
+
+	if (get_start_result(socketa))
+		throw "unexpected success starting failed_fork";
 
 	proc_container_stopped("nonexistent");
 	proc_container_stopped("failed_fork");
@@ -854,8 +876,9 @@ void test_requires4()
 	logged_state_changes.clear();
 	auto err=proc_container_start("requires4c");
 
-	if (!err.empty())
-		throw "unexpected proc_container_start error(3)";
+	if (err != "requires4c: cannot be started because it's not stopped")
+		throw "unexpected proc_container_start error(3): "
+			+ err;
 
 	verify_container_state(
 		{
@@ -921,8 +944,9 @@ void test_requires5()
 	logged_state_changes.clear();
 	auto err=proc_container_start("requires5c");
 
-	if (!err.empty())
-		throw "unexpected proc_container_start error(3)";
+	if (err !="requires5c: cannot be started because it's not stopped")
+		throw "unexpected proc_container_start error(3): "
+			+ err;
 
 	verify_container_state(
 		{

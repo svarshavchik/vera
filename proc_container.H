@@ -41,8 +41,9 @@ std::vector<std::tuple<proc_container, proc_container_state>
 
 proc_container_set current_proc_containers();
 
-//! Attempt to start a container.
-std::string proc_container_start(const std::string &s);
+//! Process a command from a new connection
+
+void proc_do_request(external_filedesc);
 
 //! Attempt to stop a container.
 std::string proc_container_stop(const std::string &s);

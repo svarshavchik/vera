@@ -90,4 +90,15 @@ void test_advance(time_t interval)
 
 void populated(const proc_container &container, bool isit);
 
+///////////////////////////////////////////////////////////////////////////
+//
+// Simulate requests.
+
+// Create a pair of sockets for the fake requests.
+std::tuple<external_filedesc, external_filedesc> create_fake_request();
+
+// Attempt to start a container.
+std::string proc_container_start(const std::string &s);
+
+
 #endif

@@ -3,14 +3,19 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
+#include "external_filedesc.H"
 #include "current_containers_info.H"
 #include "proc_loader.H"
 #include "proc_container_group.H"
+#include "privrequest.H"
 #include "log.H"
 #include <unistd.h>
 #include <string.h>
+#include <stdio.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <fcntl.h>
 #include <sstream>
 #include <fstream>
@@ -114,4 +119,41 @@ void reexec()
 {
 	reexec_handler();
 	throw "unexpected return from reexec_handler";
+}
+
+std::tuple<external_filedesc, external_filedesc> create_fake_request()
+{
+	int sockets[2];
+
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		throw "socketpair() failed";
+
+	std::tuple<external_filedesc, external_filedesc> efd{
+		std::make_shared<external_filedescObj>(
+			sockets[0]
+		), std::make_shared<external_filedescObj>(
+			sockets[1]
+		)
+	};
+
+	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0 ||
+	    fcntl(sockets[1], F_SETFD, FD_CLOEXEC) < 0)
+	{
+		throw "fnctl failed";
+	}
+
+	return efd;
+}
+
+std::string proc_container_start(const std::string &name)
+{
+	auto [a, b] = create_fake_request();
+
+	send_start(a, std::move(name));
+
+	proc_do_request(std::move(b));
+
+	b=nullptr;
+
+	return get_start_status(a);
 }

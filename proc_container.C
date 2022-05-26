@@ -8,6 +8,7 @@
 #include "proc_container_runner.H"
 #include "proc_container_timer.H"
 #include "proc_loader.H"
+#include "privrequest.H"
 #include "messages.H"
 #include "log.H"
 #include "poller.H"
@@ -1253,15 +1254,28 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 	return "";
 }
 
+void proc_do_request(external_filedesc efd)
+{
+	// The connection is on a trusted socket, so we can block.
+
+	auto ln=efd->readln();
+
+	if (ln == "start")
+	{
+		auto name=efd->readln();
+
+		get_containers_info(nullptr)->start(
+			name,
+			std::move(efd)
+		);
+		return;
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 //
 // Attempt to start a process container. It must be a loaded container,
 // not any other kind.
-
-std::string proc_container_start(const std::string &name)
-{
-	return get_containers_info(nullptr)->start(name);
-}
 
 //! Determine eligibility of containers for starting them
 
@@ -1313,14 +1327,30 @@ struct current_containers_infoObj::start_eligibility {
 	}
 };
 
-std::string current_containers_infoObj::start(const std::string &name)
+/*! Process a start request
+
+Immediately writes back to the requesting socket either an empty string
+or an error message, followed by a newline.
+
+The requesting socket then gets stashed away in the state_started object
+so that it remains open as long as the container is starting. When the
+state_starting goes away, so does the socket. But if the container gets
+started successfully, before that happens a "0\n" gets written to the
+socket before it gets closed.
+
+*/
+
+void current_containers_infoObj::start(
+	const std::string &name,
+	external_filedesc requester)
 {
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
 	    iter->first->type != proc_container_type::loaded)
 	{
-		return name + _(": unknown unit");
+		requester->write_all(name + _(": unknown unit\n"));
+		return;
 	}
 
 	auto &[pc, run_info] = *iter;
@@ -1332,11 +1362,47 @@ std::string current_containers_infoObj::start(const std::string &name)
 	std::visit(eligibility, iter->second.state);
 
 	if (!eligibility.not_stopped_containers.empty())
-		return pc->name + _(": cannot start "
-				    "because it's not stopped");
+	{
+		requester->write_all(
+			pc->name +
+			_(": cannot start because it's not stopped\n"));
+		return;
+	}
 
 	if (eligibility.containers.empty())
-		return ""; // Already in progress
+	{
+		// Maybe because this container is in starting state, and
+		// we can piggy-back on it?
+
+		if (std::visit(
+			    [&]
+			    (auto &state)
+			    {
+				    if constexpr(std::is_same_v<
+						 std::remove_cvref_t<
+						 decltype(state)>,
+					 state_starting>) {
+
+					    if (!state.requester)
+					    {
+						    state.requester=requester;
+						    return true;
+					    }
+				    }
+				    return false;
+			    }, run_info.state))
+		{
+			// The container was being started as a dependency,
+			// but we can piggy-back on it.
+
+			requester->write_all("\n");
+			return;
+		}
+
+		requester->write_all(name + _(": cannot be started because"
+					      " it's not stopped\n"));
+		return;
+	}
 
 	eligibility.is_dependency=true;
 
@@ -1372,7 +1438,9 @@ std::string current_containers_infoObj::start(const std::string &name)
 			error_message += name;
 		}
 
-		return error_message;
+		error_message += "\n";
+		requester->write_all(error_message);
+		return;
 	}
 
 	// Ok, we're good. Put everything into a starting state.
@@ -1380,9 +1448,13 @@ std::string current_containers_infoObj::start(const std::string &name)
 	// To avoid confusing logging we'll log the original container first,
 	// then take it out of the eligibility.containers, then start and log
 	// the rest of them.
+	//
+	// Save the connection that requested the container start in
+	// the state_starting.
 
-	run_info.state.emplace<state_starting>(false);
+	run_info.state.emplace<state_starting>(false, requester);
 
+	requester->write_all("\n");
 	log_state_change(pc, run_info.state);
 
 	eligibility.containers.erase(pc);
@@ -1391,13 +1463,13 @@ std::string current_containers_infoObj::start(const std::string &name)
 	{
 		auto &[pc, run_info] = *iter;
 
-		run_info.state.emplace<state_starting>(true);
+		run_info.state.emplace<state_starting>(true, nullptr);
 
 		log_state_change(pc, run_info.state);
 	}
 
 	find_start_or_stop_to_do(); // We should find something now.
-	return "";
+	return;
 }
 
 std::string proc_container_stop(const std::string &name)
@@ -1906,7 +1978,9 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 				    ))
 					return;
 
-				run_info.state.emplace<state_starting>(true);
+				run_info.state.emplace<state_starting>(
+					true, nullptr
+				);
 				log_state_change(pc, run_info.state);
 			}
 		);
@@ -2601,6 +2675,25 @@ void current_containers_infoObj::do_remove(const current_container &cc,
 static state_started &started(const current_container &cc, bool for_dependency)
 {
 	auto &[pc, run_info] = *cc;
+
+	// If someone requested this container to be started, give them the
+	// goose egg.
+
+	std::visit([]
+		   (auto &current_state)
+	{
+		if constexpr(std::is_same_v<
+			     std::remove_cvref_t<decltype(current_state)>,
+			     state_starting>) {
+
+			if (current_state.requester)
+			{
+				current_state.requester->write_all(
+					START_RESULT_OK "\n"
+				);
+			}
+		}
+	}, run_info.state);
 
 	auto &started = run_info.state.emplace<state_started>(for_dependency);
 
