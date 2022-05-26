@@ -2062,6 +2062,52 @@ void testfailcgroupdelete()
 	}
 }
 
+void testnotimeout()
+{
+	auto a=std::make_shared<proc_new_containerObj>("notimeout");
+
+	a->new_container->starting_timeout=0;
+	a->new_container->stopping_timeout=0;
+
+	a->new_container->starting_command="infinitestart";
+	a->new_container->stopping_command="infinitestop";
+
+	proc_containers_install({
+			a
+		}, container_install::update);
+
+	proc_container_start("notimeout");
+
+	do_poll(100);
+	if (logged_state_changes != std::vector<std::string>{
+			"notimeout: start pending",
+			"notimeout: cgroup created",
+			"notimeout: starting",
+		})
+		throw "unexpected state changes after starting";
+	runner_finished(1, 0);
+
+	logged_state_changes.clear();
+
+	proc_container_stop("notimeout");
+
+	do_poll(100);
+	if (logged_state_changes != std::vector<std::string>{
+			"notimeout: stop pending",
+			"notimeout: stopping",
+		})
+		throw "unexpected state changes after stopping (1)";
+
+	logged_state_changes.clear();
+	runner_finished(2, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"notimeout: removing",
+			"notimeout: sending SIGTERM",
+		})
+		throw "unexpected state changes after stopping (2)";
+}
+
 int main()
 {
 	alarm(60);
@@ -2187,6 +2233,10 @@ int main()
 		test_reset();
 		test="testfailcgroupdelete";
 		testfailcgroupdelete();
+
+		test_reset();
+		test="testnotimeout";
+		testnotimeout();
 
 		test_reset();
 	} catch (const char *e)

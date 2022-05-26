@@ -2487,10 +2487,10 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 		[&]
 		(proc_container_state &state) -> state_stopping &
 		{
-			return state.emplace<state_stopping>(
-				std::in_place_type_t<stop_running>{},
-				runner,
-				create_timer(
+			proc_container_timer timer;
+
+			if (pc->stopping_timeout > 0)
+				timer=create_timer(
 					shared_from_this(),
 					pc,
 					pc->stopping_timeout,
@@ -2509,7 +2509,13 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 						);
 						me->do_remove(cc, false);
 					}
-				)
+				);
+
+
+			return state.emplace<state_stopping>(
+				std::in_place_type_t<stop_running>{},
+				runner,
+				timer
 			);
 		});
 }
