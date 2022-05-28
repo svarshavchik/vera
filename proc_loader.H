@@ -9,9 +9,18 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <iostream>
 #include <optional>
+
+/*! Validate a container name
+
+Enforces naming conventions.
+
+ */
+
+bool proc_validpath(const std::string_view &path);
 
 /*! Find pathnames to load
 

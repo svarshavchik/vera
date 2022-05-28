@@ -24,13 +24,13 @@
 	((c) == '/' ||					\
 	 (c) == ' ' || (c) == '.' || (c) == '-')
 
-static bool proc_validpath(const std::string &path)
+bool proc_validpath(const std::string_view &path)
 {
 	// cgroup directories are formed by replacing all /s with : and
 	// appending one more :, so the maximum path.size() is NAME_MAX-1.
 
 	if (path.size() == 0 || path.size() >= NAME_MAX
-	    || SPECIAL(*path.c_str()))
+	    || SPECIAL(*path.data()))
 		return false;
 
 	char lastchar=0;
@@ -110,7 +110,9 @@ static void proc_find(const std::filesystem::path &config_global,
 
 		auto relative_filename=subdir / filename;
 
-		if (!proc_validpath(relative_filename.lexically_normal()))
+		if (!proc_validpath(static_cast<const std::string &>(
+					    relative_filename.lexically_normal()
+				    )))
 		{
 			invalid(fullpath,
 				_("ignoring non-compliant filename"));
@@ -579,7 +581,9 @@ struct parsed_yaml {
 				{
 					auto rel=spath.relative_path();
 
-					if (!proc_validpath(rel))
+					if (!proc_validpath(static_cast<
+							    const std::string &>
+							    (rel)))
 					{
 						error(*s +
 						      _(": non-compliant name"))

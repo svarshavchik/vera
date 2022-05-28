@@ -222,6 +222,10 @@ enum class container_install {
 	initial,
 };
 
+//! An environment variable is set when we re-execed.
+
+extern const char reexec_envar[];
+
 //! Install process containers
 
 void proc_containers_install(const proc_new_container_set &new_containers,

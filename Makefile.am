@@ -5,6 +5,9 @@ AM_CXXFLAGS = -std=c++20 @YAMLCPPFLAGS@
 
 export LC_ALL=C
 
+sbin_PROGRAMS=vera
+noinst_SCRIPTS=vlad
+
 noinst_PROGRAMS=\
 	testcontroller						\
 	testcontroller2						\
@@ -13,6 +16,9 @@ noinst_PROGRAMS=\
 	testpoller						\
 	testprocloader
 EXTRA_DIST=testprocloader.sh
+
+BUILT_SOURCES=configdirs.h
+CLEANFILES=configdirs.h vlad
 
 noinst_LIBRARIES=libvera.a
 
@@ -46,6 +52,20 @@ libvera_a_SOURCES=						\
 	poller.H						\
 	unit_test.H
 
+configdirs.h: config.status
+	echo '#define INSTALLCONFIGDIR "$(INSTALLCONFIGDIR)"' >configdirs.h.tmp
+	echo '#define CONFIGDIR "$(CONFIGDIR)"' >>configdirs.h.tmp
+	echo '#define RUNLEVELCONFIG "$(RUNLEVELCONFIG)"' >>configdirs.h.tmp
+	echo '#define LOCALCONFIGDIR "$(LOCALCONFIGDIR)"' >>configdirs.h.tmp
+	echo '#define OVERRIDECONFIGDIR "$(OVERRIDECONFIGDIR)"' >>configdirs.h.tmp
+	mv configdirs.h.tmp configdirs.h
+
+vera_SOURCES=vera.C
+vera_LDADD=libvera.a @YAMLLIBS@
+
+vlad: vera
+	rm -f vlad; ln vera vlad
+
 testcontroller_SOURCES=testcontroller.C unit_test.C
 testcontroller_LDADD=libvera.a @YAMLLIBS@
 
@@ -63,17 +83,26 @@ testprocloader_LDADD=libvera.a @YAMLLIBS@
 testpoller_SOURCES=testpoller.C unit_test.C
 testpoller_LDADD=libvera.a @YAMLLIBS@
 
+install-exec-hook:
+	rm -f $(DESTDIR)$(sbindir)/vlad
+	ln $(DESTDIR)$(sbindir)/vera $(DESTDIR)$(sbindir)/vlad
+
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
-	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)
-	chmod 755 $(DESTDIR)$(CONFIGDIR)
+	$(MKDIR_P) $(DESTDIR)$(LOCALCONFIGDIR)
+	$(MKDIR_P) $(DESTDIR)$(OVERRIDECONFIGDIR)
+	chmod 700 $(DESTDIR)$(INSTALLCONFIGDIR)
+	chmod 700 $(DESTDIR)$(CONFIGDIR)
+	chmod 700 $(DESTDIR)$(LOCALCONFIGDIR)
+	chmod 700 $(DESTDIR)$(OVERRIDECONFIGDIR)
 	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG)
 
 uninstall-local:
 	rm -f  $(DESTDIR)$(RUNLEVELCONFIG)
+	rm -f  $(DESTDIR)$(sbindir)/vlad
 
-check:
+check-am:
 	$(VALGRIND) ./testdepcomputations
 	$(VALGRIND) ./testcontroller
 	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testprocloader.sh

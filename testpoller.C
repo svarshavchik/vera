@@ -4,6 +4,7 @@
 */
 
 #include "config.h"
+#include "unit_test.H"
 #include "poller.H"
 #include <unistd.h>
 #include <fcntl.h>

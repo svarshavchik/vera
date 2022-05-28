@@ -55,23 +55,25 @@ AC_SUBST(YAMLLIBS)
 AC_ARG_WITH([installconfdir],
 	[AS_HELP_STRING([--with-installconfdir=dir],
 		[specify non-default local configuration directory])],
-	[INSTALLCONFIGDIR="$withval"],[INSTALLCONFIGDIR="/lib/vera"])
+	[INSTALLCONFIGDIR="$withval"],[INSTALLCONFIGDIR="$libdir/vera"])
 
-AC_DEFINE_UNQUOTED(INSTALLCONFIGDIR,["$INSTALLCONFIGDIR"],
-		[specify non-default installation configuration directory])
 AC_SUBST(INSTALLCONFIGDIR)
 
 AC_ARG_WITH([localconfdir],
 	[AS_HELP_STRING([--with-localconfdir=dir],
 		[specify non-default local configuration directory])],
-	[CONFIGDIR="$withval"],[CONFIGDIR="/etc/vera"])
+	[CONFIGDIR="$withval"],[CONFIGDIR="$sysconfdir/vera"])
 
-AC_DEFINE_UNQUOTED(CONFIGDIR,["$CONFIGDIR"],[Configuration directory])
 AC_SUBST(CONFIGDIR)
 
 RUNLEVELCONFIG="$CONFIGDIR/runlevels"
-AC_DEFINE_UNQUOTED(RUNLEVELCONFIG,["$RUNLEVELCONFIG"],[Runlevel config file])
 AC_SUBST(RUNLEVELCONFIG)
+
+LOCALCONFIGDIR="$CONFIGDIR/local"
+AC_SUBST(LOCALCONFIGDIR)
+
+OVERRIDECONFIGDIR="$CONFIGDIR/override"
+AC_SUBST(OVERRIDECONFIGDIR)
 
 AC_CONFIG_FILES([Makefile po/Makefile.in])
 AC_OUTPUT

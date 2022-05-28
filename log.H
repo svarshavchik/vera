@@ -27,4 +27,10 @@ time_t log_current_time();
 
 #define SIGTERM_TIMEOUT 10
 
+//! At startup, this points to real syslog or to standard output
+
+extern void (*log_to_syslog)(int level,
+			     const char *program,
+			     const char *message);
+
 #endif

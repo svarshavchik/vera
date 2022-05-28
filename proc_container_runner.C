@@ -10,6 +10,7 @@
 #include "messages.H"
 #include <string.h>
 #include <fcntl.h>
+#include <sys/signal.h>
 
 //! Unordered map for all current runners.
 
@@ -173,6 +174,11 @@ proc_container_runner create_runner(
 				charvec.push_back(v.data());
 
 			charvec.push_back(nullptr);
+
+			sigset_t ss;
+
+			sigemptyset(&ss);
+			sigprocmask(SIG_SETMASK, &ss, NULL);
 
 			execvp(charvec[0], charvec.data());
 		}

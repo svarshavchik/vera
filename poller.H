@@ -144,6 +144,12 @@ bool poller_is_transferrable();
 
 /*! Monitor a directory for changes.
 
+The constructor takes two callbacks:
+
+- Invoked with the name of the changed file in the given hierarchy.
+
+- Invoked to report a fatal error of some sort.
+
  */
 
 class monitor_hierarchy : inotify_watch_handler {

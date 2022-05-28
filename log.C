@@ -8,11 +8,14 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <syslog.h>
 
 void log_state_change(const proc_container &pc,
 		      const proc_container_state &pcs)
 {
-	std::cout << pc->name << ": " << std::visit(
+	std::ostringstream o;
+
+	o << std::visit(
 		[&]
 		(const auto &s) -> std::string
 		{
@@ -22,7 +25,13 @@ void log_state_change(const proc_container &pc,
 				+ static_cast<std::string>(s));
 #endif
 			return s;
-		}, pcs) << "\n";
+		}, pcs);
+
+#ifdef UNIT_TEST
+	std::cout << pc->name << ": " << o.str() << "\n";
+#else
+	log_container_message(pc, o.str());
+#endif
 }
 
 void log_container_failed_process(const proc_container &pc, int wstatus)
@@ -46,6 +55,8 @@ void log_container_error(const proc_container &pc, const std::string &msg)
 #ifdef UNIT_TEST
 	logged_state_changes.push_back(pc->name +": " + msg);
 	std::cout << pc->name << ": " << msg << "\n";
+#else
+	(*log_to_syslog)(LOG_ERR, pc->name.c_str(), msg.c_str());
 #endif
 }
 
@@ -54,6 +65,8 @@ void log_container_message(const proc_container &pc, const std::string &msg)
 #ifdef UNIT_TEST
 	logged_state_changes.push_back(pc->name +": " + msg);
 	std::cout << pc->name << ": " << msg << "\n";
+#else
+	(*log_to_syslog)(LOG_INFO, pc->name.c_str(), msg.c_str());
 #endif
 }
 
@@ -62,6 +75,8 @@ void log_message(const std::string &msg)
 #ifdef UNIT_TEST
 	std::cout << msg << "\n";
 	logged_state_changes.push_back(msg);
+#else
+	(*log_to_syslog)(LOG_INFO, "vera", msg.c_str());
 #endif
 }
 

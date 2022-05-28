@@ -27,6 +27,8 @@
 #include <string.h>
 #include <string_view>
 
+const char reexec_envar[]="VERA_REEXEC_FD";
+
 state_stopped::operator std::string() const
 {
 	return _("stopped");
@@ -441,6 +443,14 @@ struct sigchld_poller {
 		sigemptyset(&ss);
 		sigaddset(&ss, SIGCHLD);
 
+		// If running for real-sies, block these signals too, we
+		// don't do anything for them.
+		if (getpid() == 1)
+		{
+			sigaddset(&ss, SIGHUP);
+			sigaddset(&ss, SIGINT);
+			sigaddset(&ss, SIGTERM);
+		}
 		while (sigprocmask(SIG_BLOCK, &ss, NULL) < 0)
 		{
 			perror("sigprocmask");
@@ -604,7 +614,7 @@ void current_containers_infoObj::check_reexec()
 
 	std::string os=o.str();
 
-	setenv("VERA_REEXEC_FD", os.c_str(), 1);
+	setenv(reexec_envar, os.c_str(), 1);
 
 	// Tell all container to prepare_to_transfer, then reexec.
 	for (auto &[pc, run_info] : containers)
@@ -624,7 +634,7 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 	// environment.
 	std::vector<proc_container> restored_containers;
 
-	const char *p=getenv("VERA_REEXEC_FD");
+	const char *p=getenv(reexec_envar);
 
 	if (!p || !*p) return restored_containers;
 
@@ -654,7 +664,7 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 
 		close(fd);
 	}
-	unsetenv("VERA_REEXEC_FD");
+	unsetenv(reexec_envar);
 
 	std::istringstream i{std::move(s)};
 

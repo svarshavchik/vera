@@ -15,6 +15,7 @@ config.h.in
 config.log
 config.status
 config.sub
+configdirs.h
 configure
 depcomp
 install-sh
@@ -26,3 +27,5 @@ testcontroller2fdleak
 testdepcomputations
 testpoller
 testprocloader
+vera
+vlad

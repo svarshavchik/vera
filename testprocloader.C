@@ -4,6 +4,7 @@
 */
 
 #include "config.h"
+#include "unit_test.H"
 #include "proc_loader.H"
 #include <iostream>
 #include <vector>
