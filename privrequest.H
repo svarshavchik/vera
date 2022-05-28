@@ -56,7 +56,14 @@ std::string get_reload_status(const external_filedesc &efd);
 // Wait for the reload request to finish.
 int wait_reload(const external_filedesc &efd);
 
-//! Request a re-exec
+// Request a re-exec
 void request_reexec(const external_filedesc &efd);
+
+// Request a new runlevel
+
+void request_runlevel(const external_filedesc &efd,
+		      const std::string &runlevel);
+
+std::string get_runlevel_status(const external_filedesc &efd);
 
 #endif

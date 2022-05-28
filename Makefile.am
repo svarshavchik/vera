@@ -63,6 +63,16 @@ testprocloader_LDADD=libvera.a @YAMLLIBS@
 testpoller_SOURCES=testpoller.C unit_test.C
 testpoller_LDADD=libvera.a @YAMLLIBS@
 
+install-data-local:
+	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)
+	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
+	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)
+	chmod 755 $(DESTDIR)$(CONFIGDIR)
+	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG)
+
+uninstall-local:
+	rm -f  $(DESTDIR)$(RUNLEVELCONFIG)
+
 check:
 	$(VALGRIND) ./testdepcomputations
 	$(VALGRIND) ./testcontroller

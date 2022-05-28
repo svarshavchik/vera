@@ -6,6 +6,7 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_container_timer.H"
+#include "proc_loader.H"
 
 #define UNIT_TEST_RUNNER (next_pid=fork())
 #include "unit_test.H"
@@ -25,7 +26,7 @@ void test_failedexec()
 {
 	auto b=std::make_shared<proc_new_containerObj>("failedexec");
 
-	b->dep_required_by.insert("graphical runlevel");
+	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->new_container->starting_command="/no/such/path/failedexec";
 
 	proc_containers_install({
@@ -36,7 +37,7 @@ void test_failedexec()
 		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting graphical runlevel",
+			"Starting " RUNLEVEL_PREFIX "graphical",
 			"failedexec: start pending (dependency)",
 			"failedexec: cgroup created",
 			"failedexec: /no/such/path/failedexec: No such file or directory",
@@ -51,7 +52,7 @@ void test_capture()
 {
 	auto b=std::make_shared<proc_new_containerObj>("capture");
 
-	b->dep_required_by.insert("graphical runlevel");
+	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->new_container->starting_command="./testcontroller2fdleak";
 	b->new_container->start_type=start_type_t::oneshot;
 	b->new_container->stop_type=stop_type_t::automatic;
@@ -75,7 +76,7 @@ void test_capture()
 	do_poll(0);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"Starting graphical runlevel",
+			"Starting " RUNLEVEL_PREFIX "graphical",
 			"capture: start pending (dependency)",
 			"capture: cgroup created",
 			"capture: started (dependency)",
@@ -144,7 +145,7 @@ void test_restart()
 {
 	auto b=std::make_shared<proc_new_containerObj>("restart");
 
-	b->dep_required_by.insert("graphical runlevel");
+	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
 	b->new_container->restarting_command="echo restarting; exit 10";
 	b->new_container->reloading_command="echo reloading; exit 9";
@@ -256,7 +257,7 @@ void test_reexec_nofork()
 {
 	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
 
-	a->dep_required_by.insert("networking runlevel");
+	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 
 	proc_containers_install({
 			a,
@@ -300,7 +301,7 @@ static int common_reexec_setup()
 	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0)
 		throw "cloexec failed";
 
-	a->dep_required_by.insert("networking runlevel");
+	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 
 	{
 		std::ostringstream cmd;
@@ -404,8 +405,6 @@ std::string test;
 
 static void regular_tests()
 {
-	std::string test;
-
 	std::vector<int> opened_fds;
 
 	// Close any misc file descriptors we inherited
@@ -478,7 +477,7 @@ void testreexec_after(const std::string &socket_str)
 {
 	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
 
-	a->dep_required_by.insert("networking runlevel");
+	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 	a->new_container->starting_command="exit 0";
 
 	proc_containers_install({
@@ -501,7 +500,7 @@ void testreexec_after(const std::string &socket_str)
 		do_poll(1000);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"reexec: networking runlevel",
+			"reexec: " RUNLEVEL_PREFIX "networking",
 			"re-exec: reexec_a",
 			"reexec_a: restored preserved state: started (dependency)",
 			"reexec_a: restored after re-exec",

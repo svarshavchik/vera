@@ -795,7 +795,7 @@ void current_containers_infoObj::install(
 		auto runlevel_container=
 			*new_containers.insert(
 				std::make_shared<proc_new_containerObj>(
-					name + RUNLEVEL_SUFFIX
+					RUNLEVEL_PREFIX + name
 				)).first;
 
 		runlevel_container->new_container->type=
@@ -1225,11 +1225,6 @@ void current_containers_infoObj::install(
 	find_start_or_stop_to_do();
 }
 
-std::string proc_container_runlevel(const std::string &new_runlevel)
-{
-	return get_containers_info(nullptr)->runlevel(new_runlevel);
-}
-
 std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 {
 	// Check for aliases, first
@@ -1244,7 +1239,7 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 	{
 		// Maybe they specified the "real" name.
 
-		auto iter=containers.find(runlevel + RUNLEVEL_SUFFIX);
+		auto iter=containers.find(RUNLEVEL_PREFIX + runlevel);
 
 		if (iter == containers.end() ||
 		    iter->first->type != proc_container_type::runlevel)
@@ -1303,6 +1298,15 @@ void proc_do_request(external_filedesc efd)
 	if (ln == "reexec")
 	{
 		get_containers_info(nullptr)->reexec_requested=true;
+		return;
+	}
+
+	if (ln == "setrunlevel")
+	{
+		auto ret=get_containers_info(nullptr)->runlevel(efd->readln());
+
+		efd->write_all(ret + "\n");
+		return;
 	}
 }
 

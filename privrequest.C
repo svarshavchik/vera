@@ -100,3 +100,14 @@ void request_reexec(const external_filedesc &efd)
 {
 	efd->write_all("reexec\n");
 }
+
+void request_runlevel(const external_filedesc &efd,
+			     const std::string &runlevel)
+{
+	efd->write_all("setrunlevel\n" + runlevel + "\n");
+}
+
+std::string get_runlevel_status(const external_filedesc &efd)
+{
+	return efd->readln();
+}

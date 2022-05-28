@@ -479,12 +479,7 @@ EOF
 
 diff -U 3 loadtest.expected loadtest.out
 
-rm -rf globaldir
-mkdir globaldir
-./testprocloader genrunlevels globaldir
-for f in globaldir/*\ runlevel
-do
-    ./testprocloader loadtest "`basename \"$f\"`" <$f
-done
+./testprocloader genrunlevels loadtest.txt
+
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

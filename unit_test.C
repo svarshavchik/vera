@@ -186,3 +186,16 @@ std::string proc_container_restart(const std::string &name,
 
 	return get_restart_status(a);
 }
+
+std::string proc_container_runlevel(const std::string &new_runlevel)
+{
+	auto [a, b] = create_fake_request();
+
+	request_runlevel(a, new_runlevel);
+
+	proc_do_request(b);
+
+	b=nullptr;
+
+	return get_runlevel_status(a);
+}

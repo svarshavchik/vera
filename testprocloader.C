@@ -242,30 +242,9 @@ int main(int argc, char **argv)
 
 	if (args.size() == 3 && args[1] == "genrunlevels")
 	{
-		for (const auto &[name, aliases] : default_runlevels())
+		if (!proc_set_runlevel_config(args[2], default_runlevels()))
 		{
-			std::ofstream o{args[2] + "/" + name + RUNLEVEL_SUFFIX};
-
-			o << "# Placeholder entry -- do not remove\n\n"
-				"name: "
-				<< name
-				<< " runlevel\n"
-				"description: >\n"
-				"    Run Level \""
-				<< name << "\"\n\n"
-				"    Specifying:\n"
-				"\n"
-				"       Enabled: " << name << " runlevel\n\n"
-				"    automatically starts the process container"
-				" when this run level gets started.\n"
-				"version: 1\n";
-
-			o.close();
-			if (!o)
-			{
-				std::cerr << strerror(errno) << "\n";
-				exit(1);
-			}
+			exit(1);
 		}
 		return 0;
 	}

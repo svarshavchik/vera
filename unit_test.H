@@ -103,5 +103,8 @@ std::string proc_container_start(const std::string &s);
 //! Attempt to stop a container.
 std::string proc_container_stop(const std::string &s);
 
+//! Switch run levels
+std::string proc_container_runlevel(const std::string &new_runlevel);
+
 
 #endif

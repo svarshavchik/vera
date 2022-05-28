@@ -31,9 +31,6 @@ enum class proc_container_type {
 typedef std::unordered_set<proc_container, proc_container_hash,
 			   proc_container_equal> proc_container_set;
 
-//! Switch run levels
-std::string proc_container_runlevel(const std::string &new_runlevel);
-
 //! Expose the currently installed process containers.
 
 std::vector<std::tuple<proc_container, proc_container_state>

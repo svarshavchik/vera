@@ -156,6 +156,6 @@ bool proc_set_runlevel_default(
 	const std::string &new_runlevel,
 	const std::function<void (const std::string &)> &error);
 
-#define RUNLEVEL_SUFFIX " runlevel"
+#define RUNLEVEL_PREFIX "runlevel "
 
 #endif
