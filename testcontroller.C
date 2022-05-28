@@ -52,16 +52,24 @@ void test_start_and_stop()
 	if (err.empty())
 		throw "proc_container_start didn't fail for a nonexistent unit";
 
-	proc_container_stop("b");
+	auto [stopa, stopb] = create_fake_request();
 
-	if (err.empty())
+	send_stop(stopa, "b");
+	proc_do_request(stopb);
+	stopb=nullptr;
+
+	err=get_stop_status(stopa);
+
+	if (err != "b: unknown unit")
 		throw "proc_container_stop didn't fail for a nonexistent unit";
+
+	stopb=nullptr;
 
 	auto [socketa, socketb] = create_fake_request();
 
 	send_start(socketa, "a");
 
-	proc_do_request(std::move(socketb));
+	proc_do_request(socketb);
 	socketb=nullptr;
 
 	err=get_start_status(socketa);
@@ -290,7 +298,7 @@ void test_start_failed_fork()
 
 	send_start(socketa, "failed_fork");
 
-	proc_do_request(std::move(socketb));
+	proc_do_request(socketb);
 	socketb=nullptr;
 
 	auto err=get_start_status(socketa);
@@ -1789,7 +1797,15 @@ void manualstopearly()
 		throw "Unexpected state changes after early container stop";
 	}
 
-	proc_container_stop("manualstopearly");
+	auto [socketa, socketb] = create_fake_request();
+
+	send_stop(socketa, "manualstopearly");
+	proc_do_request(socketb);
+
+	if (!get_stop_status(socketa).empty())
+		throw "Unexpected error stopping container";
+
+	socketb=nullptr;
 
 	if (logged_state_changes != std::vector<std::string>{
 			"manualstopearly: stop pending",
@@ -1799,6 +1815,7 @@ void manualstopearly()
 	{
 		throw "Unexpected state changes after manual container stop";
 	}
+	wait_stop(socketa);
 }
 
 void automaticstopearly1()
@@ -2132,6 +2149,49 @@ void testnotimeout()
 		throw "unexpected state changes after stopping (2)";
 }
 
+void testmultiplestart()
+{
+	auto a=std::make_shared<proc_new_containerObj>("multiplestart");
+
+	a->new_container->starting_command="start";
+
+	proc_containers_install({
+			a
+		}, container_install::update);
+
+	auto err=proc_container_start("multiplestart");
+
+	if (!err.empty())
+		throw "proc_container_start unexpectedly failed.";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"multiplestart: start pending",
+			"multiplestart: cgroup created",
+			"multiplestart: starting",
+		})
+	{
+		throw "unexpected state changes after start";
+	}
+
+	auto [socketa, socketb] = create_fake_request();
+
+	send_start(socketa, "multiplestart");
+
+	proc_do_request(socketb);
+	socketb=nullptr;
+
+	err=get_start_status(socketa);
+
+	if (!err.empty())
+		throw "proc_container_start(2): " + err;
+
+	logged_state_changes.clear();
+	runner_finished(1, 0);
+
+	if (!get_start_result(socketa))
+		throw "unexpected starting failure";
+}
+
 int main()
 {
 	alarm(60);
@@ -2261,6 +2321,10 @@ int main()
 		test_reset();
 		test="testnotimeout";
 		testnotimeout();
+
+		test_reset();
+		test="multiplestart";
+		testmultiplestart();
 
 		test_reset();
 	} catch (const char *e)

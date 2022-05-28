@@ -316,11 +316,13 @@ private:
 	struct start_eligibility;
 	struct stop_eligibility;
 public:
-	std::string stop(const std::string &name);
+	void stop(const std::string &name,
+		   external_filedesc requester);
 
 private:
 	void stop_with_all_requirements(
-		const current_container &iter
+		current_container iter,
+		external_filedesc requester
 	);
 public:
 	void stopped(const std::string &s);

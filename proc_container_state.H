@@ -12,6 +12,7 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "external_filedesc.H"
+#include <list>
 
 //! A process container that's not running
 struct state_stopped {
@@ -27,13 +28,19 @@ struct state_starting {
 
 	bool dependency;
 
-	//! The connection that requested this container to get started.
-	external_filedesc requester;
+	//! The connections that requested this container to get started.
+	std::list<external_filedesc> requesters;
 
 	state_starting(
 		bool dependency,
 		external_filedesc requester
-	) : dependency{dependency}, requester{requester} {}
+	) : dependency{dependency}
+	{
+		if (requester)
+		{
+			requesters.push_back(std::move(requester));
+		}
+	}
 
 	//! Running start process.
 	proc_container_runner starting_runner;
@@ -115,6 +122,9 @@ struct state_stopping {
 
 	//! Its current phase
 	stopping_phase phase;
+
+	//! The connections that requested this container to get stopped.
+	std::list<external_filedesc> requesters;
 
 	//! Non default, non-copy constructor forwards to phase's constructor.
 

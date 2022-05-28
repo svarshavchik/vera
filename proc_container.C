@@ -1270,6 +1270,17 @@ void proc_do_request(external_filedesc efd)
 		);
 		return;
 	}
+
+	if (ln == "stop")
+	{
+		auto name=efd->readln();
+
+		get_containers_info(nullptr)->stop(
+			name,
+			std::move(efd)
+		);
+		return;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1383,19 +1394,23 @@ void current_containers_infoObj::start(
 						 decltype(state)>,
 					 state_starting>) {
 
-					    if (!state.requester)
-					    {
-						    state.requester=requester;
-						    return true;
-					    }
+					    requester->write_all("\n");
+
+					    state.requesters.push_back(
+						    std::move(
+							    requester
+						    ));
+					    return true;
 				    }
-				    return false;
+				    else
+				    {
+					    return false;
+				    }
 			    }, run_info.state))
 		{
-			// The container was being started as a dependency,
+			// The container is already getting started,
 			// but we can piggy-back on it.
 
-			requester->write_all("\n");
 			return;
 		}
 
@@ -1472,11 +1487,6 @@ void current_containers_infoObj::start(
 	return;
 }
 
-std::string proc_container_stop(const std::string &name)
-{
-	return get_containers_info(nullptr)->stop(name);
-}
-
 //////////////////////////////////////////////////////////////////////////
 //
 // Attempt to stop a process container. It must be a loaded container,
@@ -1498,9 +1508,9 @@ std::string proc_container_stop(const std::string &name)
 
 struct current_containers_infoObj::stop_eligibility {
 
-	current_container next_visited_container;
+	proc_container next_visited_container;
 
-	current_container_lookup_t containers;
+	proc_container_set containers;
 
 	void operator()(state_stopped &)
 	{
@@ -1512,32 +1522,34 @@ struct current_containers_infoObj::stop_eligibility {
 
 	void operator()(state_started &)
 	{
-		containers.emplace(next_visited_container->first,
-				   next_visited_container);
+		containers.insert(next_visited_container);
 	}
 
 	void operator()(state_starting &)
 	{
-		containers.emplace(next_visited_container->first,
-				   next_visited_container);
+		containers.insert(next_visited_container);
 	}
 };
 
 
-std::string current_containers_infoObj::stop(const std::string &name)
+void current_containers_infoObj::stop(const std::string &name,
+				      external_filedesc requester)
 {
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
 	    iter->first->type != proc_container_type::loaded)
 	{
-		return name + _(": unknown unit");
+		if (requester)
+			requester->write_all(name + _(": unknown unit\n"));
+		return;
 	}
 
-	stop_with_all_requirements(iter);
+	if (requester)
+		requester->write_all("\n");
+	stop_with_all_requirements(iter, requester);
 
 	find_start_or_stop_to_do(); // We should find something now.
-	return "";
 }
 
 void current_containers_infoObj::log(const std::string &name,
@@ -1561,14 +1573,14 @@ void current_containers_infoObj::log(const std::string &name,
 //    and nothing else requires them, they can also bs stopped.
 
 void current_containers_infoObj::stop_with_all_requirements(
-	const current_container &iter
-)
+	current_container iter,
+	external_filedesc requester)
 {
-	auto &[pc, run_info] = *iter;
+	auto pc=std::get<0>(*iter);
 
 	//! Check the eligibility of the specified container, first.
 
-	stop_eligibility eligibility{iter};
+	stop_eligibility eligibility{iter->first};
 
 	std::visit(eligibility, iter->second.state);
 
@@ -1583,7 +1595,7 @@ void current_containers_infoObj::stop_with_all_requirements(
 		[&]
 		(const current_container &c)
 		{
-			eligibility.next_visited_container=c;
+			eligibility.next_visited_container=c->first;
 
 			std::visit(eligibility,
 				   c->second.state);
@@ -1607,7 +1619,7 @@ void current_containers_infoObj::stop_with_all_requirements(
 		// its existing contents. This is because inserting them as
 		// we go will invalidates all existing iterators.
 
-		current_container_lookup_t removable_requirements;
+		proc_container_set removable_requirements;
 
 		// So we need a method to check both containers.
 
@@ -1708,9 +1720,8 @@ void current_containers_infoObj::stop_with_all_requirements(
 
 			if (can_be_stopped)
 			{
-				removable_requirements.emplace(
-					iter->first,
-					iter
+				removable_requirements.insert(
+					iter->first
 				);
 			}
 		}
@@ -1738,7 +1749,7 @@ void current_containers_infoObj::stop_with_all_requirements(
 			check_required_dependencies.removable_requirements
 		);
 
-		for (const auto &[pc, run_info] : eligibility.containers)
+		for (const auto &pc : eligibility.containers)
 		{
 			// Retrieve all required dependencies in a started
 			// state, anddo_ check them.
@@ -1767,10 +1778,37 @@ void current_containers_infoObj::stop_with_all_requirements(
 	// the rest of them.
 
 	do_stop_or_terminate(iter);
+
+	// Revalidate, don't take anything for granted.
+	//
+	// If the container is now stopping, register the requester with it.
+
+	iter=containers.find(pc);
+
+	if (iter != containers.end())
+		std::visit(
+			[&]
+			(auto &state)
+			{
+				if constexpr(std::is_same_v<std::remove_cvref_t<
+					     decltype(state)>,
+					     state_stopping>) {
+					if (requester)
+						state.requesters.push_back(
+							requester
+						);
+				}
+			}, iter->second.state);
+
 	eligibility.containers.erase(pc);
 
-	for (auto &[ignore, iter] : eligibility.containers)
-		do_stop_or_terminate(iter);
+	for (auto &pc : eligibility.containers)
+	{
+		iter=containers.find(pc);
+
+		if (iter != containers.end())
+			do_stop_or_terminate(iter);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -2241,7 +2279,7 @@ void current_containers_infoObj::do_start_runner(
 			cc->first,
 			_("attempting to start a container that's not in a "
 			  "pending start state"));
-		stop_with_all_requirements(cc);
+		stop_with_all_requirements(cc, {});
 		return;
 	}
 
@@ -2282,7 +2320,7 @@ void current_containers_infoObj::do_start_runner(
 	if (failed)
 	{
 		abort();
-		stop_with_all_requirements(cc);
+		stop_with_all_requirements(cc, {});
 		return;
 	}
 	// If there's a non-empty starting command: run it.
@@ -2307,7 +2345,7 @@ void current_containers_infoObj::do_start_runner(
 
 		if (!runner)
 		{
-			stop_with_all_requirements(cc);
+			stop_with_all_requirements(cc, {});
 			return;
 		}
 
@@ -2340,7 +2378,7 @@ void current_containers_infoObj::do_start_runner(
 						pc,
 						_("start process timed out")
 					);
-					me->stop_with_all_requirements(cc);
+					me->stop_with_all_requirements(cc, {});
 				}
 			);
 		}
@@ -2385,7 +2423,7 @@ void current_containers_infoObj::starting_command_finished(
 		log_container_failed_process(cc->first, status);
 
 		if (!oneshot)
-			stop_with_all_requirements(cc);
+			stop_with_all_requirements(cc, {});
 	}
 }
 
@@ -2686,9 +2724,12 @@ static state_started &started(const current_container &cc, bool for_dependency)
 			     std::remove_cvref_t<decltype(current_state)>,
 			     state_starting>) {
 
-			if (current_state.requester)
+			for (auto &requester:current_state.requesters)
 			{
-				current_state.requester->write_all(
+				if (!requester)
+					continue;
+
+				requester->write_all(
 					START_RESULT_OK "\n"
 				);
 			}
@@ -2792,7 +2833,7 @@ void current_containers_infoObj::stopped(const std::string &s)
 
 		if (!std::holds_alternative<state_stopping>(run_info.state))
 		{
-			stop(pc->name);
+			stop(pc->name, {});
 			return;
 		}
 	}

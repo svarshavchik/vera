@@ -100,5 +100,8 @@ std::tuple<external_filedesc, external_filedesc> create_fake_request();
 // Attempt to start a container.
 std::string proc_container_start(const std::string &s);
 
+//! Attempt to stop a container.
+std::string proc_container_stop(const std::string &s);
+
 
 #endif

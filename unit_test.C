@@ -157,3 +157,17 @@ std::string proc_container_start(const std::string &name)
 
 	return get_start_status(a);
 }
+
+
+std::string proc_container_stop(const std::string &name)
+{
+	auto [a, b] = create_fake_request();
+
+	send_stop(a, std::move(name));
+
+	proc_do_request(std::move(b));
+
+	b=nullptr;
+
+	return get_stop_status(a);
+}

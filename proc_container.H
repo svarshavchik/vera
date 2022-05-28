@@ -45,9 +45,6 @@ proc_container_set current_proc_containers();
 
 void proc_do_request(external_filedesc);
 
-//! Attempt to stop a container.
-std::string proc_container_stop(const std::string &s);
-
 //! All processes in the container have exited.
 
 //! Or maybe not. is_populated comes from cgroup.events. Some entry paths

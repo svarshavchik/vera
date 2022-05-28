@@ -20,3 +20,18 @@ bool get_start_result(const external_filedesc &efd)
 {
 	return efd->readln() == START_RESULT_OK;
 }
+
+void send_stop(const external_filedesc &efd, std::string name)
+{
+	efd->write_all(std::string{"stop\n"} + name + "\n");
+}
+
+std::string get_stop_status(const external_filedesc &efd)
+{
+	return efd->readln();
+}
+
+void wait_stop(const external_filedesc &efd)
+{
+	efd->readln();
+}
