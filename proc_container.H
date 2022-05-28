@@ -252,9 +252,6 @@ std::string proc_container_reload(const std::string &,
 //! For unit tests
 void proc_containers_reset();
 
-//! Request a re-exec
-void proc_request_reexec();
-
 //! Check if a re-exec has been requested, and call reexec() if so.
 void proc_check_reexec();
 

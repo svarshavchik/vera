@@ -34,4 +34,29 @@ std::string get_stop_status(const external_filedesc &efd);
 // Wait for the stop request to finish.
 void wait_stop(const external_filedesc &efd);
 
+// Send a restart request
+void send_restart(const external_filedesc &efd, std::string name);
+
+// Initial restart attempt, did it work?
+
+// Returns an empty string if it did, or an error message.
+std::string get_restart_status(const external_filedesc &efd);
+
+// Wait for the restart request to finish.
+int wait_restart(const external_filedesc &efd);
+
+// Send a reload request
+void send_reload(const external_filedesc &efd, std::string name);
+
+// Initial reload attempt, did it work?
+
+// Returns an empty string if it did, or an error message.
+std::string get_reload_status(const external_filedesc &efd);
+
+// Wait for the reload request to finish.
+int wait_reload(const external_filedesc &efd);
+
+//! Request a re-exec
+void request_reexec(const external_filedesc &efd);
+
 #endif

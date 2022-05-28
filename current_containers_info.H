@@ -300,16 +300,14 @@ public:
 	void start(const std::string &name,
 		   external_filedesc requester);
 
-	std::string restart(const std::string &name,
-			    const std::function<void (int)> &completed);
+	void restart(const external_filedesc &requester);
 
-	std::string reload(const std::string &name,
-			   const std::function<void (int)> &completed);
+	void reload(const external_filedesc &requester);
+
 
 private:
-	std::string reload_or_restart(
-		const std::string &name,
-		const std::function<void (int)> &completed,
+	void reload_or_restart(
+		const external_filedesc &requester,
 		std::string proc_containerObj::*command,
 		const char *no_command_error);
 

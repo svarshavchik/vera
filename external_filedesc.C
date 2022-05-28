@@ -54,3 +54,18 @@ std::string external_filedescObj::readln()
 	buffer.erase(b, ++p);
 	return ln;
 }
+
+bool external_filedescObj::ready()
+{
+	char charbuffer[256];
+
+	ssize_t n=recv(fd, charbuffer, sizeof(charbuffer), MSG_DONTWAIT);
+
+	if (n == 0)
+		return true;
+
+	if (n > 0)
+		buffer.insert(buffer.end(), charbuffer, charbuffer+n);
+
+	return buffer.find('\n') != buffer.npos;
+}

@@ -149,9 +149,9 @@ std::string proc_container_start(const std::string &name)
 {
 	auto [a, b] = create_fake_request();
 
-	send_start(a, std::move(name));
+	send_start(a, name);
 
-	proc_do_request(std::move(b));
+	proc_do_request(b);
 
 	b=nullptr;
 
@@ -163,11 +163,26 @@ std::string proc_container_stop(const std::string &name)
 {
 	auto [a, b] = create_fake_request();
 
-	send_stop(a, std::move(name));
+	send_stop(a, name);
 
-	proc_do_request(std::move(b));
+	proc_do_request(b);
 
 	b=nullptr;
 
 	return get_stop_status(a);
+}
+
+
+std::string proc_container_restart(const std::string &name,
+				   const std::function<void (int)> &completed)
+{
+	auto [a, b] = create_fake_request();
+
+	send_restart(a, name);
+
+	proc_do_request(b);
+
+	b=nullptr;
+
+	return get_restart_status(a);
 }

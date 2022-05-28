@@ -511,13 +511,6 @@ static state_started &started(const current_container &, bool);
 //
 // Handle re-exec requests.
 
-void proc_request_reexec()
-{
-	auto containers=get_containers_info(nullptr);
-
-	containers->reexec_requested=true;
-}
-
 void proc_check_reexec()
 {
 	get_containers_info(nullptr)->check_reexec();
@@ -546,7 +539,12 @@ void current_containers_infoObj::check_reexec()
 			if (pc->type != proc_container_type::loaded)
 				continue;
 
+			// REEXEC FILE: container name
+
 			o << pc->name << "\n";
+
+			// REEXEC FILE: container status
+
 			if (!run_info.is_transferrable(o))
 				return;
 		}
@@ -561,6 +559,10 @@ void current_containers_infoObj::check_reexec()
 
 	if (fp)
 	{
+		// REEXEC FILE: version
+
+		// REEXEC FILE: runlevel
+
 		fprintf(fp, "1\n%s\n", current_runlevel ?
 			current_runlevel->name.c_str():"default");
 
@@ -656,16 +658,16 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 
 	std::istringstream i{std::move(s)};
 
+	// REEXEC FILE: version
 	if (!std::getline(i, s))
 		return restored_containers;
-
-	// Check the version number. Restore the current runlevel.
 
 	int version;
 
 	if (!(std::istringstream{s} >> version) || version != 1)
 		return restored_containers;
 
+	// REEXEC FILE: runlevel
 	if (!std::getline(i, s))
 		return restored_containers;
 
@@ -681,6 +683,8 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 
 	auto me=shared_from_this();
 
+	// REEXEC FILE: container name
+
 	while (std::getline(i, s))
 	{
 		auto temp_container=std::make_shared<proc_containerObj>(s);
@@ -692,6 +696,8 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 		auto iter=containers.emplace(
 			temp_container,
 			proc_container_run_info{}).first;
+
+		// REEXEC FILE: container status
 
 		group_create_info gci{me, iter};
 
@@ -1266,7 +1272,7 @@ void proc_do_request(external_filedesc efd)
 
 		get_containers_info(nullptr)->start(
 			name,
-			std::move(efd)
+			efd
 		);
 		return;
 	}
@@ -1277,9 +1283,26 @@ void proc_do_request(external_filedesc efd)
 
 		get_containers_info(nullptr)->stop(
 			name,
-			std::move(efd)
+			efd
 		);
 		return;
+	}
+
+	if (ln == "restart")
+	{
+		get_containers_info(nullptr)->restart(efd);
+		return;
+	}
+
+	if (ln == "reload")
+	{
+		get_containers_info(nullptr)->reload(efd);
+		return;
+	}
+
+	if (ln == "reexec")
+	{
+		get_containers_info(nullptr)->reexec_requested=true;
 	}
 }
 
@@ -2855,75 +2878,69 @@ void current_containers_infoObj::stopped(const std::string &s)
 	find_start_or_stop_to_do(); // We might find something to do.
 }
 
-std::string proc_container_restart(const std::string &name,
-				   const std::function<void (int)> &completed)
+void current_containers_infoObj::restart(
+	const external_filedesc &requester
+)
 {
-	return get_containers_info(nullptr)->restart(name, completed);
-}
-
-std::string proc_container_reload(const std::string &name,
-				  const std::function<void (int)> &completed)
-{
-	return get_containers_info(nullptr)->reload(name, completed);
-}
-
-std::string current_containers_infoObj::restart(
-	const std::string &name,
-	const std::function<void (int)> &completed)
-{
-	return reload_or_restart(name, completed,
+	return reload_or_restart(requester,
 				 &proc_containerObj::restarting_command,
 				 _(": is not restartable\n"));
 }
 
-std::string current_containers_infoObj::reload(
-	const std::string &name,
-	const std::function<void (int)> &completed)
+void current_containers_infoObj::reload(
+	const external_filedesc &requester
+)
 {
-	return reload_or_restart(name, completed,
-			  &proc_containerObj::reloading_command,
-			  _(": is not reloadable\n"));
+	return reload_or_restart(requester,
+				 &proc_containerObj::reloading_command,
+				 _(": is not reloadable\n"));
 }
 
-std::string current_containers_infoObj::reload_or_restart(
-	const std::string &name,
-	const std::function<void (int)> &completed,
+void current_containers_infoObj::reload_or_restart(
+	const external_filedesc &requester,
 	std::string proc_containerObj::*command,
 	const char *no_command_error)
 {
+	auto name=requester->readln();
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
 	    iter->first->type != proc_container_type::loaded)
 	{
-		return name + _(": unknown unit");
+		requester->write_all(name + _(": unknown unit\n"));
+		return;
 	}
 
 	auto &[pc, run_info] = *iter;
 
 	if (!std::holds_alternative<state_started>(run_info.state))
 	{
-		return name + _(": is not currently started");
+		requester->write_all(name + _(": is not currently started\n"));
+		return;
 	}
 
 	auto &started=std::get<state_started>(run_info.state);
 
 	if (started.reload_or_restart_runner)
 	{
-		return name + _(": is already in the middle of "
-				"another reload or restart");
+		requester->write_all(name + _(": is already in the middle of "
+					      "another reload or restart\n"));
+		return;
 	}
 
 	if (((*pc).*command).empty())
 	{
-		return name + no_command_error;
+		requester->write_all(name + no_command_error);
+		return;
 	}
+
+	requester->write_all("\n");
 
 	started.reload_or_restart_runner=create_runner(
 		shared_from_this(),
 		iter,
 		(*pc).*command,
-		[completed]
+		[requester]
 		(auto &callback_info,
 		 int exit_status)
 		{
@@ -2937,8 +2954,11 @@ std::string current_containers_infoObj::reload_or_restart(
 			auto &started=std::get<state_started>(run_info.state);
 
 			started.reload_or_restart_runner=nullptr;
-			completed(exit_status);
-		});
 
-	return "";
+			std::ostringstream o;
+
+			o.imbue(std::locale{"C"});
+			o << exit_status << "\n";
+			requester->write_all(o.str());
+		});
 }

@@ -33,6 +33,8 @@ private:
 
 public:
 	std::string readln();
+
+	bool ready();
 };
 
 typedef std::shared_ptr<external_filedescObj> external_filedesc;

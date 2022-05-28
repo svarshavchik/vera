@@ -9,7 +9,7 @@
 
 #define UNIT_TEST_RUNNER (next_pid=fork())
 #include "unit_test.H"
-
+#include "privrequest.H"
 #include <sys/wait.h>
 #include <unistd.h>
 #include <filesystem>
@@ -119,24 +119,23 @@ std::tuple<int, std::string> restart_or_reload(
 }
 
 std::tuple<int, std::string> do_test_or_restart(
-	const std::function<std::string (const std::function<void (int)>)>
-	&callback)
+	const std::function<std::tuple<external_filedesc,
+	std::string (*)(const external_filedesc &),
+	int (*)(const external_filedesc &)>()> &callback)
 {
-	int exitcode_received=0;
-	bool exited=false;
+	auto [filedesc, statusfunc, waitfunc]=callback();
 
-	auto ret=callback([&]
-			  (int exitcode)
-			  {
-				  exitcode_received=exitcode;
-				  exited=true;
-			  });
+	auto error=statusfunc(filedesc);
 
-	if (!ret.empty())
-		return {1 << 8, std::move(ret)};
+	if (!error.empty())
+		return {1 << 8, std::move(error)};
 
-	while (!exited)
+	while (!filedesc->ready())
+	{
 		do_poll(1000);
+	}
+
+	auto exitcode_received=waitfunc(filedesc);
 
 	return {exitcode_received, ""};
 }
@@ -156,9 +155,14 @@ void test_restart()
 
 	auto ret=do_test_or_restart(
 		[]
-		(const std::function<void (int)> &cb)
 		{
-			return proc_container_restart("nonexistent",  cb);
+			auto [socketa, socketb] = create_fake_request();
+
+			send_restart(socketa, "nonexistent");
+			proc_do_request(socketb);
+
+			return std::tuple{
+				socketa, get_restart_status, wait_restart};
 		});
 
 	auto &[exitcode, message]=ret;
@@ -169,9 +173,14 @@ void test_restart()
 
 	ret=do_test_or_restart(
 		[]
-		(const std::function<void (int)> &cb)
 		{
-			return proc_container_restart("restart", cb);
+			auto [socketa, socketb] = create_fake_request();
+
+			send_restart(socketa, "restart");
+			proc_do_request(socketb);
+
+			return std::tuple{
+				socketa, get_restart_status, wait_restart};
 		});
 
 	if (WEXITSTATUS(exitcode) != 1 ||
@@ -182,9 +191,14 @@ void test_restart()
 
 	ret=do_test_or_restart(
 		[]
-		(const std::function<void (int)> &cb)
 		{
-			return proc_container_restart("restart", cb);
+			auto [socketa, socketb] = create_fake_request();
+
+			send_restart(socketa, "restart");
+			proc_do_request(socketb);
+
+			return std::tuple{
+				socketa, get_restart_status, wait_restart};
 		});
 
 	if (WEXITSTATUS(exitcode) != 10 || message != "")
@@ -192,17 +206,24 @@ void test_restart()
 
 	ret=do_test_or_restart(
 		[]
-		(const std::function<void (int)> &cb)
 		{
-			auto ret=proc_container_reload("restart", cb);
+			auto [socketa, socketb] = create_fake_request();
+
+			send_reload(socketa, "restart");
+			proc_do_request(socketb);
 
 			auto ret2=do_test_or_restart(
 				[]
-				(const std::function<void (int)> &cb2)
 				{
-					return proc_container_restart(
-						"restart",
-						cb2);
+					auto [socketa, socketb] =
+						create_fake_request();
+
+					send_restart(socketa, "restart");
+					proc_do_request(socketb);
+
+					return std::tuple{
+						socketa, get_restart_status,
+						wait_restart};
 				});
 
 			auto &[exitcode, message] = ret2;
@@ -214,11 +235,21 @@ void test_restart()
 				throw "Unexpected result of an in-progress"
 					" error";
 			}
-			return ret;
+
+			return std::tuple{
+				socketa, get_reload_status, wait_reload};
 		});
 
 	if (WEXITSTATUS(exitcode) != 9 || message != "")
 		throw "Unexpected result of a successful reload";
+}
+
+void proc_request_reexec()
+{
+	auto [socketa, socketb] = create_fake_request();
+
+	request_reexec(socketa);
+	proc_do_request(socketb);
 }
 
 void test_reexec_nofork()
