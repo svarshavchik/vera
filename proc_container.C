@@ -1225,6 +1225,22 @@ void current_containers_infoObj::install(
 	find_start_or_stop_to_do();
 }
 
+void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
+{
+	std::string s{"default"};
+
+	if (current_runlevel)
+		s=current_runlevel->name;
+
+	efd->write_all(s + "\n");
+
+	for (auto &[alias,c] : runlevel_containers)
+	{
+		if (current_runlevel && current_runlevel == c)
+			efd->write_all(alias + "\n");
+	}
+}
+
 std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 {
 	// Check for aliases, first
@@ -1306,6 +1322,12 @@ void proc_do_request(external_filedesc efd)
 		auto ret=get_containers_info(nullptr)->runlevel(efd->readln());
 
 		efd->write_all(ret + "\n");
+		return;
+	}
+
+	if (ln == "getrunlevel")
+	{
+		get_containers_info(nullptr)->getrunlevel(efd);
 		return;
 	}
 }

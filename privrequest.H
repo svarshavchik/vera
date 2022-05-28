@@ -7,6 +7,7 @@
 
 #include "external_filedesc.H"
 #include <string>
+#include <vector>
 
 // Send requests and process responses over a privileged (root) sockets.
 
@@ -65,5 +66,15 @@ void request_runlevel(const external_filedesc &efd,
 		      const std::string &runlevel);
 
 std::string get_runlevel_status(const external_filedesc &efd);
+
+// Request the current runlevel and aliases
+
+void request_current_runlevel(const external_filedesc &efd);
+
+// Returns the current runlevel and its aliases
+//
+// First string is the full runlevel name, followed by aliases (3, 4, etc...)
+
+std::vector<std::string> get_current_runlevel(const external_filedesc &efd);
 
 #endif

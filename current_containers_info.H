@@ -297,6 +297,8 @@ public:
 
 	std::string runlevel(const std::string &new_runlevel);
 
+	void getrunlevel(const external_filedesc &efd);
+
 	void start(const std::string &name,
 		   external_filedesc requester);
 

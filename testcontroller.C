@@ -1219,6 +1219,29 @@ void test_runlevels()
 
 	logged_state_changes.clear();
 
+	{
+		auto [socketa, socketb] = create_fake_request();
+
+		request_current_runlevel(socketa);
+		proc_do_request(socketb);
+		socketb=nullptr;
+
+		auto current_runlevel=get_current_runlevel(socketa);
+
+		if (current_runlevel.size() > 1)
+			std::sort(current_runlevel.begin()+1,
+				  current_runlevel.end());
+
+		if (current_runlevel != std::vector<std::string>{
+				RUNLEVEL_PREFIX "graphical",
+				"5",
+				"default"
+			})
+		{
+			throw "Unexpected get_current_runlevel result";
+		}
+	}
+
 	if (!proc_container_start("otherprog").empty())
 		throw "proc_container_start failed";
 	if (logged_state_changes != std::vector<std::string>{

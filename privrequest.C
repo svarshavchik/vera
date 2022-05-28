@@ -111,3 +111,25 @@ std::string get_runlevel_status(const external_filedesc &efd)
 {
 	return efd->readln();
 }
+
+void request_current_runlevel(const external_filedesc &efd)
+{
+	efd->write_all("getrunlevel\n");
+}
+
+std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
+{
+	std::vector<std::string> ret;
+
+	while (1)
+	{
+		auto s=efd->readln();
+
+		if (s.empty())
+			break;
+
+		ret.push_back(s);
+	}
+
+	return ret;
+}
