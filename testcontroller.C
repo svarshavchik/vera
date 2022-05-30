@@ -1048,6 +1048,33 @@ void test_install()
 			"installc: started"
 		}, "unexpected state after starting containers");
 
+
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		request_status(privsocketa);
+		proc_do_request(privsocketb);
+		privsocketb=nullptr;
+
+		auto [pubsocketa, pubsocketb] = create_fake_request();
+
+		proxy_status(privsocketa, pubsocketa);
+
+		privsocketa=nullptr;
+
+		auto ret=get_status(pubsocketb);
+
+		if (!ret || *ret != std::unordered_map<std::string,
+		    container_state_info>{
+			    {"installa",{"stopped"}},
+			    {"installb",{"started"}},
+			    {"installc",{"started"}}
+		    })
+		{
+			throw "did not receive expected status response";
+		}
+	}
+
 	logged_state_changes.clear();
 
 	proc_containers_install({
@@ -2037,7 +2064,7 @@ void testfailcgroupcreate()
 			"a: start pending (dependency)",
 			"b: start pending (dependency)",
 			"b: started (dependency)",
-			"testcgroup/a: No such file or directory",
+			"testcgroup/:a: No such file or directory",
 			"a: removing",
 			"a: stopped",
 			"b: stop pending",
@@ -2101,8 +2128,8 @@ void testfailcgroupdelete()
 
 	std::string p{proc_container_group_data::get_cgroupfs_base_path()};
 
-	rename((p + "/a:").c_str(), (p + "/b:").c_str());
-	close(open((p + "/a:").c_str(), O_RDWR|O_CREAT|O_TRUNC, 0644));
+	rename((p + "/:a").c_str(), (p + "/:b").c_str());
+	close(open((p + "/:a").c_str(), O_RDWR|O_CREAT|O_TRUNC, 0644));
 	do_poll(0);
 	if (logged_state_changes != std::vector<std::string>{
 			"a: cannot delete cgroup: Not a directory"
@@ -2111,8 +2138,8 @@ void testfailcgroupdelete()
 		throw "Unexpected state change after stopping.";
 	}
 	logged_state_changes.clear();
-	unlink((p+"/a:").c_str());
-	rename((p + "/b:").c_str(), (p + "/a:").c_str());
+	unlink((p+"/:a").c_str());
+	rename((p + "/:b").c_str(), (p + "/:a").c_str());
 	populated(a->new_container, true);
 	do_poll(0);
 	populated(a->new_container, false);

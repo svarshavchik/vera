@@ -33,8 +33,8 @@ std::string proc_container_group_data::cgroups_dir()
 	n.insert(n.end(), base.begin(), base.end());
 
 	n.push_back('/');
-	n.insert(n.end(), name.begin(), name.end());
 	n.push_back(':');
+	n.insert(n.end(), name.begin(), name.end());
 
 	return n;
 }
@@ -143,7 +143,7 @@ bool proc_container_group::create(const group_create_info &create_info)
 	if (!cgroups_dir_create())
 	{
 		// path ends with a colon
-		log_message(cgroups_dir() + " " + strerror(errno));
+		log_message(cgroups_dir() + ": " + strerror(errno));
 		return false;
 	}
 
@@ -152,7 +152,7 @@ bool proc_container_group::create(const group_create_info &create_info)
 	if (fd < 0)
 	{
 		// path ends with a colon
-		log_message(cgroups_dir() + " " + strerror(errno));
+		log_message(cgroups_dir() + ": " + strerror(errno));
 		return false;
 	}
 

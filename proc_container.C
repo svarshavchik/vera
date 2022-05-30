@@ -31,24 +31,24 @@ const char reexec_envar[]="VERA_REEXEC_FD";
 
 state_stopped::operator std::string() const
 {
-	return _("stopped");
+	return "stopped";
 }
 
 state_starting::operator std::string() const
 {
 	if (starting_runner)
 	{
-		return dependency ? _("starting (dependency)")
-			: _("starting");
+		return dependency ? "starting (dependency)"
+			: "starting";
 	}
 
-	return dependency ? _("start pending (dependency)")
-		: _("start pending");
+	return dependency ? "start pending (dependency)"
+		: "start pending";
 }
 
 state_started::operator std::string() const
 {
-	return dependency ? _("started (dependency)") : _("started");
+	return dependency ? "started (dependency)" : "started";
 }
 
 state_stopping::operator std::string() const
@@ -64,20 +64,20 @@ state_stopping::operator std::string() const
 
 stop_pending::operator std::string() const
 {
-	return _("stop pending");
+	return "stop pending";
 }
 
 stop_running::operator std::string() const
 {
-	return _("stopping");
+	return "stopping";
 }
 
 stop_removing::operator std::string() const
 {
 	if (sigkill_sent)
-		return _("force-removing");
+		return "force-removing";
 
-	return _("removing");
+	return "removing";
 }
 
 proc_containerObj::proc_containerObj(const std::string &name) : name{name}
@@ -1251,6 +1251,31 @@ void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 	}
 }
 
+void current_containers_infoObj::status(const external_filedesc &efd)
+{
+	std::ostringstream o;
+
+	o.imbue(std::locale{"C"});
+
+	for (auto &[pc, run_info] : containers)
+	{
+		if (pc->type != proc_container_type::loaded)
+			continue;
+
+		o << pc->name << "\n";
+		o << "status:" << std::visit(
+			[]
+			(const auto &state) -> std::string
+			{
+				return state;
+			}, run_info.state)
+		  << "\n";
+		o << "\n";
+	}
+
+	efd->write_all(o.str());
+}
+
 std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 {
 	// Check for aliases, first
@@ -1338,6 +1363,12 @@ void proc_do_request(external_filedesc efd)
 	if (ln == "getrunlevel")
 	{
 		get_containers_info(nullptr)->getrunlevel(efd);
+		return;
+	}
+
+	if (ln == "status")
+	{
+		get_containers_info(nullptr)->status(efd);
 		return;
 	}
 }

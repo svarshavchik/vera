@@ -299,6 +299,8 @@ public:
 
 	void getrunlevel(const external_filedesc &efd);
 
+	void status(const external_filedesc &efd);
+
 	void start(const std::string &name,
 		   external_filedesc requester);
 

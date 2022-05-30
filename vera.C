@@ -24,8 +24,12 @@
 #include <string.h>
 #include <fstream>
 #include <locale>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 #define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
+#define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
 
 std::string exename;
 
@@ -241,18 +245,15 @@ void check_reload_config(const char *filename)
 	);
 }
 
-// The vera init daemon
-
-void vera()
+int create_vera_socket(const char *tmpname, const char *finalname)
 {
-	umask(077);
 	int fd;
 
 	// Create the privileged command socket.
 
 	while (1)
 	{
-		unlink(PRIVCMDSOCKET ".tmp");
+		unlink(tmpname);
 
 		fd=socket(PF_UNIX, SOCK_STREAM, 0);
 
@@ -261,7 +262,7 @@ void vera()
 			struct sockaddr_un sun{};
 
 			sun.sun_family=AF_UNIX;
-			strcpy(sun.sun_path, PRIVCMDSOCKET ".tmp");
+			strcpy(sun.sun_path, tmpname);
 
 			// Make sure it's nonblocking and has close-on-exec
 			// set.
@@ -271,17 +272,26 @@ void vera()
 			    bind(fd, reinterpret_cast<sockaddr *>(&sun),
 				 sizeof(sun)) == 0 &&
 			    listen(fd, 10) == 0 &&
-			    rename(PRIVCMDSOCKET ".tmp",
-				   PRIVCMDSOCKET) == 0)
+			    rename(tmpname, finalname) == 0)
 				break;
 			close(fd);
 		}
 
-		log_message(std::string{PRIVCMDSOCKET} +
+		log_message(std::string{finalname} +
 			    _(": socket creation failure: ") +
 			    strerror(errno));
 		sleep(5);
 	}
+	return fd;
+}
+
+// The vera init daemon
+
+void vera_init()
+{
+	umask(077);
+	int fd=create_vera_socket(PRIVCMDSOCKET ".tmp",
+				  PRIVCMDSOCKET);
 	umask(022);
 
 	auto cmd_socket=std::make_shared<external_filedescObj>(fd);
@@ -314,7 +324,7 @@ void vera()
 
 	// Create our cgroup
 
-	mkdir(proc_container_group_data::get_cgroupfs_base_path(), 755);
+	mkdir(proc_container_group_data::get_cgroupfs_base_path(), 0755);
 
 	// Garbage collection on the configuration directory.
 
@@ -398,11 +408,9 @@ void vera()
 	}
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
-// Send commands to the vera daemon
+// Connect to the private socket.
 
-external_filedesc connect_vera_priv()
+external_filedesc try_connect_vera_priv()
 {
 	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
 	struct sockaddr_un sun{};
@@ -412,11 +420,160 @@ external_filedesc connect_vera_priv()
 
 	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
 	{
-		perror(PRIVCMDSOCKET);
+		close(fd);
+		return nullptr;
+	}
+
+	return std::make_shared<external_filedescObj>(fd);
+}
+
+// Connect to the public socket.
+
+external_filedesc connect_vera_pub()
+{
+	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
+	struct sockaddr_un sun{};
+
+	sun.sun_family=AF_UNIX;
+	strcpy(sun.sun_path, PUBCMDSOCKET);
+
+	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
+	{
+		close(fd);
+		perror(PUBCMDSOCKET);
 		exit(1);
 	}
 
 	return std::make_shared<external_filedescObj>(fd);
+}
+
+// Connection on the public socket.
+
+// A separate process listens on the public socket and it does not affect
+// the main vera init daemon. Therefore it's not as critical that it's going
+// to block on reading the command. At most, a rogue connection is going to
+// block all other non-privileged connections.
+
+void do_pub_request(external_filedesc pubfd)
+{
+	auto cmd=pubfd->readln();
+
+	if (cmd == "status")
+	{
+		auto fd=try_connect_vera_priv();
+
+		if (!fd)
+			return;
+
+		request_status(fd);
+		proxy_status(fd, pubfd);
+		return;
+	}
+}
+
+
+// Separate process that listens on the public socket and forwards
+// requests to the main vera init daemon.
+//
+// The vera init daemon creates a pipe and forks. The original, parent
+// process, becomes the main init daemon and closes the read end of the pipe.
+//
+// The pipe gets closed if the main init daemon gets re-execed.
+//
+// The child process listens on the public socket and proxies public requests.
+// It closes the write end of the pipe, and exits when the read end of the
+// pipe gets closed.
+
+void vera_pub()
+{
+	umask(000);
+	int fd=create_vera_socket(PUBCMDSOCKET ".tmp",
+				  PUBCMDSOCKET);
+	umask(077);
+
+
+	// Poll the public command socket for connections. Call do_pub_request()
+	// for each accepted connection.
+
+	polledfd poll_cmd{fd,
+		[]
+		(int fd)
+		{
+			struct sockaddr addr;
+			socklen_t addrlen=sizeof(addr);
+
+			// Accept the new connection, make sure it has the
+			// close-on-exec bit set.
+
+			int conn_fd=accept4(fd,
+					    &addr,
+					    &addrlen,
+					    SOCK_CLOEXEC);
+
+			if (conn_fd < 0)
+				return;
+
+			do_pub_request(std::make_shared<external_filedescObj>(
+					       conn_fd
+				       ));
+		}};
+
+	while (1)
+		do_poll();
+}
+
+void vera()
+{
+	int pipefd[2];
+
+	while (pipe2(pipefd, O_CLOEXEC|O_NONBLOCK) < 0)
+	{
+		log_message(_("pipe failed"));
+		sleep(5);
+	}
+
+	pid_t p;
+
+	while ((p=fork()) < 0)
+	{
+		log_message(_("fork failed"));
+		sleep(5);
+	}
+
+	if (p)
+	{
+		close(pipefd[0]);
+		vera_init();
+	}
+	else
+	{
+		close(pipefd[1]);
+
+		polledfd poll_for_exit{pipefd[0],
+			[]
+			(int fd)
+			{
+				_exit(0);
+			}};
+
+		vera_pub();
+	}
+}
+///////////////////////////////////////////////////////////////////////////////
+//
+// Send commands to the vera daemon
+
+external_filedesc connect_vera_priv()
+{
+	auto fd=try_connect_vera_priv();
+
+	if (!fd)
+	{
+		perror(PRIVCMDSOCKET);
+		exit(1);
+	}
+
+	return fd;
 }
 
 void vlad(std::vector<std::string> args)
@@ -575,6 +732,47 @@ void vlad(std::vector<std::string> args)
 		std::cout << s[0] << std::endl;
 		return;
 	}
+
+	if (args.size() >= 1 && args[0] == "status")
+	{
+		auto fd=connect_vera_pub();
+
+		request_status(fd);
+
+		auto status=get_status(fd);
+
+		if (!status)
+		{
+			std::cerr << "Cannot retrieve current container status"
+				  << std::endl;
+			exit(1);
+		}
+
+		std::vector<std::string> containers;
+
+		containers.reserve(status->size());
+
+		for (const auto &[name, status] : *status)
+		{
+			if (args.size() >= 2 && name != args[1])
+				continue;
+			containers.push_back(name);
+		}
+
+		std::sort(containers.begin(), containers.end());
+		for (auto &name:containers)
+		{
+			const auto &[name_ignore, info]=
+				*status->find(name);
+
+			std::cout << name << "\n";
+			std::cout << "    " << info.state << "\n";
+		}
+		return;
+	}
+
+	std::cerr << "Unknown command" << std::endl;
+	exit(1);
 }
 
 int main(int argc, char **argv)

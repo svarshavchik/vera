@@ -8,6 +8,10 @@
 #include <sstream>
 #include <fcntl.h>
 #include <locale>
+#include <algorithm>
+#include <string_view>
+#include <stdio.h>
+#include <string.h>
 
 void send_start(const external_filedesc &efd, std::string name)
 {
@@ -132,6 +136,143 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
 		ret.push_back(s);
 	}
 
+	return ret;
+}
+
+void request_status(const external_filedesc &efd)
+{
+	efd->write_all("status\n");
+}
+
+void proxy_status(const external_filedesc &privfd,
+		  const external_filedesc &requestfd)
+{
+	FILE *fp=tmpfile();
+
+	if (!fp)
+		return;
+
+	char buffer[1024];
+
+	ssize_t n;
+
+	while ((n=read(privfd->fd, buffer, sizeof(buffer))) > 0)
+	{
+		write(fileno(fp),buffer, n);
+	}
+
+	fseek(fp, 0L, SEEK_SET);
+
+	int fpfd=fileno(fp);
+
+	struct iovec iov{};
+	char dummy{0};
+
+	struct msghdr msg{};
+	char buf[CMSG_SPACE(sizeof(fpfd))]={0};
+
+	msg.msg_control=buf;
+	msg.msg_controllen=sizeof(buf);
+
+	auto cmsg = CMSG_FIRSTHDR(&msg);
+	cmsg->cmsg_level=SOL_SOCKET;
+	cmsg->cmsg_type=SCM_RIGHTS;
+	cmsg->cmsg_len=CMSG_LEN(sizeof(fpfd));
+	memcpy(CMSG_DATA(cmsg), &fpfd, sizeof(fpfd));
+
+	msg.msg_iov=&iov;
+	msg.msg_iovlen=1;
+	iov.iov_base=&dummy;
+	iov.iov_len=1;
+	sendmsg(requestfd->fd, &msg, MSG_NOSIGNAL);
+}
+
+std::optional<std::unordered_map<std::string, container_state_info>> get_status(
+	const external_filedesc &requestfd
+)
+{
+	std::optional<std::unordered_map<std::string, container_state_info>
+		      > ret;
+
+	int fd;
+	struct msghdr msg{};
+	char buf[CMSG_SPACE(sizeof(fd))];
+	char dummy;
+	struct iovec iov;
+
+	msg.msg_control=buf;
+	msg.msg_controllen=sizeof(buf);
+
+	msg.msg_iov=&iov;
+	msg.msg_iovlen=1;
+
+	iov.iov_base=&dummy;
+	iov.iov_len=1;
+
+	if (recvmsg(requestfd->fd, &msg, 0) < 0)
+		return ret;
+
+	if (msg.msg_controllen < sizeof(buf))
+		return ret;
+
+	auto cmsg=CMSG_FIRSTHDR(&msg);
+
+	if (cmsg->cmsg_level != SOL_SOCKET ||
+	    cmsg->cmsg_type != SCM_RIGHTS ||
+	    cmsg->cmsg_len != CMSG_LEN(sizeof(fd)))
+	{
+		return ret;
+	}
+	memcpy(&fd, CMSG_DATA(cmsg), sizeof(fd));
+
+	auto efd=std::make_shared<external_filedescObj>(fd);
+
+	std::stringstream s;
+
+	s.imbue(std::locale{"C"});
+
+	{
+		char buffer[1024];
+
+		ssize_t n;
+
+		while ((n=read(efd->fd, buffer, sizeof(buffer))) > 0)
+			s << std::string{buffer, buffer+n};
+	}
+
+	s.seekg(0);
+
+	auto &m=ret.emplace();
+
+	std::string name;
+
+	while (std::getline(s, name))
+	{
+		container_state_info info;
+
+		std::string line;
+
+		while (std::getline(s, line))
+		{
+			if (line.empty())
+				break;
+
+			auto b=line.begin(), e=line.end(),
+				p=std::find(b, e, ':');
+
+			std::string_view keyword{
+				&*b,
+				static_cast<size_t>(p-b)
+			};
+
+			if (keyword == "status" && p != e)
+			{
+				info.state=std::string{++p, e};
+			}
+		}
+
+		m.emplace(std::move(name), std::move(info));
+	}
 	return ret;
 }
 

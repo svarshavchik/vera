@@ -8,6 +8,8 @@
 #include "external_filedesc.H"
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <optional>
 
 // Send requests and process responses over a privileged (root) sockets.
 
@@ -84,5 +86,29 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd);
 
 std::tuple<external_filedesc, external_filedesc> create_fake_request();
 
+// Send a status request to the daemon
+
+void request_status(const external_filedesc &efd);
+
+// Read the status request from the daemon, save it in a temporary file,
+// send the temporary file descriptor to the requesting connection.
+
+void proxy_status(const external_filedesc &privfd,
+		  const external_filedesc &requestfd);
+
+struct container_state_info {
+	std::string state;
+
+	bool operator==(const container_state_info &) const=default;
+};
+
+// Receive and parse the container state.
+
+// Returns a map, the key is the container name. nullopt return indicates an
+// error.
+
+std::optional<std::unordered_map<std::string, container_state_info>> get_status(
+	const external_filedesc &requestfd
+);
 
 #endif
