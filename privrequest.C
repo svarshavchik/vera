@@ -6,6 +6,7 @@
 #include "privrequest.H"
 #include <sys/socket.h>
 #include <sstream>
+#include <fcntl.h>
 #include <locale>
 
 void send_start(const external_filedesc &efd, std::string name)
@@ -132,4 +133,28 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
 	}
 
 	return ret;
+}
+
+std::tuple<external_filedesc, external_filedesc> create_fake_request()
+{
+	int sockets[2];
+
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+		throw "socketpair() failed";
+
+	std::tuple<external_filedesc, external_filedesc> efd{
+		std::make_shared<external_filedescObj>(
+			sockets[0]
+		), std::make_shared<external_filedescObj>(
+			sockets[1]
+		)
+	};
+
+	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0 ||
+	    fcntl(sockets[1], F_SETFD, FD_CLOEXEC) < 0)
+	{
+		throw "fnctl failed";
+	}
+
+	return efd;
 }

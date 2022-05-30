@@ -58,6 +58,7 @@ configdirs.h: config.status
 	echo '#define RUNLEVELCONFIG "$(RUNLEVELCONFIG)"' >>configdirs.h.tmp
 	echo '#define LOCALCONFIGDIR "$(LOCALCONFIGDIR)"' >>configdirs.h.tmp
 	echo '#define OVERRIDECONFIGDIR "$(OVERRIDECONFIGDIR)"' >>configdirs.h.tmp
+	echo '#define LOCALSTATEDIR "$(localstatedir)"' >>configdirs.h.tmp
 	mv configdirs.h.tmp configdirs.h
 
 vera_SOURCES=vera.C

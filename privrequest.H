@@ -77,4 +77,12 @@ void request_current_runlevel(const external_filedesc &efd);
 
 std::vector<std::string> get_current_runlevel(const external_filedesc &efd);
 
+// Create a pair of sockets for the fake requests.
+
+// This is used mostly for unit tests, but we also use this to queue up
+// a synthesized request to switch to the default run level, at startup.
+
+std::tuple<external_filedesc, external_filedesc> create_fake_request();
+
+
 #endif

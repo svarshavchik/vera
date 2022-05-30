@@ -576,7 +576,7 @@ void current_containers_infoObj::check_reexec()
 		fprintf(fp, "1\n%s\n", current_runlevel ?
 			current_runlevel->name.c_str():"default");
 
-		if (fwrite(s.data(), s.size(), 1, fp) != 1 ||
+		if ((s.size() > 0 && fwrite(s.data(), s.size(), 1, fp) != 1) ||
 		    fflush(fp) < 0 ||
 		    fseek(fp, 0L, SEEK_SET) < 0 || ferror(fp))
 		{

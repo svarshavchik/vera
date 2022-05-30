@@ -11,14 +11,21 @@
 #include "messages.H"
 #include "log.H"
 #include "current_containers_info.H"
+#include "external_filedesc.H"
+#include "privrequest.H"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <syslog.h>
 #include <iostream>
 #include <signal.h>
+#include <string.h>
 #include <fstream>
 #include <locale>
+
+#define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
 
 std::string exename;
 
@@ -238,7 +245,72 @@ void check_reload_config(const char *filename)
 
 void vera()
 {
+	umask(077);
+	int fd;
+
+	// Create the privileged command socket.
+
+	while (1)
+	{
+		unlink(PRIVCMDSOCKET ".tmp");
+
+		fd=socket(PF_UNIX, SOCK_STREAM, 0);
+
+		if (fd >= 0)
+		{
+			struct sockaddr_un sun{};
+
+			sun.sun_family=AF_UNIX;
+			strcpy(sun.sun_path, PRIVCMDSOCKET ".tmp");
+
+			// Make sure it's nonblocking and has close-on-exec
+			// set.
+
+			if (fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 &&
+			    fcntl(fd, F_SETFL, O_NONBLOCK) == 0 &&
+			    bind(fd, reinterpret_cast<sockaddr *>(&sun),
+				 sizeof(sun)) == 0 &&
+			    listen(fd, 10) == 0 &&
+			    rename(PRIVCMDSOCKET ".tmp",
+				   PRIVCMDSOCKET) == 0)
+				break;
+			close(fd);
+		}
+
+		log_message(std::string{PRIVCMDSOCKET} +
+			    _(": socket creation failure: ") +
+			    strerror(errno));
+		sleep(5);
+	}
 	umask(022);
+
+	auto cmd_socket=std::make_shared<external_filedescObj>(fd);
+
+	// Poll the command socket for connections. Call proc_do_request()
+	// for each accepted connection.
+
+	polledfd poll_cmd{fd,
+		[]
+		(int fd)
+		{
+			struct sockaddr addr;
+			socklen_t addrlen=sizeof(addr);
+
+			// Accept the new connection, make sure it has the
+			// close-on-exec bit set.
+
+			int conn_fd=accept4(fd,
+					    &addr,
+					    &addrlen,
+					    SOCK_CLOEXEC);
+
+			if (conn_fd < 0)
+				return;
+
+			proc_do_request(std::make_shared<external_filedescObj>(
+						conn_fd
+					));
+		}};
 
 	// Create our cgroup
 
@@ -246,8 +318,18 @@ void vera()
 
 	// Garbage collection on the configuration directory.
 
-	if (!getenv(reexec_envar))
+	bool initial;
+
+	if (getenv(reexec_envar))
 	{
+		initial=false;
+		log_message("restarted");
+	}
+	else
+	{
+		initial=true;
+		log_message("starting");
+
 		proc_gc(installconfigdir(),
 			localconfigdir(),
 			overrideconfigdir(),
@@ -295,14 +377,173 @@ void vera()
 			}),
 		container_install::initial);
 
+	if (initial)
+	{
+		// Create a fake request to switch to the default runlevel
+		//
+		// This makes the daemon come up with the default runlevel.
+		auto [socketa, socketb] = create_fake_request();
+
+		request_runlevel(socketa, "default");
+
+		proc_do_request(socketb);
+	}
+
 	// Enter the event loop
 
 	while (1)
 	{
 		do_poll();
+		proc_check_reexec();
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//
+// Send commands to the vera daemon
+
+external_filedesc connect_vera_priv()
+{
+	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
+	struct sockaddr_un sun{};
+
+	sun.sun_family=AF_UNIX;
+	strcpy(sun.sun_path, PRIVCMDSOCKET);
+
+	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
+	{
+		perror(PRIVCMDSOCKET);
+		exit(1);
+	}
+
+	return std::make_shared<external_filedescObj>(fd);
+}
+
+void vlad(std::vector<std::string> args)
+{
+	if (args.size() == 2 && args[0] == "start")
+	{
+		auto fd=connect_vera_priv();
+
+		send_start(fd, args[1]);
+
+		auto ret=get_start_status(fd);
+
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
+		if (!get_start_result(fd))
+		{
+			std::cerr << args[1]
+				  << _(": could not be started, check the "
+				       "log files for more information")
+				  << std::endl;
+			exit(1);
+		}
+		return;
+	}
+
+	if (args.size() == 2 && args[0] == "stop")
+	{
+		auto fd=connect_vera_priv();
+
+		send_stop(fd, args[1]);
+
+		auto ret=get_stop_status(fd);
+
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
+		wait_stop(fd);
+		return;
+	}
+
+	if (args.size() == 2 && args[0] == "restart")
+	{
+		auto fd=connect_vera_priv();
+
+		send_restart(fd, args[1]);
+
+		auto ret=get_restart_status(fd);
+
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
+		int rc=wait_restart(fd);
+
+		if (WIFSIGNALED(rc))
+		{
+			std::cerr << args[1]
+				  << _(": restart terminated by signal ")
+				  << WSTOPSIG(rc)
+				  << std::endl;
+			exit(1);
+		}
+		rc=WEXITSTATUS(rc);
+
+		if (rc)
+		{
+			std::cerr << args[1]
+				  << _(": could not be restarted, check the "
+				       "log files for more information")
+				  << std::endl;
+			exit(rc);
+		}
+		return;
+	}
+
+	if (args.size() == 2 && args[0] == "reload")
+	{
+		auto fd=connect_vera_priv();
+
+		send_reload(fd, args[1]);
+
+		auto ret=get_reload_status(fd);
+
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
+		int rc=wait_reload(fd);
+
+		if (WIFSIGNALED(rc))
+		{
+			std::cerr << args[1]
+				  << _(": reload terminated by signal ")
+				  << WSTOPSIG(rc)
+				  << std::endl;
+			exit(1);
+		}
+		rc=WEXITSTATUS(rc);
+
+		if (rc)
+		{
+			std::cerr << args[1]
+				  << _(": could not be reloaded, check the "
+				       "log files for more information")
+				  << std::endl;
+			exit(rc);
+		}
+		return;
+	}
+
+	if (args.size() == 1 && args[0] == "reexec")
+	{
+		request_reexec(connect_vera_priv());
+		return;
+	}
+}
 
 int main(int argc, char **argv)
 {
@@ -320,6 +561,13 @@ int main(int argc, char **argv)
 	else
 		++slash;
 
-	vera();
+	if (exename.substr(slash) == "vlad")
+	{
+		vlad({argv+1, argv+argc});
+	}
+	else
+	{
+		vera();
+	}
 	return 0;
 }
