@@ -543,6 +543,38 @@ void vlad(std::vector<std::string> args)
 		request_reexec(connect_vera_priv());
 		return;
 	}
+
+	if (args.size() == 2 && args[0] == "switch")
+	{
+		request_runlevel(connect_vera_priv(), args[1]);
+		return;
+	}
+
+	if (args.size() == 1 && args[0] == "current")
+	{
+		auto fd=connect_vera_priv();
+
+		request_current_runlevel(fd);
+
+		auto s=get_current_runlevel(fd);
+
+		if (s.empty())
+		{
+			std::cerr << _("Cannot retrieve current runlevel")
+				  << std::endl;
+			exit(1);
+		}
+
+		// Make things pretty.
+		if (s[0].substr(0, std::size(RUNLEVEL_PREFIX)-1) ==
+		    RUNLEVEL_PREFIX)
+		{
+			s[0]=s[0].substr(std::size(RUNLEVEL_PREFIX)-1);
+		}
+
+		std::cout << s[0] << std::endl;
+		return;
+	}
 }
 
 int main(int argc, char **argv)
