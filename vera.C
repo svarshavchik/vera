@@ -821,12 +821,111 @@ void vlad(std::vector<std::string> args)
 	{
 		do_override(args[1], "masked");
 	}
+
+	if (args.size() >= 1 && args[0] == "default")
+	{
+		if (args.size() > 1)
+		{
+			exit(proc_set_runlevel_default(
+				     runlevelconfig(),
+				     args[1],
+				     []
+				     (const std::string &error)
+				     {
+					     std::cerr << error << std::endl;
+				     }) ? 0:1);
+		}
+
+		auto rl=load_runlevelconfig();
+
+		for (auto &[name, aliases] : rl)
+		{
+			for (auto &alias:aliases)
+			{
+				if (alias == "default")
+				{
+					std::cout << name << std::endl;
+					return;
+				}
+			}
+		}
+
+		std::cerr << _("Cannot determine default runlevel")
+			  << std::endl;
+		exit(1);
+	}
+
+	if (args.size() >= 2 && args[0] == "validate")
+	{
+		std::ifstream i{args[1]};
+
+		if (!i)
+		{
+			std::cerr << args[1] << ": " << strerror(errno)
+				  << std::endl;
+			exit(1);
+		}
+
+		size_t n=args[1].rfind('/');
+
+		std::filesystem::path relative_path;
+
+		try {
+
+			relative_path=args[1].substr(n == args[1].npos
+						     ? 0:n+1);
+
+			if (args.size() >= 3)
+				relative_path=args[2];
+		} catch (...) {
+			std::cerr << "Invalid filename" << std::endl;
+			exit(1);
+		}
+
+		proc_new_container_set set;
+		bool error=false;
+
+		try {
+			set=proc_load(i, args[1], relative_path, true,
+				      [&]
+				      (const auto &msg)
+				      {
+					      std::cerr << msg << std::endl;
+					      error=true;
+				      });
+		} catch (...) {
+			std::cerr << args[1] << _(": parsing error")
+				  << std::endl;
+			exit(1);
+		}
+
+		if (!error)
+		{
+			std::vector<proc_container> list;
+
+			list.reserve(set.size());
+			for (auto &c:set)
+				list.push_back(c->new_container);
+			std::sort(list.begin(), list.end(),
+				  []
+				  (const auto &a, const auto &b)
+				  {
+					  return a->name < b->name;
+				  });
+
+			for (auto &c:list)
+				std::cout << c->name << std::endl;
+		}
+		exit(error ? 1:0);
+	}
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);
 }
 
 int main(int argc, char **argv)
 {
+	std::locale::global(std::locale{""});
+
 	// Set up logging.
 
 	log_to_syslog=getpid() == 1 ? log_to_real_syslog:log_to_stdout;

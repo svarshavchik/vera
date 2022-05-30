@@ -1284,7 +1284,9 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 
 	if (iter != runlevel_containers.end())
 	{
-		new_runlevel=iter->second;
+		// Do not switch to the same runlevel
+		if (iter->second != current_runlevel)
+			new_runlevel=iter->second;
 	}
 	else
 	{
@@ -1298,7 +1300,9 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 			return _("No such run level: ") + runlevel;
 		}
 
-		new_runlevel=iter->first;
+		// Do not switch to the same runlevel
+		if (iter->first != current_runlevel)
+			new_runlevel=iter->first;
 	}
 
 	find_start_or_stop_to_do();

@@ -28,6 +28,7 @@ bool proc_validpath(const std::string_view &path)
 {
 	// cgroup directories are formed by replacing all /s with : and
 	// appending one more :, so the maximum path.size() is NAME_MAX-1.
+	// (this is checked later).
 
 	if (path.size() == 0 || path.size() >= NAME_MAX
 	    || SPECIAL(*path.data()))
@@ -893,7 +894,8 @@ proc_new_container_set proc_load(
 
 		if (name.size()+1 > NAME_MAX)
 		{
-			error(name + _(": maximum container size exceeded"));
+			error(name + _(": maximum size of container's name"
+				       " exceeded"));
 			results.clear();
 			return results;
 		}

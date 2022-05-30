@@ -1,5 +1,7 @@
-*.inc.H
+*.8
 *.a
+*.inc.H
+*.stamp
 *.tar.gz
 *.tar.xz
 m4
@@ -18,6 +20,7 @@ config.sub
 configdirs.h
 configure
 depcomp
+INSTALL
 install-sh
 missing
 stamp-h1
@@ -28,4 +31,5 @@ testdepcomputations
 testpoller
 testprocloader
 vera
+vera.8.in
 vlad

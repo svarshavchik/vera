@@ -111,3 +111,59 @@ check-am:
 	./testcontroller2
 	$(VALGRIND) ./testcontroller2 testreexec_nofork
 	./testcontroller2 testreexec_do '$(VALGRIND) ./testcontroller2'
+
+man8_MANS=vera.8 vlad.8
+
+EXTRA_DIST += init.8 vlad.8 vera.8.in
+
+vera.8: vera.8.in Makefile
+	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~;   # \
+	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~;                # \
+	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~;          # \
+	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~'                  \
+					<$(srcdir)/vera.8.in >vera.8.tmp
+	mv -f vera.8.tmp vera.8
+
+CLEANFILES += vera.8
+
+EXTRA_DIST += INSTALL
+BUILT_SOURCES += INSTALL
+
+if HAVE_DOCS
+init.8: vera.man.stamp
+	touch init.8
+
+vera.8.in: vera.man.stamp
+	touch vera.8.in
+
+vlad.8: vera.man.stamp
+	touch vlad.8
+
+vera.man.stamp: vera.xml
+	rm -rf veraman.tmp
+	mkdir -p veraman.tmp
+	xsltproc  --nonet -o veraman.tmp/ http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $(srcdir)/vera.xml
+	mv veraman.tmp/vera.8 veraman.tmp/vera.8.in
+	mv veraman.tmp/* .
+	rm -rf veraman.tmp
+	touch vera.man.stamp
+
+CLEANFILES += init.8 vera.8.in vlad.8 vera.man.stamp
+
+INSTALL: vera.html.stamp
+	touch INSTALL
+
+vera.html.stamp: vera.xml
+	rm -rf html.tmp
+	xsltproc --nonet -o html.tmp/ \
+	   --stringparam chunk.first.sections 1 \
+	   --stringparam use.id.as.filename 1 \
+           http://docbook.sourceforge.net/release/xsl/current/xhtml/chunk.xsl \
+           vera.xml
+	elinks -dump -no-references <html.tmp/INSTALL.html >INSTALL.tmp
+	mv INSTALL.tmp INSTALL
+	rm -rf html.tmp
+	touch vera.html.stamp
+
+CLEANFILES += INSTALL
+endif
