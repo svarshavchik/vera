@@ -99,6 +99,8 @@ void proxy_status(const external_filedesc &privfd,
 struct container_state_info {
 	std::string state;
 
+	bool enabled=false;
+
 	bool operator==(const container_state_info &) const=default;
 };
 
@@ -106,9 +108,20 @@ struct container_state_info {
 
 // Returns a map, the key is the container name. nullopt return indicates an
 // error.
+//
+// container_state_info does not reflect overrides.
 
 std::optional<std::unordered_map<std::string, container_state_info>> get_status(
 	const external_filedesc &requestfd
 );
+
+// Update the container_state_info map to reflect the current overrides
+
+void update_status_overrides(
+	std::unordered_map<std::string, container_state_info> &status,
+	const std::string &globaldir,
+	const std::string &localdir,
+	const std::string &overridedir);
+
 
 #endif

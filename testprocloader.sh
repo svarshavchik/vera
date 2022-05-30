@@ -392,6 +392,10 @@ $VALGRIND ./testprocloader setoverride overridedir sub/dir none
 
 test ! -f overridedir/sub/dir
 
+test ! -d overridedir/sub
+
+test -d overridedir
+
 $VALGRIND ./testprocloader setoverride overridedir sub/dir enabled
 
 cat >loadtest.txt <<EOF
@@ -480,6 +484,40 @@ EOF
 diff -U 3 loadtest.expected loadtest.out
 
 ./testprocloader genrunlevels loadtest.txt
+
+rm -rf globaldir localdir overridedir
+mkdir -p globaldir localdir overridedir
+
+cat >globaldir/name1 <<EOF
+name: name1
+version: 1
+EOF
+
+cat >globaldir/name2 <<EOF
+name: name1
+version: 1
+EOF
+
+cat >globaldir/name3 <<EOF
+name: name1
+version: 1
+EOF
+
+echo "masked" >overridedir/name1
+
+echo "enabled" >overridedir/name2
+
+cat >loadtest.txt <<EOF
+name1:masked:0
+name2/a:stopped:1
+name2/b:stopped:1
+name2:stopped:1
+name3:stopped:0
+EOF
+
+$VALGRIND ./testprocloader testupdatestatusoverrides name2 name2/a name2/b name3 | sort >loadtest.out
+
+diff -U 3 loadtest.txt loadtest.out
 
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected

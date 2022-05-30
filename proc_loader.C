@@ -87,8 +87,6 @@ static void proc_find(const std::filesystem::path &config_global,
 
 	auto fulllocal=config_local / subdir;
 
-	auto fulloverride=config_override / subdir;
-
 	std::error_code ec;
 
 	std::filesystem::directory_iterator b{
@@ -1072,6 +1070,20 @@ void proc_set_override(
 	if (override_type == "none")
 	{
 		unlink( (fullpath / path).c_str());
+
+		std::filesystem::path subdir{path};
+
+		while (subdir.has_relative_path())
+		{
+			subdir=subdir.parent_path();
+
+			if (subdir.empty())
+				break;
+
+			if (rmdir( (fullpath / subdir).c_str()) < 0)
+				break;
+		}
+
 		return;
 	}
 
@@ -1111,6 +1123,21 @@ void proc_set_override(
 	}
 }
 
+static proc_override read_override(std::istream &i)
+{
+	std::string s;
+
+	std::getline(i, s);
+
+	if (s == "masked")
+		return proc_override::masked;
+
+	if (s == "enabled")
+		return proc_override::enabled;
+
+	return proc_override::none;
+}
+
 proc_new_container_set proc_load_all(
 	const std::string &config_global,
 	const std::string &config_local,
@@ -1145,15 +1172,16 @@ proc_new_container_set proc_load_all(
 					  return;
 				  }
 
-				  std::string s;
-
-				  std::getline(i, s);
-
-				  if (s == "masked")
+				  switch (read_override(i)) {
+				  case proc_override::masked:
 					  return;
 
-				  if (s == "enabled")
+				  case proc_override::enabled:
 					  enabled=true;
+					  break;
+				  case proc_override::none:
+					  break;
+				  }
 			  }
 
 			  std::string name{
@@ -1181,6 +1209,43 @@ proc_new_container_set proc_load_all(
 		  });
 
 	return containers;
+}
+
+std::unordered_map<std::string, proc_override> proc_get_overrides(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override
+)
+{
+	std::unordered_map<std::string, proc_override> ret;
+
+	proc_find(config_global,
+		  config_local,
+		  config_override,
+		  [&]
+		  (const auto &global_path,
+		   const auto &local_path,
+		   const auto &override_path,
+		   const auto &relative_path)
+		  {
+			  if (!override_path)
+				  return;
+
+			  std::ifstream i{*override_path};
+
+			  if (!i.is_open())
+				  return;
+
+			  auto o=read_override(i);
+
+			  if (o != proc_override::none)
+				  ret.emplace(relative_path, o);
+		  },
+		  [&]
+		  (const auto &, const auto &)
+		  {
+		  });
+	return ret;
 }
 
 ///////////////////////////////////////////////////////////////////////////

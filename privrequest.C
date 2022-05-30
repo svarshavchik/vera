@@ -4,6 +4,7 @@
 */
 #include "config.h"
 #include "privrequest.H"
+#include "proc_loader.H"
 #include <sys/socket.h>
 #include <sstream>
 #include <fcntl.h>
@@ -273,7 +274,49 @@ std::optional<std::unordered_map<std::string, container_state_info>> get_status(
 
 		m.emplace(std::move(name), std::move(info));
 	}
+
 	return ret;
+}
+
+void update_status_overrides(
+	std::unordered_map<std::string, container_state_info> &status,
+	const std::string &globaldir,
+	const std::string &localdir,
+	const std::string &overridedir)
+{
+	auto overrides=proc_get_overrides(globaldir, localdir, overridedir);
+
+	// Masked containers won't be in the status, let's put them there.
+
+	for (auto &[name, override_status] : overrides)
+	{
+		if (override_status == proc_override::masked)
+		{
+			status[name].state="masked";
+		}
+	}
+
+	for (auto &[name, info] : status)
+	{
+		std::filesystem::path path{name};
+
+		while (!path.empty())
+		{
+			auto iter=overrides.find(path);
+
+			if (iter != overrides.end())
+				switch (iter->second) {
+				case proc_override::masked:
+					break;
+				case proc_override::none:
+					break;
+				case proc_override::enabled:
+					info.enabled=true;
+					break;
+				}
+			path=path.parent_path();
+		}
+	}
 }
 
 std::tuple<external_filedesc, external_filedesc> create_fake_request()

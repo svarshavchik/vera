@@ -6,6 +6,7 @@
 #include "config.h"
 #include "unit_test.H"
 #include "proc_loader.H"
+#include "privrequest.H"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -246,6 +247,26 @@ int main(int argc, char **argv)
 		if (!proc_set_runlevel_config(args[2], default_runlevels()))
 		{
 			exit(1);
+		}
+		return 0;
+	}
+
+	if (args.size() > 2 && args[1] == "testupdatestatusoverrides")
+	{
+		std::unordered_map<std::string, container_state_info> status;
+
+		for (size_t n=2; n<args.size(); ++n)
+		{
+			status[args[n]].state="stopped";
+		}
+
+		update_status_overrides(status, "globaldir", "localdir",
+					"overridedir");
+
+		for (auto &[name, info] : status)
+		{
+			std::cout << name << ":" << info.state << ":"
+				  << (info.enabled ? "1":"0") << "\n";
 		}
 		return 0;
 	}

@@ -100,7 +100,7 @@ proc_new_container_set proc_load(
 enum class proc_override {
 	none,	 //!< No overrides
 	masked,	 //!< Container masked, as if it does not exist.
-	disabled, //!< Container exists, but is not enabled in its runlevel
+	enabled, //!< Container is enabled (in its runlevel, presumably).
 };
 
 //! Install an override entry.
@@ -140,6 +140,13 @@ proc_new_container_set proc_load_all(
 	const std::function<void (const std::string &)> &warning,
 	const std::function<void (const std::string &)> &error
 );
+
+// Return the current overrides
+
+std::unordered_map<std::string, proc_override> proc_get_overrides(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override);
 
 //! Return the default runlevel configuration
 

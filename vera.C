@@ -576,6 +576,30 @@ external_filedesc connect_vera_priv()
 	return fd;
 }
 
+void do_override(const std::string &name, const char *type)
+{
+	struct stat stat_buf;
+
+	if (stat((INSTALLCONFIGDIR "/" + name).c_str(), &stat_buf) ||
+	    !S_ISREG(stat_buf.st_mode))
+	{
+		std::cerr << name << " is not an existing unit,"
+			  << std::endl;
+		exit(1);
+	}
+
+	int exit_code=0;
+
+	proc_set_override(OVERRIDECONFIGDIR, name, type,
+			  [&]
+			  (const std::string &s)
+			  {
+				  std::cerr << s << "\n";
+				  exit_code=1;
+			  });
+	exit(exit_code);
+}
+
 void vlad(std::vector<std::string> args)
 {
 	if (args.size() == 2 && args[0] == "start")
@@ -748,6 +772,13 @@ void vlad(std::vector<std::string> args)
 			exit(1);
 		}
 
+		update_status_overrides(
+			*status,
+			INSTALLCONFIGDIR,
+			LOCALCONFIGDIR,
+			OVERRIDECONFIGDIR
+		);
+
 		std::vector<std::string> containers;
 
 		containers.reserve(status->size());
@@ -766,11 +797,30 @@ void vlad(std::vector<std::string> args)
 				*status->find(name);
 
 			std::cout << name << "\n";
-			std::cout << "    " << info.state << "\n";
+			std::cout << "    " << info.state;
+
+			if (info.enabled)
+				std::cout << " enabled";
+
+			std::cout << "\n";
 		}
 		return;
 	}
 
+	if (args.size() == 2 && args[0] == "enable")
+	{
+		do_override(args[1], "enabled");
+	}
+
+	if (args.size() == 2 && args[0] == "disable")
+	{
+		do_override(args[1], "none");
+	}
+
+	if (args.size() == 2 && args[0] == "mask")
+	{
+		do_override(args[1], "masked");
+	}
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);
 }
@@ -793,6 +843,7 @@ int main(int argc, char **argv)
 
 	if (exename.substr(slash) == "vlad")
 	{
+		umask(022);
 		vlad({argv+1, argv+argc});
 	}
 	else
