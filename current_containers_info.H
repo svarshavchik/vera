@@ -282,8 +282,16 @@ private:
 	void do_stop_runner(const current_container &);
 	void do_remove(const current_container &, bool send_sigkill);
 
+
+	void prepare_respawn(
+		const current_container &cc,
+		state_started &state);
+
+	void respawn(
+		const current_container &cc,
+		state_started &state);
+
 	void starting_command_finished(const current_container &cc,
-				       bool oneshot,
 				       int status);
 	proc_container_timer create_sigkill_timer(
 		const proc_container &pc
@@ -326,6 +334,7 @@ private:
 		current_container iter,
 		external_filedesc requester
 	);
+
 public:
 	void stopped(const std::string &s);
 
@@ -373,6 +382,19 @@ proc_container_runner create_runner(
 	const current_containers_info &all_containers,
 	const current_container &cc,
 	const std::string &command,
+	const std::function<void (const current_containers_callback_info &,
+				  int)> &done
+);
+
+/*! Recreate a running process
+
+After re-execing we reinstall runners that we know about.
+*/
+
+proc_container_runner reinstall_runner(
+	pid_t p,
+	const current_containers_info &all_containers,
+	const proc_container &container,
 	const std::function<void (const current_containers_callback_info &,
 				  int)> &done
 );

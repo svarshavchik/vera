@@ -19,6 +19,8 @@ static std::vector<std::string> logged_runners;
 
 static pid_t next_pid=1;
 
+void populated(const proc_container &container, bool isit);
+
 #ifndef UNIT_TEST_RUNNER
 
 static pid_t get_next_pid(const proc_container &container,
@@ -45,6 +47,7 @@ static pid_t get_next_pid(const proc_container &container,
 
 	logged_runners.push_back(o.str());
 
+	populated(container, true);
 	return pid;
 }
 
@@ -87,8 +90,6 @@ void test_advance(time_t interval)
 	fake_time += interval;
 	run_timers();
 }
-
-void populated(const proc_container &container, bool isit);
 
 ///////////////////////////////////////////////////////////////////////////
 //

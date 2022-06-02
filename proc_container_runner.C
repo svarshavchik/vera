@@ -23,7 +23,7 @@
 //! wait()ed for, and we find a null weak pointer here which we'll remove.
 
 typedef std::unordered_map<pid_t,
-			   std::weak_ptr<const proc_container_runnerObj>
+			   std::weak_ptr<proc_container_runnerObj>
 			   > current_runners;
 
 static current_runners runners;
@@ -55,6 +55,27 @@ void proc_container_runnerObj::invoke(int wstatus) const
 
 	done(info, wstatus);
 	me->find_start_or_stop_to_do();
+}
+
+void update_runner_containers(const current_containers &new_current_containers)
+{
+	for (auto &[pid, wrunner] : runners)
+	{
+		auto runner=wrunner.lock();
+
+		if (!runner)
+			continue;
+
+		auto old_container=runner->container.lock();
+
+		if (!old_container)
+			continue;
+
+		auto iter=new_current_containers.find(old_container);
+
+		if (iter != new_current_containers.end())
+			runner->container=iter->first;
+	}
 }
 
 proc_container_runner create_runner(
@@ -205,6 +226,17 @@ proc_container_runner create_runner(
 	}
 	close(exec_pipe[0]);
 
+	return reinstall_runner(p, all_containers, container, done);
+}
+
+proc_container_runner reinstall_runner(
+	pid_t p,
+	const current_containers_info &all_containers,
+	const proc_container &container,
+	const std::function<void (const current_containers_callback_info &,
+				  int)> &done
+)
+{
 	auto runner=std::make_shared<proc_container_runnerObj>(
 		p, all_containers, container, done);
 

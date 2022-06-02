@@ -2242,6 +2242,163 @@ void testmultiplestart()
 		throw "unexpected starting failure";
 }
 
+void testrespawn()
+{
+	auto a=std::make_shared<proc_new_containerObj>("respawn");
+
+	a->new_container->starting_command="start";
+	a->new_container->start_type=start_type_t::respawn;
+	a->new_container->respawn_attempts=2;
+	a->new_container->respawn_limit=60;
+
+	proc_containers_install({
+			a
+		}, container_install::update);
+
+	proc_container_start("respawn");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: start pending",
+			"respawn: cgroup created",
+			"respawn: started",
+		})
+		throw "unexpected respawn starting state changes.";
+
+	if (logged_runners != std::vector<std::string>{
+			"respawn: /bin/sh|-c|start (pid 1)"
+		})
+	{
+		throw "did not execute the respawn process";
+	}
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	do_poll(0);
+
+	runner_finished(1, 1);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: termination signal: 1",
+			"respawn: sending SIGTERM",
+		})
+		throw "unexpected state changes after first respawn.";
+
+	logged_state_changes.clear();
+	test_advance(SIGTERM_TIMEOUT-1);
+	if (logged_state_changes != std::vector<std::string>{
+		})
+		throw "unexpected state change before timeout expires.";
+
+	test_advance(1);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: sending SIGKILL",
+		})
+		throw "unexpected state changes after first respawn.";
+	logged_state_changes.clear();
+	populated(a->new_container, false);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: cgroup removed",
+			"respawn: restart failed, delaying before trying again",
+		})
+		throw "unexpected state changes before delay starts.";
+	logged_state_changes.clear();
+	test_advance(a->new_container->respawn_limit-1-SIGTERM_TIMEOUT);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+		})
+		throw "unexpected state changes before delay ends.";
+	test_advance(1);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: restarting after a failure",
+			"respawn: restarting",
+			"respawn: cgroup created",
+		})
+		throw "unexpected state changes during restart";
+	if (logged_runners != std::vector<std::string>{
+			"respawn: /bin/sh|-c|start (pid 2)"
+		})
+	{
+		throw "did not execute the 2nd respawn process";
+	}
+	logged_state_changes.clear();
+	logged_runners.clear();
+
+	runner_finished(2, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: sending SIGTERM",
+		})
+		throw "unexpected state changes after second respawn";
+	logged_state_changes.clear();
+	logged_runners.clear();
+	do_poll(0);
+	populated(a->new_container, false);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: cgroup removed",
+			"respawn: restarting",
+			"respawn: cgroup created",
+		})
+		throw "unexpected state changes after third respawn";
+	if (logged_runners != std::vector<std::string>{
+			"respawn: /bin/sh|-c|start (pid 3)"
+		})
+	{
+		throw "did not execute the 3rd respawn process";
+	}
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	do_poll(0);
+	runner_finished(3, 0);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: sending SIGTERM",
+		})
+		throw "unexpected state changes after third respawn";
+	logged_state_changes.clear();
+	do_poll(0);
+	populated(a->new_container, false);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: cgroup removed",
+			"respawn: restarting too fast, delaying"
+		})
+	{
+		throw "unexpected state changes when expecting delay";
+	}
+	logged_state_changes.clear();
+	do_poll(0);
+	test_advance(a->new_container->respawn_limit-1);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+		})
+		throw "unexpected state changes before 2nd delay ends.";
+	test_advance(1);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: restarting",
+			"respawn: cgroup created",
+		})
+		throw "unexpected state changes after fourth respawn";
+	logged_state_changes.clear();
+	proc_container_stop("respawn");
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: stop pending",
+			"respawn: removing",
+			"respawn: sending SIGTERM",
+		})
+		throw "unexpected state changes after stop (1)";
+	logged_state_changes.clear();
+	do_poll(0);
+	populated(a->new_container, false);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: cgroup removed",
+			"respawn: stopped",
+		})
+		throw "unexpected state changes after stop (2)";
+}
+
 int main()
 {
 	alarm(60);
@@ -2375,6 +2532,10 @@ int main()
 		test_reset();
 		test="multiplestart";
 		testmultiplestart();
+
+		test_reset();
+		test="respawn";
+		testrespawn();
 
 		test_reset();
 	} catch (const char *e)

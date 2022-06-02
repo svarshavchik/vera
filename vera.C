@@ -403,7 +403,7 @@ void vera_init()
 
 	while (1)
 	{
-		do_poll();
+		do_poll(static_cast<int>(run_timers() * 1000));
 		proc_check_reexec();
 	}
 }

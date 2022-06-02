@@ -63,11 +63,31 @@ void runner_finished(pid_t pid, int wstatus);
 //!
 //! - oneshot: the container starts immediately, after that starting command
 //!   gets executed
+//!
+//! - respawn: same as oneshot, and gets restarted automatically when
+//!   all processes terminate.
 
 enum class start_type_t {
 	forking,
 	oneshot,
+	respawn,
 };
+
+inline bool is_oneshot_like(start_type_t start_type)
+{
+	bool oneshot=false;
+
+	switch(start_type) {
+	case start_type_t::forking:
+		break;
+	case start_type_t::oneshot:
+	case start_type_t::respawn:
+		oneshot=true;
+		break;
+	}
+
+	return oneshot;
+}
 
 //! Container stop_type
 
@@ -97,6 +117,14 @@ public:
 
 	//! The container's starting type
 	start_type_t start_type{start_type_t::forking};
+
+	//! respawn: limit on how many times the process can be respawned.
+
+	size_t respawn_attempts=3;
+
+	//! Allow up to respawn_attempts within the same respawn_limit
+
+	time_t respawn_limit=30;
 
 	//! The container's stopping type
 	stop_type_t stop_type{stop_type_t::manual};

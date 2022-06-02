@@ -75,13 +75,13 @@
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <group choice='req'>
-	    <arg>start</arg>
-	    <arg>stop</arg>
-	    <arg>restart</arg>
-	    <arg>reload</arg>
-	    <arg>mask</arg>
-	    <arg>disable</arg>
-	    <arg>enable</arg>
+	    <arg choice='plain'>start</arg>
+	    <arg choice='plain'>stop</arg>
+	    <arg choice='plain'>restart</arg>
+	    <arg choice='plain'>reload</arg>
+	    <arg choice='plain'>mask</arg>
+	    <arg choice='plain'>disable</arg>
+	    <arg choice='plain'>enable</arg>
 	  </group>
 	  <arg choice='req'><replaceable>unit</replaceable></arg>
 	</cmdsynopsis>
@@ -89,12 +89,12 @@
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <group choice='req'>
-	    <arg>status</arg>
-	    <arg>current</arg>
-	    <arg>switch <replaceable>runlevel</replaceable></arg>
-	    <arg>default</arg>
-	    <arg>default <replaceable>runlevel</replaceable></arg>
-	    <arg>reexec</arg>
+	    <arg choice='plain'>status</arg>
+	    <arg choice='plain'>current</arg>
+	    <arg choice='plain'>switch <replaceable>runlevel</replaceable></arg>
+	    <arg choice='plain'>default</arg>
+	    <arg choice='plain'>default <replaceable>runlevel</replaceable></arg>
+	    <arg choice='plain'>reexec</arg>
 	  </group>
 	</cmdsynopsis>
 
@@ -138,14 +138,17 @@
 	</itemizedlist>
 
 	<para>
-	  The term <quote>unit</quote> refers to a unique label that gets
-	  assigned to each <command>vera</command>-started process
-	  (or a collection of processes).
+	  The term <quote>unit</quote> refers to each
+	  <command>vera</command>-started process
+	  (or a collection of processes). Each unit has a unit name, or label,
+	  that's used in <command>vera</command>/<command>vlad</command>
+	  commands to refer to it.
 	  The <quote>start</quote> and <quote>stop</quote> commands start and
 	  stop individual units. Units that do not get started automatically
 	  (see <quote>runlevels</quote> below) get started on demand by the
 	  <quote>start</quote> command, and <quote>stop</quote> shuts down the
-	  unit, irrespective of whether it was started automatically or manually.
+	  unit, irrespective of whether it was started automatically or
+	  manually.
 	</para>
 
 	<para>
@@ -273,11 +276,30 @@
 	  </note>
 
 	  <para>
-	    <quote>reexec</quote> restarts the <command>vera</command> system
-	    process. The only time this is needed is after installing a new
-	    version of <command>vera</command> or one of the few system libraries
-	    it uses.
+	    <quote>reexec</quote> signals the <command>vera</command> system
+	    process to restart itself. This is needed after installing a new
+	    version of <command>vera</command> or one of the system libraries
+	    it uses. It's possible that <command>vera</command> will not
+	    restart immediately. If any units are in the middle of being
+	    stopped, started, restarted, or respawned a
+	    <quote>reexec</quote> gets delayed until
+	    all pending activity finishes.
 	  </para>
+
+	  <note>
+	    <para>
+	      This can be a lengthy delay when there's a respawned unit that
+	      reached its maximum number of attempts and it's waiting until
+	      it's respawnabel.
+	      Additionally, <quote>reexec</quote> resets all respawned units'
+	      counters and limits.
+	    </para>
+
+	    <para>
+	      This is not considered critical, a <quote>reexec</quote> is
+	      not something that normally happens.
+	    </para>
+	  </note>
 	</refsect2>
       </refsect1>
 
@@ -393,13 +415,15 @@
 	    <itemizedlist>
 	      <listitem>
 		<para>
-		  <quote><replaceable>name</replaceable> runlevel</quote> are
+		  <quote>system/runlevel
+		  <replaceable>name</replaceable></quote> are
 		  internally-generated unit specifications that represent
-		  runlevels. This is done by appending <quote>runlevel</quote>
+		  runlevels. This is done by prepending
+		  <quote>system/runlevel</quote>
 		  to the name of each runlevel, as listed in
 		  <xref linkend="runlevels" />, above (examples:
-		  <quote>graphical runlevel</quote>,
-		  <quote>reboot runlevel</quote>).
+		  <quote>system/runlevel graphical</quote>,
+		  <quote>system/runlevel reboot</quote>).
 		</para>
 	      </listitem>
 	    </itemizedlist>
@@ -408,13 +432,15 @@
 
 	<refsect2>
 	  <title>Format of unit specification files</title>
+	  <para>
+	    This section describes the format of unit specification files.
+	  </para>
 	  <cmdsynopsis>
 	    <command>vlad</command>
-	    <arg>validate</arg>
+	    <arg choice='plain'>validate</arg>
 	    <arg choice='req'>filename</arg>
 	  </cmdsynopsis>
 	  <para>
-	    This section describes the format of unit specification files.
 	    The
 	    <quote>validate</quote> command reads the
 	    <replaceable>filename</replaceable> and checks that it meets
@@ -430,12 +456,13 @@ Description: "System Scheduler"
 Requires:
     - time_service
     - synchronization_service
+
 Required-by:
     - calendar
 
 Enabled:
-    - multi-user runlevel
-    - graphical runlevel
+    - system/multi-user runlevel
+    - system/graphical runlevel
 
 Starting:
     type: forking
@@ -558,6 +585,328 @@ Version: 1</literallayout>
 	      </citerefentry>'s assistance.
 	  </para>
 	</refsect2>
+
+	<refsect2 id="startstop">
+	  <title><quote>Starting</quote> and <quote>Stopping</quote></title>
+
+	  <para>
+	    The <quote>Starting</quote> key in a unit specification file contains
+	    other <quote>Key: value</quote>
+	    pairs that specify how this unit gets started.
+	  </para>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term><quote>command: "/usr/bin/scheduler start"</quote></term>
+	      <listitem>
+		<para>
+		  This key gives the command that starts the unit's programs.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><quote>type: forking</quote></term>
+	      <listitem>
+		<para>
+		  The starting type specifies how the unit gets started.
+		  The possible values for <quote>Type</quote> are:
+		</para>
+
+		<variablelist>
+		  <varlistentry>
+		    <term>forking (default)</term>
+		    <listitem>
+		      <para>
+			The starting command forks and its child process
+			is the permanent unit process. The original process
+			terminates.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry>
+		    <term>oneshot</term>
+		    <listitem>
+		      <para>
+			The starting process is the main unit process.
+			After the starting process starts running the unit
+			is considered to be fully started.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry>
+		    <term>respawn</term>
+		    <listitem>
+		      <para>
+			The starting process is the main unit process.
+			After the starting process starts running the unit
+			is considered to be fully started.
+		      </para>
+
+		      <para>
+			When the starting process terminates it gets
+			immediately restarted.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+		</variablelist>
+
+		<note>
+		  <para>
+		    <quote>respawn</quote> require a starting command.
+		    For other starting types:
+		    an unspecified starting command has the same results as if
+		    the unit's starting command immediately terminated with
+		    an exit code of 0, for a forking unit.
+		    A <quote>oneshot</quote>
+		    unit without a starting command is effectively a placeholder.
+		    The unit is deemed to get started immediately, upon demand,
+		    with all the other implications that follow (other units'
+		    <quote>before</quote> and <quote>after</quote> dependencies,
+		    for example).
+		  </para>
+		</note>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><quote>timeout: 300</quote></term>
+	      <listitem>
+		<para>
+		  <quote>Timeout</quote> defaults to 60 seconds, if missing.
+		  A forking unit's starting command must terminate with a 0
+		  exit code before this timeout expires.
+		</para>
+
+		<para>
+		  Once the forking unit's starting command terminates with a 0
+		  exit code the unit is deemed to be started (and other units
+		  that start after this get started themselves now).
+		</para>
+
+		<para>
+		  In all other cases the unit's start is deemed to have failed
+		  (see <xref linkend='failedstart' /> below).
+		</para>
+
+		<para>
+		  A timeout of 0 indicates an infinite timeout, there is no
+		  time limit for the starting command.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><quote>before</quote> and <quote>after</quote></term>
+	      <listitem>
+		<para>
+		  These keys specify other units that get started before or
+		  after this one (see <xref linkend="dependencies" />).
+		</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+
+	  <para>
+	    The <quote>Stopping</quote> key in a unit specification file contains
+	    other key/value pairs that specify how thie unit gets stopped.
+	  </para>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term><quote>command: "/usr/bin/scheduler stop"</quote></term>
+	      <listitem>
+		<para>
+		  This key gives the command that stops the unit's programs..
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><quote>type: manual</quote></term>
+	      <listitem>
+		<para>
+		  The stopping type specifies how the unit gets stopped.
+		  The possible values for <quote>Type</quote> are:
+		</para>
+
+		<variablelist>
+		  <varlistentry>
+		    <term>manual (default)</term>
+		    <listitem>
+		      <para>
+			The unit gets stopped by running
+			<command>vlad stop</command> for this unit, or another
+			unit that requires this unit.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry>
+		    <term>automatic</term>
+		    <listitem>
+		      <para>
+			The unit gets stopped when all of its processes stop.
+			Termination of the unit's last process has the same
+			results as running <command>vlad stop</command>.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+		</variablelist>
+		<note>
+		  <para>
+		    It's expected that the stopping command takes appropriate
+		    measures to terminate all processes that were previously
+		    started. In the event of an automatic stop there won't be any,
+		    but the stopping command is free to perform whatever bookkeeping
+		    a formal unit stop needs.
+		  </para>
+		</note>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><quote>timeout: 300</quote></term>
+	      <listitem>
+		<para>
+		  <quote>Timeout</quote> defaults to 60 seconds, if missing.
+		  A stopping command must terminate before its timeout expires.
+		</para>
+		<para>
+		  A timeout of 0 indicates an infinite timeout, there is no
+		  time limit for the stopping command.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><quote>before</quote> and <quote>after</quote></term>
+	      <listitem>
+		<para>
+		  These keys specify other units that get started before or
+		  after this one (see <xref linkend="dependencies" />).
+		</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+
+	  <para>
+	    After the stopping command times out or terminates any remaining
+	    processes in the unit (which may include a stuck stopping command)
+	    receive a SIGTERM signal, followed by SIGKILL.
+	  </para>
+	</refsect2>
+
+	<refsect2 id="failedstart">
+	  <title>Starting failures</title>
+
+	  <para>
+	    An attempt to start a <quote>forking</quote> unit fails if its
+	    starting command times out or terminates with a non-zero exit
+	    code. This has the following implications:
+	  </para>
+
+	  <itemizedlist>
+	    <listitem>
+	      <para>
+		Other units that are haven't started, but are
+		waiting for the failed unit start, do not
+		get started any more.
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		All same actions that normally happen when the failed unit
+		gets stopped also happen, as if the <command>stop</command>
+		got executed for this unit, specifically: all other units that
+		were started as a failed unit's dependency get now stopped.
+	      </para>
+	    </listitem>
+	  </itemizedlist>
+	</refsect2>
+
+	<refsect2 id="reloadrestart">
+	  <title><quote>Reload</quote> and <quote>Restart</quote> commands</title>
+
+	  <para>
+	    The <quote>reload</quote> key and <quote>restart</quote> keys
+	    define the commands executed by <command>vlad reload</command>
+	    and <command>vlad restart</command> commands. These commands
+	    are allowed only if the unit is already started.
+	  </para>
+	</refsect2>
+
+	<refsect2 id="respawn">
+	  <title><quote>respawn</quote> parameters</title>
+
+	  <para>
+	    A <quote>respawn</quote> starting type unit gets restarted
+	    up to three times in thirty seconds. This is to prevent a
+	    malfunctioning unit from slowing down the system.
+	    An optional <quote>respawn</quote> key adjusts these default
+	    settings:
+	  </para>
+
+	  <blockquote>
+	    <informalexample>
+	      <literallayout>
+Name: sshd
+Description: SSH server
+Starting:
+   Command: /usr/sbin/sshd
+   Type: respawn
+Respawn:
+   attempts: 1
+   limit: 60</literallayout>
+	    </informalexample>
+	  </blockquote>
+
+	  <para>
+	    Note that the <quote>type</quote> key in the <quote>starting</quote>
+	    section defines this unit as a respawning unit, and the
+	    standalone <quote>respawn</quote> key defines the respawning
+	    parameters:
+	  </para>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term>attempts</term>
+	      <listitem>
+		<para>
+		  This defines the maximum number of times the unit gets
+		  started before it gets limited.
+		</para>
+	      </listitem>
+	    </varlistentry>
+
+	    <varlistentry>
+	      <term>limit</term>
+	      <listitem>
+		<para>
+		  This value in the number of seconds before the counter
+		  gets reset.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+
+	  <para>
+	    <command>vera</command> starts this unit at most
+	    <replaceable>attempts</replaceable> times in
+	    <replaceable>limit</replaceable> seconds. If the unit
+	    fails one more time before <replaceable>limit</replaceable>
+	    seconds are up, <command>vera</command> waits until
+	    <replaceable>limit</replaceable> seconds expire, before attempting
+	    to restart the unit again.
+	  </para>
+
+	  <note>
+	    <para>
+	      This is only if when the specified starting command
+	      exits normally with a 0 exit status. Any other exit status
+	      puts the unit into a penalty box until
+	      <replaceable>limit</replaceable> seconds expire before
+	      <command>vera</command> restarts the unit again.
+	    </para>
+	  </note>
+	</refsect2>
       </refsect1>
 
       <refsect1 id="dependencies">
@@ -635,11 +984,13 @@ Version: 1</literallayout>
 	      </para>
 
 	      <para>
-		For example: a unit <quote>enabled: graphical runlevel</quote>,
+		For example: a unit defined that it's
+		<quote>enabled: system/graphical runlevel</quote>,
 		then it gets enabled (by the <command>enable</command> command).
 		The resulting
 		<quote>required-by</quote>
-		of the<quote>graphical runlevel</quote> has the following effect:
+		of the<quote>system/graphical runlevel</quote> has the
+		following effect:
 		switching, or starting, that runlevel starts this unit (as part
 		of the runlevel).
 	      </para>
@@ -754,223 +1105,6 @@ Version: 1</literallayout>
 	    </listitem>
 	  </varlistentry>
 	</variablelist>
-
-	<refsect2 id="startstop">
-	  <title><quote>Starting</quote> and <quote>Stopping</quote></title>
-
-	  <para>
-	    The <quote>Starting</quote> key in a unit specification file contains
-	    other <quote>Key: value</quote>
-	    pairs that specify how this unit gets started.
-	  </para>
-
-	  <variablelist>
-	    <varlistentry>
-	      <term><quote>command: "/usr/bin/scheduler start"</quote></term>
-	      <listitem>
-		<para>
-		  This key gives the command that starts the unit's programs.
-		</para>
-	      </listitem>
-	    </varlistentry>
-	    <varlistentry>
-	      <term><quote>type: forking</quote></term>
-	      <listitem>
-		<para>
-		  The starting type specifies how the unit gets started.
-		  The possible values for <quote>Type</quote> are:
-		</para>
-
-		<variablelist>
-		  <varlistentry>
-		    <term>forking (default)</term>
-		    <listitem>
-		      <para>
-			The starting command forks and its child process
-			is the permanent unit process. The original process
-			terminates.
-		      </para>
-		    </listitem>
-		  </varlistentry>
-
-		  <varlistentry>
-		    <term>oneshot</term>
-		    <listitem>
-		      <para>
-			The starting process is the main unit process.
-			After the starting process starts running the unit
-			is considered to be fully started.
-		      </para>
-		    </listitem>
-		  </varlistentry>
-		</variablelist>
-
-		<note>
-		  <para>
-		    An unspecified starting command has the same results as if
-		    the unit's starting command immediately terminated with
-		    an exit code of 0, for a forking unit. A <quote>oneshot</quote>
-		    unit without a starting command is effectively a placeholder.
-		    The unit is deemed to get started immediately, upon demand,
-		    with all the other implications that follow (other units'
-		    <quote>before</quote> and <quote>after</quote> dependencies,
-		    for example).
-		  </para>
-		</note>
-	      </listitem>
-	    </varlistentry>
-	    <varlistentry>
-	      <term><quote>timeout: 300</quote></term>
-	      <listitem>
-		<para>
-		  <quote>Timeout</quote> defaults to 60 seconds, if missing.
-		  A forking unit's starting command must terminate with a 0
-		  exit code before this timeout expires.
-		</para>
-
-		<para>
-		  Once the forking unit's starting command terminates with a 0
-		  exit code the unit is deemed to be started (and other units
-		  that start after this get started themselves now).
-		</para>
-
-		<para>
-		  In all other cases the unit's start is deemed to have failed
-		  (see <xref linkend='failedstart' /> below).
-		</para>
-
-		<para>
-		  A timeout of 0 indicates an infinite timeout, there is no
-		  time limit for the starting command.
-		</para>
-	      </listitem>
-	    </varlistentry>
-	    <varlistentry>
-	      <term><quote>before</quote> and <quote>after</quote></term>
-	      <listitem>
-		<para>
-		  These keys specify other units that get started before or
-		  after this one (see <quote>Dependencies</quote>, above).
-		</para>
-	      </listitem>
-	    </varlistentry>
-	  </variablelist>
-
-	  <para>
-	    The <quote>Stopping</quote> key in a unit specification file contains
-	    other key/value pairs that specify how thie unit gets stopped.
-	  </para>
-
-	  <variablelist>
-	    <varlistentry>
-	      <term><quote>command: "/usr/bin/scheduler stop"</quote></term>
-	      <listitem>
-		<para>
-		  This key gives the command that stops the unit's programs..
-		</para>
-	      </listitem>
-	    </varlistentry>
-	    <varlistentry>
-	      <term><quote>type: manual</quote></term>
-	      <listitem>
-		<para>
-		  The stopping type specifies how the unit gets stopped.
-		  The possible values for <quote>Type</quote> are:
-		</para>
-
-		<variablelist>
-		  <varlistentry>
-		    <term>manual (default)</term>
-		    <listitem>
-		      <para>
-			The unit gets stopped by running
-			<command>vlad stop</command> for this unit, or another
-			unit that requires this unit.
-		      </para>
-		    </listitem>
-		  </varlistentry>
-
-		  <varlistentry>
-		    <term>automatic</term>
-		    <listitem>
-		      <para>
-			The unit gets stopped when all of its processes stop.
-			Termination of the unit's last process has the same
-			results as running <command>vlad stop</command>.
-		      </para>
-		    </listitem>
-		  </varlistentry>
-		</variablelist>
-		<note>
-		  <para>
-		    It's expected that the stopping command takes appropriate
-		    measures to terminate all processes that were previously
-		    started. In the event of an automatic stop there won't be any,
-		    but the stopping command is free to perform whatever bookkeeping
-		    a formal unit stop needs.
-		  </para>
-		</note>
-	      </listitem>
-	    </varlistentry>
-	    <varlistentry>
-	      <term><quote>timeout: 300</quote></term>
-	      <listitem>
-		<para>
-		  <quote>Timeout</quote> defaults to 60 seconds, if missing.
-		  A stopping command must terminate before its timeout expires.
-		</para>
-		<para>
-		  A timeout of 0 indicates an infinite timeout, there is no
-		  time limit for the stopping command.
-		</para>
-	      </listitem>
-	    </varlistentry>
-	    <varlistentry>
-	      <term><quote>before</quote> and <quote>after</quote></term>
-	      <listitem>
-		<para>
-		  These keys specify other units that get stopped before or
-		  after this one (see <quote>Dependencies</quote>, above).
-		</para>
-	      </listitem>
-	    </varlistentry>
-	  </variablelist>
-
-	  <para>
-	    After the stopping command times out or terminates any remaining
-	    processes in the unit (which may include a stuck stopping command)
-	    receive a SIGTERM signal, followed by SIGKILL.
-	  </para>
-	</refsect2>
-
-	<refsect2 id="failedstart">
-	  <title>Starting failures</title>
-
-	  <para>
-	    An attempt to start a <quote>forking</quote> unit fails if its
-	    starting command times out or terminates with a non-zero exit
-	    code. This has the following implications:
-	  </para>
-
-	  <itemizedlist>
-	    <listitem>
-	      <para>
-		Other units that are haven't started, but are
-		waiting for the failed unit start, do not
-		get started any more.
-	      </para>
-	    </listitem>
-
-	    <listitem>
-	      <para>
-		All same actions that normally happen when the failed unit
-		gets stopped also happen, as if the <command>stop</command>
-		got executed for this unit, specifically: all other units that
-		were started as a failed unit's dependency get now stopped.
-	      </para>
-	    </listitem>
-	  </itemizedlist>
-	</refsect2>
       </refsect1>
       <refsect1>
 	<title>BUGS</title>

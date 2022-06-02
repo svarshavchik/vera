@@ -101,6 +101,12 @@ bool proc_containerObj::set_start_type(const std::string &value)
 		start_type=start_type_t::oneshot;
 		return true;
 	}
+
+	if (value == "respawn")
+	{
+		start_type=start_type_t::respawn;
+		return true;
+	}
 	return false;
 }
 
@@ -128,6 +134,8 @@ const char *proc_containerObj::get_start_type() const
 		return "forking";
 	case start_type_t::oneshot:
 		return "oneshot";
+	case start_type_t::respawn:
+		return "respawn";
 	}
 
 	return "UNKNOWN";
@@ -179,6 +187,7 @@ namespace {
 
 struct is_transferrable_helper {
 
+	const proc_container &pc;
 	std::string &description;
 	std::string &serialized;
 
@@ -191,32 +200,75 @@ struct is_transferrable_helper {
 
 	bool operator()(state_started &started) const
 	{
+		// Wait until the container does or does not reload or restart
 		if (started.reload_or_restart_runner)
+		{
+			log_message(_("reexec delayed by a reloading "
+				      "or a restarting container: ")
+				    + pc->name);
+
 			return false;
+		}
+		// Wait until the container finishes respawning
+		if (started.respawn_prepare_timer)
+		{
+			log_message(_("reexec delayed by a respawning"
+				      " container: ")
+				    + pc->name);
+			return false;
+		}
+		std::ostringstream o;
+
+		o.imbue(std::locale{"C"});
 
 		if (started.dependency)
 		{
 			description="started (dependency)";
-			serialized="started 1";
 		}
 		else
 		{
 			description="started";
-			serialized="started 0";
 		}
+
+		o << "started "
+		  << (started.dependency ? 1:0)
+		  << " "
+		  << started.start_time;
+
+		if (started.respawn_runner)
+		{
+			o << " 1 " << started.respawn_runner->pid;
+		}
+		else
+		{
+			o << " 0";
+		}
+		serialized=o.str();
 		return true;
 	}
 
-	template<typename T>
-	bool operator()(T &t) const
+	bool operator()(state_starting &) const
 	{
+		log_message(_("reexec delayed by a starting container: ")
+			    + pc->name);
+		return false;
+	}
+
+	bool operator()(state_stopping &) const
+	{
+		log_message(_("reexec delayed by a stopping container: ")
+			    + pc->name);
 		return false;
 	}
 
 	//! New container states are stopped by default, we ass-ume that.
 
-	void restored(std::istream &i, proc_container_state &stopped_state)
-		const
+	void restored(
+		std::istream &i,
+		proc_container_state &stopped_state,
+		const std::function<void (state_started &,
+					  pid_t)> &reinstall_respawn_runner
+	) const
 	{
 		std::string s;
 
@@ -225,13 +277,40 @@ struct is_transferrable_helper {
 		if (s != "started")
 			return;
 
-		int flag=false;
+		int flag=0;
 
 		i >> flag;
 
-		stopped_state.emplace<state_started>(
+		auto &state=stopped_state.emplace<state_started>(
 			flag != 0
 		);
+
+		log_container_message(
+			pc,
+			flag ? _("container was started as a dependency")
+			: _("container was started"));
+
+		i >> state.start_time;
+
+		int has_respawn_runner=0;
+
+		i >> has_respawn_runner;
+
+		if (has_respawn_runner)
+		{
+			pid_t respawned_pid;
+
+			if (i >> respawned_pid)
+			{
+				std::ostringstream o;
+
+				o.imbue(std::locale{"C"});
+				o << _("reinstalling runner for pid ")
+				  << respawned_pid;
+				log_container_message(pc, o.str());
+				reinstall_respawn_runner(state, respawned_pid);
+			}
+		}
 	}
 };
 
@@ -240,11 +319,13 @@ struct is_transferrable_helper {
 #endif
 }
 
-bool proc_container_run_info::is_transferrable(std::ostream &o)
+bool proc_container_run_info::is_transferrable(
+	const proc_container &pc,
+	std::ostream &o)
 {
 	std::string description, serialized;
 
-	if (!std::visit(is_transferrable_helper{description, serialized},
+	if (!std::visit(is_transferrable_helper{pc, description, serialized},
 			state))
 		return false;
 
@@ -273,15 +354,19 @@ void proc_container_run_info::prepare_to_transfer(const proc_container &pc)
 
 	std::string description, serialized;
 
-	std::visit(is_transferrable_helper{description, serialized}, state);
+	std::visit(is_transferrable_helper{pc, description, serialized}, state);
 
 	log_message(pc->name + _(": preserving state: ") + description);
 	if (group)
 		group->prepare_to_transfer();
 }
 
-void proc_container_run_info::restored(std::istream &i,
-				       const group_create_info &create_info)
+void proc_container_run_info::restored(
+	std::istream &i,
+	const group_create_info &create_info,
+	const std::function<void (state_started &,
+				  pid_t)> &reinstall_respawn_runner
+)
 {
 	std::string description, serialized;
 
@@ -296,10 +381,15 @@ void proc_container_run_info::restored(std::istream &i,
 
 			i.imbue(std::locale{"C"});
 
-			is_transferrable_helper helper{description,
+			is_transferrable_helper helper{
+				create_info.cc->first,
+				description,
 				serialized};
 
-			helper.restored(i, state);
+			helper.restored(
+				i, state,
+				reinstall_respawn_runner
+			);
 
 			std::visit(helper, state);
 
@@ -555,7 +645,7 @@ void current_containers_infoObj::check_reexec()
 
 			// REEXEC FILE: container status
 
-			if (!run_info.is_transferrable(o))
+			if (!run_info.is_transferrable(pc, o))
 				return;
 		}
 
@@ -711,7 +801,25 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 
 		group_create_info gci{me, iter};
 
-		iter->second.restored(i, gci);
+		iter->second.restored(
+			i, gci,
+			[&, this]
+			(state_started &state, pid_t pid)
+			{
+				state.respawn_runner=reinstall_runner(
+					pid,
+					shared_from_this(),
+					iter->first,
+					[]
+					(const auto &info, int status)
+					{
+						auto &[me, cc]=info;
+
+						me->starting_command_finished(
+							cc,
+							status);
+					});
+			});
 	}
 
 	return restored_containers;
@@ -1150,9 +1258,19 @@ void current_containers_infoObj::install(
 	for (auto &[pc, info] : new_current_containers)
 		info.updated(pc);
 
+	// We are about to replace current_containers with
+	// new_current_containers. Runners and timers maintain weak references
+	// to the container objects, and they need to get updated to reflect
+	// the new container objects.
+	update_timer_containers(new_current_containers);
+	update_runner_containers(new_current_containers);
+
+	// And now we can install the new ones
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
 	runlevel_containers=std::move(new_runlevel_containers);
+
+	// Figure out what to do with the ones that are no longer defined.
 
 	for (auto &c:to_remove)
 	{
@@ -2421,18 +2539,15 @@ void current_containers_infoObj::do_start_runner(
 
 	if (!pc->starting_command.empty())
 	{
-		// There's a start command. Start it.
-
 		auto runner=create_runner(
 			shared_from_this(),
 			cc, pc->starting_command,
-			[oneshot=pc->start_type == start_type_t::oneshot]
+			[]
 			(const auto &info, int status)
 			{
 				auto &[me, cc]=info;
 
 				me->starting_command_finished(cc,
-							      oneshot,
 							      status);
 			}
 		);
@@ -2447,9 +2562,15 @@ void current_containers_infoObj::do_start_runner(
 
 		starting.starting_runner=runner;
 
-		if (pc->start_type == start_type_t::oneshot)
+		if (is_oneshot_like(pc->start_type))
 		{
-			started(cc, starting.dependency);
+			auto &state=started(cc, starting.dependency);
+
+			// If this is a respawn, we need to track it.
+
+			if (pc->start_type == start_type_t::respawn)
+				state.respawn_runner=runner;
+
 			return;
 		}
 		if (pc->starting_timeout > 0)
@@ -2491,34 +2612,237 @@ void current_containers_infoObj::do_start_runner(
 
 void current_containers_infoObj::starting_command_finished(
 	const current_container &cc,
-	bool oneshot,
 	int status)
 {
 	bool for_dependency=true; // Unless told otherwise
+
+	bool succeeded=
+		!WIFSIGNALED(status) && WEXITSTATUS(status) == 0;
+
+	if (!succeeded)
+		log_container_failed_process(cc->first, status);
 
 	std::visit(
 		[&]
 		(auto &current_state)
 		{
+			// If we get here in state_starting, we get the
+			// real value of for_dependency.
+
 			if constexpr(std::is_same_v<std::remove_cvref_t<
 				     decltype(current_state)>,
 				     state_starting>) {
 				for_dependency=current_state.dependency;
 			}
+			else if constexpr(std::is_same_v<std::remove_cvref_t<
+					  decltype(current_state)>,
+					  state_started>) {
+				// If we get here in state_started for a
+				// respawnable container, this is the
+				// then this is what needs to be respawned.
+
+				if (cc->first->start_type ==
+				    start_type_t::respawn)
+				{
+					log_container_message(
+						cc->first,
+						_("sending SIGTERM"));
+
+					if (cc->second.group)
+						cc->second.group->cgroups_sendsig
+							(SIGTERM);
+
+					current_state.respawn_succeeded=
+						succeeded;
+					// If the respawn_runner failed, bump
+					// up the respawn counter, so we don't
+					// immediately try to restart it,
+					// unless its respawn interval has
+					// passed.
+
+					if (!succeeded)
+					{
+						current_state.respawn_counter=
+							cc->first
+							->respawn_attempts;
+					}
+
+					prepare_respawn(
+						cc,
+						current_state
+					);
+				}
+			}
+
 		}, cc->second.state);
 
-	if (status == 0)
+	if (is_oneshot_like(cc->first->start_type))
 	{
-		if (!oneshot)
-			started(cc, for_dependency);
+		return;
+	}
+
+	if (succeeded)
+	{
+		started(cc, for_dependency);
 	}
 	else
 	{
-		log_container_failed_process(cc->first, status);
-
-		if (!oneshot)
-			stop_with_all_requirements(cc, {});
+		stop_with_all_requirements(cc, {});
 	}
+}
+
+// The respawn_runner has finished
+
+// SIGTERM/SIGKILL anything that's left in the container, then respawn it.
+
+void current_containers_infoObj::prepare_respawn(
+	const current_container &cc,
+	state_started &state)
+{
+	if (!cc->second.group)
+	{
+		// No container group, nothing to wait to finish.
+		respawn(cc, state);
+		return;
+	}
+
+	state.respawn_prepare_timer=create_timer(
+		shared_from_this(),
+		cc->first,
+		SIGTERM_TIMEOUT,
+		[]
+		(const auto &info)
+		{
+			const auto &[me, cc]=info;
+
+			// We expect to be in state_started, but go through
+			// the motions, anyway.
+
+			std::visit([&]
+				   (auto &state)
+			{
+				if constexpr(std::is_same_v<std::remove_cvref_t<
+					     decltype(state)>,
+					     state_started>) {
+
+					if (!cc->second.group)
+					{
+						// No container group, nothing
+						// to wait to finish.
+						me->respawn(cc, state);
+						return;
+					}
+					log_container_message(
+						cc->first,
+						_("sending SIGKILL"));
+
+					cc->second.group->cgroups_sendsig(
+						SIGKILL
+					);
+
+					// Reinstall timer.
+					me->prepare_respawn(cc, state);
+				}
+			}, cc->second.state);
+		});
+}
+
+// A start_type_t::respawn container has stopped, respawn it.
+
+void current_containers_infoObj::respawn(
+	const current_container &cc,
+	state_started &state)
+{
+	// No matter what, clean up the timer.
+
+	state.respawn_prepare_timer=nullptr;
+
+	auto now=log_current_time();
+
+	// Determine if we need to wait more time because the container
+	// is stopping too fast.
+
+	if (now < state.respawn_starting_time ||
+	    (now - state.respawn_starting_time) >= cc->first->respawn_limit)
+	{
+		// It's been a while since the container respawn for the
+		// first time, we can start with a clean slate.
+
+		state.respawn_starting_time=now;
+		state.respawn_counter=0;
+
+		if (!state.respawn_succeeded)
+			log_container_error(
+				cc->first,
+				_("restarting after a failure"));
+
+	}
+	else
+	{
+		if (++state.respawn_counter >= cc->first->respawn_attempts
+
+		    // Don't hold up a re-exec on account of us.
+
+		    && !reexec_requested)
+		{
+			log_container_error(
+				cc->first,
+				state.respawn_succeeded
+				? _("restarting too fast, delaying")
+				: _("restart failed, "
+				    "delaying before trying again"));
+
+			// Wait a little bit more and reuse the prepare timer.
+
+			state.respawn_prepare_timer=create_timer(
+				shared_from_this(),
+				cc->first,
+				state.respawn_starting_time +
+				cc->first->respawn_limit - now,
+				[]
+				(auto &info)
+				{
+					auto &[me, cc]=info;
+
+					// We expect to be in state_started,
+					// but go through the motions, anyway.
+
+					std::visit([&]
+						   (auto &state)
+					{
+						if constexpr(std::is_same_v<
+							     std::remove_cvref_t<
+							     decltype(state)>,
+							     state_started>) {
+
+							// Time should be expired
+							// now, and we're good
+							// to go.
+							me->respawn(
+								cc,
+								state);
+						}
+					}, cc->second.state);
+				});
+			return;
+		}
+	}
+
+	log_container_error(
+		cc->first,
+		_("restarting"));
+
+	state.respawn_runner=create_runner(
+		shared_from_this(),
+		cc, cc->first->starting_command,
+		[]
+		(const auto &info, int status)
+		{
+			auto &[me, cc]=info;
+
+			me->starting_command_finished(cc, status);
+		}
+	);
 }
 
 //! Move a container into a stopping state
@@ -2674,7 +2998,8 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 			// ended up produce it, it doesn't matter, but log
 			// it if it's an error.
 
-			if (status != 0)
+			if (WIFSIGNALED(status) ||
+			    WEXITSTATUS(status) != 0)
 			{
 				log_container_failed_process(cc->first, status);
 			}
@@ -2893,6 +3218,24 @@ void current_containers_infoObj::stopped(const std::string &s)
 			return;
 		}
 	}
+
+	// If this container is waiting to be respawned, respawn it.
+
+	if (std::visit([&, this]
+		       (auto &state)
+	{
+		if constexpr(std::is_same_v<std::remove_cvref_t<decltype(state)>,
+			     state_started>) {
+
+			if (state.respawn_prepare_timer)
+			{
+				respawn(cc, state);
+				return true;
+			}
+		}
+		return false;
+	}, cc->second.state))
+		return;
 
 	if (cc->first->stop_type == stop_type_t::manual)
 	{

@@ -502,11 +502,12 @@ void testreexec_after(const std::string &socket_str)
 	if (logged_state_changes != std::vector<std::string>{
 			"reexec: " RUNLEVEL_PREFIX "networking",
 			"re-exec: reexec_a",
+			"reexec_a: container was started as a dependency",
 			"reexec_a: restored preserved state: started (dependency)",
 			"reexec_a: restored after re-exec",
 			"re-exec: reexec_b",
 			"reexec_b: restored preserved state: stopped",
-			"reexec_a: reactived after re-exec",
+			"reexec_a: reactivated after re-exec",
 			"reexec_a: test",
 		})
 		throw "Unexpected state change after reexec";

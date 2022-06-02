@@ -43,4 +43,6 @@ proc_container_timer create_timer(
 				  )> &done
 );
 
+void update_timer_containers(const current_containers &new_current_containers);
+
 #endif

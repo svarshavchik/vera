@@ -73,7 +73,6 @@ void proc_container_group_data::cgroups_register()
 		return;
 	}
 
-	ftruncate(cgroup_eventsfd, 0);
 	lseek(cgroup_eventsfd, 0, SEEK_SET);
 	write(cgroup_eventsfd, "populated 1\n", 12);
 }
@@ -103,10 +102,10 @@ void populated(const proc_container &container, bool isit)
 
 	dir += "/cgroup.events";
 
-	std::ofstream o{dir, std::ios::out | std::ios::trunc};
+	int fd=open(dir.c_str(), O_WRONLY);
 
-	o << (isit ? "populated 1\n":"populated 0\n");
-	o.close();
+	write(fd, (isit ? "populated 1\n":"populated 0\n"), 12);
+	close(fd);
 }
 
 void proc_container_group::cgroups_sendsig(int sig)

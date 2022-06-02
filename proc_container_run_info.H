@@ -144,7 +144,8 @@ struct proc_container_run_info {
 	//!
 	//! Returns false if the container's state cannot be saved.
 
-	bool is_transferrable(std::ostream &o);
+	bool is_transferrable(const proc_container &pc,
+			      std::ostream &o);
 
 	//! About to re-exec ourselves.
 
@@ -159,7 +160,10 @@ struct proc_container_run_info {
 	//! to is_transferable.
 
 	void restored(std::istream &i,
-		      const group_create_info &create_info);
+		      const group_create_info &create_info,
+		      const std::function<void (state_started &,
+						pid_t)> &reinstall_respawn_runner
+	);
 
 	//! After all containers were restored, this gets called for them.
 

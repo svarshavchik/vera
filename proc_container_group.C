@@ -217,22 +217,11 @@ bool proc_container_group_data::install(
 			},
 			fd=cgroup_eventsfd,
 			name=container->name,
-			buffer=std::string{},
-
-			// This might be called after re-execing, in which case
-			// we need to get the current state.
-			populated=is_populated(cgroup_eventsfd,
-					       scratch_buffer)]
+			buffer=std::string{}]
 		(auto, auto)
 		mutable
 		{
-			bool old_populated=populated;
-
-			populated=is_populated(fd, buffer);
-
-			// Did it really change?
-			if (old_populated == populated)
-				return;
+			auto populated=is_populated(fd, buffer);
 
 			auto l=all_containers.lock();
 
@@ -318,7 +307,7 @@ void proc_container_group::all_restored(const group_create_info &create_info)
 
 	if (populated)
 	{
-		log_message(container->name + _(": reactived after re-exec"));
+		log_message(container->name + _(": reactivated after re-exec"));
 	}
 	else
 	{

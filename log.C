@@ -5,6 +5,7 @@
 #include "config.h"
 #include "log.H"
 #include "messages.H"
+#include "proc_container.H"
 #include <functional>
 #include <iostream>
 #include <sstream>
@@ -44,7 +45,7 @@ void log_container_failed_process(const proc_container &pc, int wstatus)
 	}
 	else
 	{
-		o << _("exit status: ") << wstatus;
+		o << _("exit status: ") << WEXITSTATUS(wstatus);
 	}
 
 	log_container_error(pc, o.str());

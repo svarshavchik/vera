@@ -5,6 +5,7 @@
 #ifndef proc_container_state_h
 #define proc_container_state_h
 
+#include "proc_container_statefwd.H"
 #include <string>
 #include <variant>
 #include <type_traits>
@@ -12,6 +13,7 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "external_filedesc.H"
+#include "log.H"
 #include <list>
 
 //! A process container that's not running
@@ -27,7 +29,6 @@ struct state_starting {
 	//! Starting this container because it is a dependency.
 
 	bool dependency;
-
 	//! The connections that requested this container to get started.
 	std::list<external_filedesc> requesters;
 
@@ -57,6 +58,9 @@ struct state_started {
 
 	bool dependency;
 
+	//! When this container started.
+	time_t start_time=log_current_time();
+
 	state_started(bool dependency) : dependency{dependency} {}
 
 	//! Human readable label.
@@ -65,6 +69,40 @@ struct state_started {
 	//! Currently running reload or restart command
 
 	proc_container_runner reload_or_restart_runner;
+
+	//! Respawnable runner
+
+	proc_container_runner respawn_runner;
+
+	/*!
+	  When the respawnable runner was first started
+
+	  This information is not preserved when the daemon gets re-execed.
+	  This is not critical.
+	*/
+	time_t respawn_starting_time=start_time;
+
+	/*!
+	  How many times the respawnable runner was restarted
+
+	  This information is not preserved when the daemon gets re-execed.
+	  This is not critical.
+	*/
+
+	size_t respawn_counter=0;
+
+	/*! Respawn cleanup timer
+
+	  Before we respawn we send a SIGTERM to anything that's left in the
+	  container, and wait to send a SIGKILL to kill off anything that's
+	  stubborn.
+
+	*/
+
+	proc_container_timer respawn_prepare_timer;
+
+	//! Whether the respawnable runner succeeded
+	bool respawn_succeeded=false;
 };
 
 //! A \ref state_stopping "state_stopping container" that's waiting to be able to begin stopping
@@ -142,20 +180,5 @@ struct state_stopping {
 	//! Human readable label.
 	operator std::string() const;
 };
-
-//! The state of a process container
-
-//! - \c state_stopped - the container is stopped
-//!
-//! - \c state_starting - the container is starting
-//!
-//! - \c state_started - the container has started
-//!
-//! - \c state_stopping - the container is stopping
-
-typedef std::variant<state_stopped,
-		     state_starting,
-		     state_started,
-		     state_stopping> proc_container_state;
 
 #endif

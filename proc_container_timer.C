@@ -19,8 +19,29 @@ proc_container_timerObj::proc_container_timerObj(
 {
 }
 
-static std::multimap<time_t, std::weak_ptr<const proc_container_timerObj>
+static std::multimap<time_t, std::weak_ptr<proc_container_timerObj>
 		     > current_timers;
+
+void update_timer_containers(const current_containers &new_current_containers)
+{
+	for (auto &[alarm, wtimer] : current_timers)
+	{
+		auto timer=wtimer.lock();
+
+		if (!timer)
+			continue;
+
+		auto old_container=timer->container.lock();
+
+		if (!old_container)
+			continue;
+
+		auto iter=new_current_containers.find(old_container);
+
+		if (iter != new_current_containers.end())
+			timer->container=iter->first;
+	}
+}
 
 proc_container_timer create_timer(
 	const current_containers_info &all_containers,
@@ -44,6 +65,8 @@ proc_container_timer create_timer(
 
 time_t run_timers()
 {
+	bool ran_something=false;
+
 	while (1)
 	{
 		auto b=current_timers.begin();
@@ -55,6 +78,9 @@ time_t run_timers()
 
 		if (b->first > now)
 		{
+			if (ran_something)
+				return 0;
+
 			return b->first-now;
 		}
 
@@ -82,7 +108,10 @@ time_t run_timers()
 
 		// We might find something to do.
 		me->find_start_or_stop_to_do();
+		ran_something=true;
 	}
 
+	if (ran_something)
+		return 0;
 	return 60 * 60;
 }

@@ -8,7 +8,8 @@
 #include <string>
 #include <time.h>
 
-#include "proc_container.H"
+#include "proc_container_statefwd.H"
+#include "proc_containerfwd.H"
 
 void log_state_change(const proc_container &,
 		      const proc_container_state &);

@@ -12,6 +12,7 @@ noinst_PROGRAMS=\
 	testcontroller						\
 	testcontroller2						\
 	testcontroller2fdleak					\
+	testcontroller3						\
 	testdepcomputations 					\
 	testpoller						\
 	testprocloader
@@ -43,6 +44,7 @@ libvera_a_SOURCES=						\
 	proc_container_runnerfwd.H				\
 	proc_container_run_info.H				\
 	proc_container_state.H					\
+	proc_container_statefwd.H				\
 	proc_container_timer.C					\
 	proc_container_timer.H					\
 	proc_container_timerfwd.H				\
@@ -74,6 +76,9 @@ testcontroller2_SOURCES=testcontroller2.C unit_test.C
 testcontroller2_LDADD=libvera.a @YAMLLIBS@
 
 testcontroller2fdleak_SOURCES=testcontroller2fdleak.C
+
+testcontroller3_SOURCES=testcontroller3.C unit_test.C
+testcontroller3_LDADD=libvera.a @YAMLLIBS@
 
 testdepcomputations_SOURCES=testdepcomputations.C unit_test.C
 testdepcomputations_LDADD=libvera.a @YAMLLIBS@
@@ -111,6 +116,11 @@ check-am:
 	./testcontroller2
 	$(VALGRIND) ./testcontroller2 testreexec_nofork
 	./testcontroller2 testreexec_do '$(VALGRIND) ./testcontroller2'
+	./testcontroller3 respawn1 "$(VALGRIND)"
+	./testcontroller3 respawn2
+	./testcontroller3 respawn3 "$(VALGRIND)"
+	./testcontroller3 respawn4
+	$(VALGRIND) ./testcontroller3 testnoreexec
 
 man8_MANS=vera.8 vlad.8
 

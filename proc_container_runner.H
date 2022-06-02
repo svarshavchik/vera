@@ -38,4 +38,6 @@ public:
 	void invoke(int wstatus) const;
 };
 
+void update_runner_containers(const current_containers &new_current_containers);
+
 #endif

@@ -546,6 +546,69 @@ struct parsed_yaml {
 		return std::string{b, e};
 	}
 
+	/*!
+	  Parse a YAML scalar string into a std::string
+
+	  Overload that returns a bool success indicator. An additional
+	  std::string parameter gets passed by reference. It receives
+	  the read YAML scalar string if this succeeds.
+	 */
+	bool parse_scalar(
+		yaml_node_t *n,
+		const std::string &name,
+		const std::function<void (const std::string &)> &error,
+		std::string &ret)
+	{
+		auto s=parse_scalar(n, name, error);
+
+		if (!s)
+			return false;
+
+		ret=*s;
+		return true;
+	}
+
+	/*!
+	  Parse a YAML scalar string into a numeric value.
+
+	  Overload that returns a bool success indicator. An additional
+	  std::string parameter gets passed by reference. It receives
+	  the read YAML scalar string if this succeeds.
+	 */
+
+	template<typename T>
+	std::enable_if_t<std::is_arithmetic_v<T> &&
+			 !std::is_floating_point_v<T>,
+			 bool>
+	parse_scalar(
+		yaml_node_t *n,
+		const std::string &name,
+		T &ret,
+		const std::function<void (const std::string &)> &error
+	)
+	{
+		auto s=parse_scalar(n, name, error);
+
+		if (!s)
+			return false;
+
+		std::istringstream i{*s};
+
+		i.imbue(std::locale{"C"});
+		if (i >> ret)
+		{
+			char c;
+
+			if (!(i >> c))
+				return true;
+		}
+
+		error(name + _(": cannot parse a numeric value"));
+
+		return false;
+	}
+
+
 	/*! Parse a list of requirements
 
 	  Uses parse_sequence(), processes each value, appends it to
@@ -649,16 +712,11 @@ struct parsed_yaml {
 					}
 					found_command=true;
 
-					auto s=parse_scalar(
+					return parse_scalar(
 						n,
 						name + "/command",
-						error);
-
-					if (!s)
-						return false;
-
-					command=*s;
-					return true;
+						error,
+						command);
 				}
 
 				if (key == "timeout")
@@ -756,6 +814,15 @@ struct parsed_yaml {
 {
 #endif
 }
+
+static bool proc_load_container(
+	parsed_yaml &parsed,
+	const std::filesystem::path &unit_path,
+	const proc_new_container &nc,
+	const std::string &key,
+	yaml_node_t *n,
+	bool enabled,
+	const std::function<void (const std::string &)> &error);
 
 proc_new_container_set proc_load(
 	std::istream &input_file,
@@ -916,122 +983,14 @@ proc_new_container_set proc_load(
 			    [&](const std::string &key, auto n,
 			       auto &error)
 			    {
-				    std::string name=unit_path;
-
-				    name += ": ";
-				    name += key;
-
-				    if (key == "description")
-				    {
-					    auto s=parsed.parse_scalar(
-						    n,
-						    name,
-						    error);
-
-					    if (!s)
-						    return false;
-
-					    nc->description=*s;
-				    }
-
-				    if (key == "requires" &&
-					!parsed.parse_requirements(
-						n,
-						name,
-						error,
-						unit_path,
-						nc->dep_requires))
-				    {
-					    return false;
-				    }
-
-				    // "required-by" loads dep_required_by
-				    //
-				    // "enabled" is functionally equivalent
-				    // to "required-by".
-
-				    if ((key == "required-by" ||
-					 (key == "enabled" && enabled)
-					) &&
-					!parsed.parse_requirements(
-						n,
-						name,
-						error,
-						unit_path,
-						nc->dep_required_by))
-				    {
-					    return false;
-				    }
-
-				    if (key == "starting")
-				    {
-					    return parsed.starting_or_stopping(
-						    n,
-						    name + "/starting",
-						    error,
-						    unit_path,
-						    nc->new_container
-						    ->starting_command,
-						    nc->new_container
-						    ->starting_timeout,
-						    nc->starting_before,
-						    nc->starting_after,
-						    *nc->new_container,
-						    &proc_containerObj
-						    ::set_start_type
-					    );
-				    }
-
-				    if (key == "stopping")
-				    {
-					    return parsed.starting_or_stopping(
-						    n,
-						    name + "/stopping",
-						    error,
-						    unit_path,
-						    nc->new_container
-						    ->stopping_command,
-						    nc->new_container
-						    ->stopping_timeout,
-						    nc->stopping_before,
-						    nc->stopping_after,
-						    *nc->new_container,
-						    &proc_containerObj
-						    ::set_stop_type
-					    );
-
-				    }
-				    return true;
-
-				    if (key == "restart")
-				    {
-					    auto s=parsed.parse_scalar(
-						    n,
-						    name,
-						    error);
-
-					    if (!s)
-						    return false;
-
-					    nc->new_container
-						    ->restarting_command=*s;
-				    }
-
-				    if (key == "reload")
-				    {
-					    auto s=parsed.parse_scalar(
-						    n,
-						    name,
-						    error);
-
-					    if (!s)
-						    return false;
-
-					    nc->new_container
-						    ->reloading_command=*s;
-				    }
-
-				    return true;
+				    return proc_load_container(
+					    parsed,
+					    unit_path,
+					    nc,
+					    key,
+					    n,
+					    enabled,
+					    error);
 			    },
 			    error))
 		{
@@ -1051,6 +1010,149 @@ proc_new_container_set proc_load(
 		results.clear();
 	}
 	return results;
+}
+
+// Parse a single container.
+
+static bool proc_load_container(
+	parsed_yaml &parsed,
+	const std::filesystem::path &unit_path,
+	const proc_new_container &nc,
+	const std::string &key,
+	yaml_node_t *n,
+	bool enabled,
+	const std::function<void (const std::string &)> &error)
+{
+	std::string name=unit_path;
+
+	name += ": ";
+	name += key;
+
+	if (key == "description")
+	{
+		if (!parsed.parse_scalar(
+			    n,
+			    name + "/description",
+			    error,
+			    nc->description))
+			return false;
+	}
+
+	if (key == "requires" &&
+	    !parsed.parse_requirements(
+		    n,
+		    name,
+		    error,
+		    unit_path,
+		    nc->dep_requires))
+	{
+		return false;
+	}
+
+	// "required-by" loads dep_required_by
+	//
+	// "enabled" is functionally equivalent
+	// to "required-by".
+
+	if ((key == "required-by" ||
+	     (key == "enabled" && enabled)
+	    ) &&
+	    !parsed.parse_requirements(
+		    n,
+		    name,
+		    error,
+		    unit_path,
+		    nc->dep_required_by))
+	{
+		return false;
+	}
+
+	if (key == "starting")
+	{
+		return parsed.starting_or_stopping(
+			n,
+			name + "/starting",
+			error,
+			unit_path,
+			nc->new_container->starting_command,
+			nc->new_container->starting_timeout,
+			nc->starting_before,
+			nc->starting_after,
+			*nc->new_container,
+			&proc_containerObj::set_start_type
+		);
+	}
+
+	if (key == "stopping")
+	{
+		return parsed.starting_or_stopping(
+			n,
+			name + "/stopping",
+			error,
+			unit_path,
+			nc->new_container->stopping_command,
+			nc->new_container->stopping_timeout,
+			nc->stopping_before,
+			nc->stopping_after,
+			*nc->new_container,
+			&proc_containerObj::set_stop_type
+		);
+
+	}
+
+	if (key == "restart")
+	{
+		return parsed.parse_scalar(
+			n,
+			name,
+			error,
+			nc->new_container
+			->restarting_command);
+	}
+
+	if (key == "reload")
+	{
+		return parsed.parse_scalar(
+			n,
+			name,
+			error,
+			nc->new_container
+			->reloading_command);
+	}
+
+	if (key == "respawn")
+	{
+		return parsed.parse_map(
+			n, name,
+			[&](const std::string &key, auto n,
+			    auto &error)
+			{
+				if (key == "attempts")
+				{
+					return parsed.parse_scalar(
+						n,
+						name + ": attempts",
+						nc->new_container
+						->respawn_attempts,
+						error);
+				}
+
+				if (key == "limit")
+				{
+					return parsed.parse_scalar(
+						n,
+						name + ": limit",
+						nc->new_container
+						->respawn_limit,
+						error);
+				}
+
+				return true;
+			},
+			error);
+	}
+
+	return true;
 }
 
 void proc_set_override(
