@@ -38,7 +38,7 @@ void test_failedexec()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting " RUNLEVEL_PREFIX "graphical",
-			"failedexec: start pending (dependency)",
+			"failedexec: start pending",
 			"failedexec: cgroup created",
 			"failedexec: /no/such/path/failedexec: No such file or directory",
 			"failedexec: removing",
@@ -77,9 +77,9 @@ void test_capture()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting " RUNLEVEL_PREFIX "graphical",
-			"capture: start pending (dependency)",
+			"capture: start pending",
 			"capture: cgroup created",
-			"capture: started (dependency)",
+			"capture: started",
 			"capture: foo",
 			"capture: bar",
 		})

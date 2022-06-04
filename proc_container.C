@@ -38,17 +38,17 @@ state_starting::operator std::string() const
 {
 	if (starting_runner)
 	{
-		return dependency ? "starting (dependency)"
-			: "starting";
+		return dependency ? "starting"
+			: "starting (manual)";
 	}
 
-	return dependency ? "start pending (dependency)"
-		: "start pending";
+	return dependency ? "start pending"
+		: "start pending (manual)";
 }
 
 state_started::operator std::string() const
 {
-	return dependency ? "started (dependency)" : "started";
+	return dependency ? "started" : "started (manual)";
 }
 
 state_stopping::operator std::string() const

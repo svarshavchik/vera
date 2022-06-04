@@ -22,6 +22,7 @@
 #include <iostream>
 #include <signal.h>
 #include <string.h>
+#include <getopt.h>
 #include <fstream>
 #include <locale>
 #include <string>
@@ -30,6 +31,15 @@
 
 #define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
 #define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
+
+int stopped_flag;
+
+const struct option options[]={
+	{"stopped", 0, &stopped_flag, 1},
+	{nullptr},
+};
+
+extern int optind;
 
 std::string exename;
 
@@ -796,11 +806,13 @@ void vlad(std::vector<std::string> args)
 			const auto &[name_ignore, info]=
 				*status->find(name);
 
+			if (info.state == "stopped" && !stopped_flag)
+				continue;
 			std::cout << name << "\n";
 			std::cout << "    " << info.state;
 
 			if (info.enabled)
-				std::cout << " enabled";
+				std::cout << ", enabled";
 
 			std::cout << "\n";
 		}
@@ -922,6 +934,7 @@ void vlad(std::vector<std::string> args)
 	exit(1);
 }
 
+
 int main(int argc, char **argv)
 {
 	std::locale::global(std::locale{""});
@@ -942,8 +955,11 @@ int main(int argc, char **argv)
 
 	if (exename.substr(slash) == "vlad")
 	{
+		while (getopt_long(argc, argv, "", options, NULL) >= 0)
+			;
+
 		umask(022);
-		vlad({argv+1, argv+argc});
+		vlad({argv+optind, argv+argc});
 	}
 	else
 	{

@@ -88,8 +88,12 @@
 
 	<cmdsynopsis>
 	  <command>vlad</command>
+	  <arg>--stopped</arg>
+	  <arg choice='plain'>status</arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
 	  <group choice='req'>
-	    <arg choice='plain'>status</arg>
 	    <arg choice='plain'>current</arg>
 	    <arg choice='plain'>switch <replaceable>runlevel</replaceable></arg>
 	    <arg choice='plain'>default</arg>
