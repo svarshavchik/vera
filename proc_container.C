@@ -124,6 +124,12 @@ bool proc_containerObj::set_stop_type(const std::string &value)
 		return true;
 	}
 
+	if (value == "target")
+	{
+		stop_type=stop_type_t::target;
+		return true;
+	}
+
 	return false;
 }
 
@@ -148,6 +154,8 @@ const char *proc_containerObj::get_stop_type() const
 		return "automatic";
 	case stop_type_t::manual:
 		return "manual";
+	case stop_type_t::target:
+		return "target";
 	}
 
 	return "UNKNOWN";
@@ -1527,7 +1535,23 @@ struct current_containers_infoObj::start_eligibility {
 	void operator()(state_started &state)
 	{
 		if (!is_dependency)
+		{
+			// The container is already started, so we won't
+			// start it, but mark it as manually-started, for
+			// book-keeping purposes
 			state.dependency=false;
+
+			// If we are asked to start a stop_type=target
+			// container, we can start it again.
+
+			if (next_visited_container->first->stop_type ==
+			    stop_type_t::target)
+			{
+				containers.emplace(
+					next_visited_container->first,
+					next_visited_container);
+			}
+		}
 	}
 
 	void operator()(state_starting &state)
@@ -1807,6 +1831,16 @@ void current_containers_infoObj::stop_with_all_requirements(
 		[&]
 		(const current_container &c)
 		{
+			// Ignore targets
+
+			switch (c->first->stop_type) {
+			case stop_type_t::manual:
+			case stop_type_t::automatic:
+				break;
+			case stop_type_t::target:
+				return;
+			}
+
 			eligibility.next_visited_container=c->first;
 
 			std::visit(eligibility,
@@ -1913,6 +1947,16 @@ void current_containers_infoObj::stop_with_all_requirements(
 			// to bother.
 			if (scheduled_to_be_stopped(iter->first))
 				return;
+
+			// Ignore targets
+
+			switch (iter->first->stop_type) {
+			case stop_type_t::manual:
+			case stop_type_t::automatic:
+				break;
+			case stop_type_t::target:
+				return;
+			}
 
 			// Assume dependency can be stopped until told
 			// otherwise.
@@ -2497,43 +2541,53 @@ void current_containers_infoObj::do_start_runner(
 
 	auto &starting= *starting_ptr;
 
-	// We're starting a container. If the start fails we want to bail
-	// out of starting anything that depends of this, failed, container.
-	//
-	// However we'll do this the other way around: before starting this
-	// container: check if its required_dependencies have are not
-	// in starting state. If so, they must've failed, so we fail too.
+	// A stopping_type=target dependency does not check if all of its
+	// dependencies were started.
+	switch (pc->stop_type) {
+	case stop_type_t::target:
+		break;
+	case stop_type_t::automatic:
+	case stop_type_t::manual:
 
-	bool failed=false;
+		// We're starting a container. If the start fails we want to
+		// bail out of starting anything that depends of this, failed,
+		// container.
+		//
+		// However we'll do this the other way around: before starting
+		// this container: check if its required_dependencies have
+		// are not in starting state. If so, they must've failed, so
+		// we fail too.
 
-	all_required_dependencies(
-		pc,
-		[&]
-		(const current_container &dep)
+		bool failed=false;
+
+		all_required_dependencies(
+			pc,
+			[&]
+			(const current_container &dep)
+			{
+				auto &[pc, run_info] = *dep;
+
+				// When we're breaking a circular dependency
+				// we can see a state_starting here.
+				if (std::holds_alternative<state_started>(
+					    run_info.state)
+				    || std::holds_alternative<state_starting>(
+					    run_info.state
+				    ))
+					return;
+
+				log_container_error(
+					cc->first,
+					_("aborting, dependency not started: ")
+					+ pc->name);
+				failed=true;
+			});
+
+		if (failed)
 		{
-			auto &[pc, run_info] = *dep;
-
-			// When we're breaking a circular dependency we can
-			// see a state_starting here.
-			if (std::holds_alternative<state_started>(
-				    run_info.state)
-			    || std::holds_alternative<state_starting>(
-				    run_info.state
-			    ))
-				return;
-
-			log_container_error(
-				cc->first,
-				_("aborting, dependency not started: ")
-				+ pc->name);
-			failed=true;
-		});
-
-	if (failed)
-	{
-		abort();
-		stop_with_all_requirements(cc, {});
-		return;
+			stop_with_all_requirements(cc, {});
+			return;
+		}
 	}
 	// If there's a non-empty starting command: run it.
 
@@ -3237,9 +3291,11 @@ void current_containers_infoObj::stopped(const std::string &s)
 	}, cc->second.state))
 		return;
 
-	if (cc->first->stop_type == stop_type_t::manual)
-	{
-		// A manual stop: if the container is state_stopping in the
+	switch (cc->first->stop_type) {
+	case stop_type_t::manual:
+	case stop_type_t::target:
+		// The container does not stop automatically. If it is
+		// a manual stop: if the container is state_stopping in the
 		// removal phase we can proceed to a stopped state.
 		if (!std::visit(
 			    [&]
@@ -3260,9 +3316,8 @@ void current_containers_infoObj::stopped(const std::string &s)
 		{
 			return;
 		}
-	}
-	else
-	{
+		break;
+	case stop_type_t::automatic:
 		// Automatic stop: if the container is in any stopping
 		// phase it can move into the stopped state.
 		//

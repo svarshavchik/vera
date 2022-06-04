@@ -273,6 +273,7 @@ int main(int argc, char **argv)
 				"  after:\n"
 				"    - sysinit\n"
 				"stopping:\n"
+				"  type: target\n"
 				"  before:\n"
 				"    - sysinit\n"
 				"version: 1\n";
@@ -305,7 +306,9 @@ int main(int argc, char **argv)
 			o << "  - '" << RUNLEVEL_PREFIX_BASE
 			  << name << "'\n";
 		}
-		o << "version: 1\n";
+		o << "stopping:\n"
+			"  type: target\n"
+			"version: 1\n";
 		o.close();
 
 		if (!o)

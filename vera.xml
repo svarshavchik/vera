@@ -760,8 +760,9 @@ Version: 1</literallayout>
 		    <listitem>
 		      <para>
 			The unit gets stopped by running
-			<command>vlad stop</command> for this unit, or another
-			unit that requires this unit.
+			<command>vlad stop</command> for this unit, or if
+			another unit that this unit requires gets stopped
+			for any reason.
 		      </para>
 		    </listitem>
 		  </varlistentry>
@@ -770,9 +771,35 @@ Version: 1</literallayout>
 		    <term>automatic</term>
 		    <listitem>
 		      <para>
-			The unit gets stopped when all of its processes stop.
-			Termination of the unit's last process has the same
+			The unit also gets stopped when all of its processes
+			stop.
+			When the last process in this unit stops this
+			has the same
 			results as running <command>vlad stop</command>.
+		      </para>
+		    </listitem>
+		  </varlistentry>
+
+		  <varlistentry>
+		    <term>target</term>
+		    <listitem>
+		      <para>
+			Only
+			<command>vlad stop</command> stops this unit.
+			The unit does not get stopped if other units
+			required by it are stopped.
+		      </para>
+
+		      <para>
+			This is used by placeholder units that serve as
+			runlevel targets, or as <quote>Required-By</quote>
+			or <quote>Enabled</quote> dependencies, for example:
+			many units are required by
+			<quote>system/multi-user</quote> or other runlevels.
+			If any of those units stop this does not stop the
+			entire runlevel and all other units in it, even though
+			<quote>system/multi-user</quote> formally requires
+			them.
 		      </para>
 		    </listitem>
 		  </varlistentry>

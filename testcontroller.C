@@ -2399,6 +2399,141 @@ void testrespawn()
 		throw "unexpected state changes after stop (2)";
 }
 
+void testtarget1()
+{
+	auto a=std::make_shared<proc_new_containerObj>("target1a");
+	auto b=std::make_shared<proc_new_containerObj>("target1b");
+	auto c=std::make_shared<proc_new_containerObj>("target1c");
+
+	b->dep_required_by.insert("target1a");
+	c->dep_required_by.insert("target1a");
+	b->starting_before.insert("target1c");
+	c->stopping_after.insert("target1c");
+
+	a->new_container->stop_type=stop_type_t::target;
+	b->new_container->starting_command="start";
+	c->new_container->starting_command="start";
+
+	proc_containers_install({
+			a, b, c,
+		}, container_install::update);
+
+	proc_container_start("target1a");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"target1a: start pending (manual)",
+			"target1c: start pending",
+			"target1b: start pending",
+			"target1b: cgroup created",
+			"target1b: starting",
+		})
+		throw "Unexpected starting state changes (1)";
+
+	logged_state_changes.clear();
+	runner_finished(1, 0);
+	if (logged_state_changes != std::vector<std::string>{
+			"target1b: started",
+			"target1c: cgroup created",
+			"target1c: starting",
+		})
+		throw "Unexpected starting state changes (2)";
+	logged_state_changes.clear();
+	runner_finished(2, 1);
+	if (logged_state_changes != std::vector<std::string>{
+			"target1c: termination signal: 1",
+			"target1c: removing",
+			"target1c: sending SIGTERM",
+			"target1a: started (manual)",
+		})
+		throw "Unexpected starting state changes (3)";
+	logged_state_changes.clear();
+	proc_container_stopped("target1c");
+	if (logged_state_changes != std::vector<std::string>{
+			"target1c: cgroup removed",
+			"target1c: stopped",
+		})
+		throw "Unexpected starting state changes (4)";
+	logged_state_changes.clear();
+	proc_container_stop("target1b");
+	proc_container_stopped("target1b");
+	if (logged_state_changes != std::vector<std::string>{
+			"target1b: stop pending",
+			"target1b: removing",
+			"target1b: sending SIGTERM",
+			"target1b: cgroup removed",
+			"target1b: stopped",
+		})
+		throw "Unexpected starting state changes (5)";
+}
+
+void testtarget2()
+{
+	auto a=std::make_shared<proc_new_containerObj>("target2a");
+	auto b=std::make_shared<proc_new_containerObj>("target2b");
+
+	b->dep_required_by.insert("target2a");
+
+	b->new_container->stop_type=stop_type_t::target;
+
+	proc_containers_install({
+			a, b
+		}, container_install::update);
+
+	proc_container_start("target2a");
+
+	logged_state_changes.clear();
+	proc_container_stop("target2a");
+	if (logged_state_changes != std::vector<std::string>{
+			"target2a: stop pending",
+			"target2a: removing",
+			"target2a: stopped",
+		})
+		throw "Unexpected stopping state changes";
+}
+
+void testtarget3()
+{
+	auto a=std::make_shared<proc_new_containerObj>("target3a");
+	auto b=std::make_shared<proc_new_containerObj>("target3b");
+
+	b->dep_required_by.insert("target3a");
+
+	a->new_container->stop_type=stop_type_t::target;
+	b->new_container->start_type=start_type_t::oneshot;
+	b->new_container->stop_type=stop_type_t::automatic;
+
+	proc_containers_install({
+			a, b
+		}, container_install::update);
+
+	proc_container_start("target3a");
+	if (logged_state_changes != std::vector<std::string>{
+			"target3a: start pending (manual)",
+			"target3b: start pending",
+			"target3b: started",
+			"target3a: started (manual)",
+		})
+		throw "Unexpected starting state changes";
+
+	logged_state_changes.clear();
+	proc_container_stopped("target3b");
+	if (logged_state_changes != std::vector<std::string>{
+			"target3b: stop pending",
+			"target3b: removing",
+			"target3b: stopped",
+		})
+		throw "Unexpected stopping state changes";
+	logged_state_changes.clear();
+	proc_container_start("target3a");
+	if (logged_state_changes != std::vector<std::string>{
+			"target3a: start pending (manual)",
+			"target3b: start pending",
+			"target3b: started",
+			"target3a: started (manual)",
+		})
+		throw "Unexpected restarting state changes";
+}
+
 int main()
 {
 	alarm(60);
@@ -2537,6 +2672,17 @@ int main()
 		test="respawn";
 		testrespawn();
 
+		test_reset();
+		test="target1";
+		testtarget1();
+
+		test_reset();
+		test="target2";
+		testtarget2();
+
+		test_reset();
+		test="target3";
+		testtarget3();
 		test_reset();
 	} catch (const char *e)
 	{

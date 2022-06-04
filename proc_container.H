@@ -100,6 +100,7 @@ inline bool is_oneshot_like(start_type_t start_type)
 enum class stop_type_t {
 	automatic,
 	manual,
+	target
 };
 
 //! Implementation object.
