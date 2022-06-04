@@ -483,8 +483,15 @@ EOF
 
 diff -U 3 loadtest.expected loadtest.out
 
-./testprocloader genrunlevels loadtest.txt
-
+rm -rf globaldir
+mkdir -p globaldir
+./testprocloader genrunlevels loadtest.txt globaldir
+cd globaldir
+for f in *
+do
+    ../vlad validate $f "system/$f"
+done
+cd ..
 rm -rf globaldir localdir overridedir
 mkdir -p globaldir localdir overridedir
 

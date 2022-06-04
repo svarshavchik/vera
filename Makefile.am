@@ -94,7 +94,7 @@ install-exec-hook:
 	ln $(DESTDIR)$(sbindir)/vera $(DESTDIR)$(sbindir)/vlad
 
 install-data-local:
-	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)
+	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system
 	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOCALCONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(OVERRIDECONFIGDIR)
@@ -102,7 +102,7 @@ install-data-local:
 	chmod 755 $(DESTDIR)$(CONFIGDIR)
 	chmod 755 $(DESTDIR)$(LOCALCONFIGDIR)
 	chmod 755 $(DESTDIR)$(OVERRIDECONFIGDIR)
-	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG)
+	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG) $(DESTDIR)$(INSTALLCONFIGDIR)/system
 
 uninstall-local:
 	rm -f  $(DESTDIR)$(RUNLEVELCONFIG)

@@ -408,22 +408,44 @@
 
 	  <note>
 	    <para>
-	      <command>vera</command> reserves several unit specification names
-	      for its internal use:
+	      <command>vera</command> reserves unit names prefixed by
+	      <quote>system/</quote>
+	      for its internal use, specifically.
 	    </para>
 
 	    <itemizedlist>
 	      <listitem>
 		<para>
-		  <quote>system/runlevel
-		  <replaceable>name</replaceable></quote> are
-		  internally-generated unit specifications that represent
-		  runlevels. This is done by prepending
-		  <quote>system/runlevel</quote>
-		  to the name of each runlevel, as listed in
-		  <xref linkend="runlevels" />, above (examples:
-		  <quote>system/runlevel graphical</quote>,
-		  <quote>system/runlevel reboot</quote>).
+		  Each runlevel (see <xref linkend="runlevels" /> above)
+		  has a corresponding
+		  <quote>system/<replaceable>name</replaceable></quote>.
+		  Installing a unit specification for a specific runlevel
+		  is nothing more than defining <quote>enabled:
+		  system/<replaceable>name</replaceable></quote> in its
+		  specification file, for example:
+		</para>
+		<blockquote>
+		  <informalexample>
+		    <literallayout>
+enabled:
+   - system/multi-user
+   - system/graphical&#10;
+</literallayout>
+		  </informalexample>
+		</blockquote>
+
+		<para>
+		  Enabling this unit results in it getting started
+		  automatically in the <quote>multi-user</quote> and
+		  <quote>graphical</quote> runlevels.
+		</para>
+	      </listitem>
+
+	      <listitem>
+		<para>
+		  Similarly, <quote>system/sysinit</quote>-required units
+		  get started in all runlevels, and before the runlevel-
+		  specific units.
 		</para>
 	      </listitem>
 	    </itemizedlist>
@@ -461,8 +483,8 @@ Required-by:
     - calendar
 
 Enabled:
-    - system/multi-user runlevel
-    - system/graphical runlevel
+    - system/multi-user
+    - system/graphical
 
 Starting:
     type: forking
@@ -985,11 +1007,11 @@ Respawn:
 
 	      <para>
 		For example: a unit defined that it's
-		<quote>enabled: system/graphical runlevel</quote>,
+		<quote>enabled: system/graphical</quote>,
 		then it gets enabled (by the <command>enable</command> command).
 		The resulting
 		<quote>required-by</quote>
-		of the<quote>system/graphical runlevel</quote> has the
+		of the<quote>system/graphical</quote> has the
 		following effect:
 		switching, or starting, that runlevel starts this unit (as part
 		of the runlevel).

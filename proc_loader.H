@@ -172,6 +172,7 @@ bool proc_set_runlevel_default(
 	const std::string &new_runlevel,
 	const std::function<void (const std::string &)> &error);
 
-#define RUNLEVEL_PREFIX "system/runlevel "
+#define RUNLEVEL_PREFIX_BASE "runlevel "
+#define RUNLEVEL_PREFIX "system/" RUNLEVEL_PREFIX_BASE
 
 #endif

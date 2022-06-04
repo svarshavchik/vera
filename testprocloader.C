@@ -242,10 +242,75 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	if (args.size() == 3 && args[1] == "genrunlevels")
+	if (args.size() == 4 && args[1] == "genrunlevels")
 	{
-		if (!proc_set_runlevel_config(args[2], default_runlevels()))
+		auto rl=default_runlevels();
+
+		if (!proc_set_runlevel_config(args[2], rl))
 		{
+			exit(1);
+		}
+
+		for (auto &[name, aliases] : rl)
+		{
+			auto filename=args[3] + "/" + name;
+
+			std::ofstream o{filename};
+
+			if (!o)
+			{
+				perror(filename.c_str());
+				exit(1);
+			}
+
+			o << "# Automatically generated\n"
+				"name: " << name << "\n"
+				"description: processes started in runlevel "
+			  << name << "\n"
+				"required-by: '" << RUNLEVEL_PREFIX_BASE
+			  << name << "'\n"
+				"starting:\n"
+				"  after:\n"
+				"    - sysinit\n"
+				"stopping:\n"
+				"  before:\n"
+				"    - sysinit\n"
+				"version: 1\n";
+			o.close();
+
+			if (!o)
+			{
+				perror(filename.c_str());
+				exit(1);
+			}
+		}
+
+		auto filename=args[3] + "/sysinit";
+
+		std::ofstream o{filename};
+
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+
+		o << "# Automatically generated\n"
+			"name: sysinit\n"
+			"description: processes started at system boot\n"
+			"required-by:\n";
+
+		for (auto &[name, aliases] : rl)
+		{
+			o << "  - '" << RUNLEVEL_PREFIX_BASE
+			  << name << "'\n";
+		}
+		o << "version: 1\n";
+		o.close();
+
+		if (!o)
+		{
+			perror(filename.c_str());
 			exit(1);
 		}
 		return 0;
