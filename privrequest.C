@@ -270,6 +270,15 @@ std::optional<std::unordered_map<std::string, container_state_info>> get_status(
 			{
 				info.state=std::string{++p, e};
 			}
+
+			if (keyword == "timestamp" && p != e)
+			{
+				std::istringstream i{{++p, e}};
+
+				i.imbue(std::locale{"C"});
+
+				i >> info.timestamp;
+			}
 		}
 
 		m.emplace(std::move(name), std::move(info));

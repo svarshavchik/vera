@@ -29,12 +29,12 @@
 
     <blockquote>
       <informalexample>
-	<programlisting>./configure --sysconfdir=/etc --sbindir=/sbin \&#10;    --libdir=/lib --localstatedir=/run</programlisting>
+	<programlisting>./configure --sysconfdir=/etc --sbindir=/sbin \&#10;    --libdir=/lib --localstatedir=/run \&#10;    --localedir=/usr/share/locale</programlisting>
       </informalexample>
     </blockquote>
 
     <para>
-      This install <command>vera</command> and <command>vlad</command> commands
+      This installs <command>vera</command> and <command>vlad</command> commands
       into <filename>/sbin</filename>, the unit configuration file directory
       gets created in <filename>/lib/vera</filename>; the local
       unit configuration overrides and other configuration files in

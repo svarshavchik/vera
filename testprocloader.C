@@ -25,9 +25,9 @@ void loadtest(const proc_new_container_set &res)
 			  << ":start=" << n->new_container->get_start_type()
 			  << ":stop=" << n->new_container->get_stop_type()
 			  << "\n";
-		if (!n->description.empty())
+		if (!n->new_container->description.empty())
 			std::cout << name << ":description="
-				  << n->description << "\n";
+				  << n->new_container->description << "\n";
 		for (const auto &r:n->dep_requires)
 			std::cout << name << ":requires " << r << "\n";
 		for (const auto &r:n->dep_required_by)
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
 
 			o << "# Automatically generated\n"
 				"name: " << name << "\n"
-				"description: processes started in runlevel "
+				"description: processes for runlevel "
 			  << name << "\n"
 				"required-by: '" << RUNLEVEL_PREFIX_BASE
 			  << name << "'\n"
@@ -298,7 +298,7 @@ int main(int argc, char **argv)
 
 		o << "# Automatically generated\n"
 			"name: sysinit\n"
-			"description: processes started at system boot\n"
+			"description: processes for system startup\n"
 			"required-by:\n";
 
 		for (auto &[name, aliases] : rl)

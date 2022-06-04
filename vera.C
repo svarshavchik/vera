@@ -23,8 +23,10 @@
 #include <signal.h>
 #include <string.h>
 #include <getopt.h>
+#include <time.h>
 #include <fstream>
 #include <locale>
+#include <iomanip>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -801,6 +803,10 @@ void vlad(std::vector<std::string> args)
 		}
 
 		std::sort(containers.begin(), containers.end());
+
+		auto now=log_current_time();
+		auto real_now=time(NULL);
+
 		for (auto &name:containers)
 		{
 			const auto &[name_ignore, info]=
@@ -814,6 +820,63 @@ void vlad(std::vector<std::string> args)
 			if (info.enabled)
 				std::cout << ", enabled";
 
+			if (info.timestamp && info.timestamp < now)
+			{
+				auto minutes=(now-info.timestamp) / 60;
+
+				if (minutes < 1)
+				{
+					std::cout << _(" just now");
+				} else if (minutes < 60)
+				{
+					std::cout << " " << minutes
+						  << N_(" minute ago",
+							" minutes ago",
+							minutes);
+				}
+				else
+				{
+					auto real_start_time=real_now -
+						(now-info.timestamp);
+					auto tm=*localtime(&real_start_time);
+
+					if ( (minutes /= 60) < 24)
+					{
+						std::cout << std::put_time(
+							&tm, " %X ("
+						);
+
+						std::cout << minutes
+							  << N_(" hour ago",
+								" hours ago",
+								minutes);
+					} else if ( (minutes /= 24) < 7)
+					{
+						std::cout << std::put_time(
+							&tm, " %c ("
+						);
+
+						std::cout << minutes
+							  << N_(" day ago",
+								" days ago",
+								minutes);
+					}
+					else
+					{
+						std::cout << std::put_time(
+							&tm, " %c ("
+						);
+
+						minutes /= 7;
+
+						std::cout << minutes
+							  << N_(" week ago",
+								" weeks ago",
+								minutes);
+					}
+					std::cout << ")";
+				}
+			}
 			std::cout << "\n";
 		}
 		return;
@@ -939,6 +1002,8 @@ int main(int argc, char **argv)
 {
 	std::locale::global(std::locale{""});
 
+	bindtextdomain(PACKAGE, LOCALEDIR);
+	textdomain(PACKAGE);
 	// Set up logging.
 
 	log_to_syslog=getpid() == 1 ? log_to_real_syslog:log_to_stdout;

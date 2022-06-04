@@ -1064,6 +1064,11 @@ void test_install()
 
 		auto ret=get_status(pubsocketb);
 
+		if (ret)
+		{
+			for (auto &[name, state] : *ret)
+				state.timestamp=0;
+		}
 		if (!ret || *ret != std::unordered_map<std::string,
 		    container_state_info>{
 			    {"installa",{"stopped"}},

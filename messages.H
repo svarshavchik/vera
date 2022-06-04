@@ -8,6 +8,6 @@
 #include <libintl.h>
 
 #define _(x) (gettext(x))
-
+#define N_(a,b,n) (ngettext((a),(b),(n)))
 
 #endif

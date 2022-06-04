@@ -31,7 +31,9 @@ void log_state_change(const proc_container &pc,
 #ifdef UNIT_TEST
 	std::cout << pc->name << ": " << o.str() << "\n";
 #else
-	log_container_message(pc, o.str());
+	log_message(o.str() + " " + (
+			    pc->description.empty() ? pc->name:pc->description
+		    ));
 #endif
 }
 

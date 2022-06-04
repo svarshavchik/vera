@@ -1034,7 +1034,7 @@ static bool proc_load_container(
 			    n,
 			    name + "/description",
 			    error,
-			    nc->description))
+			    nc->new_container->description))
 			return false;
 	}
 

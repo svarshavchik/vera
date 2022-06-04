@@ -113,6 +113,9 @@ public:
 	//! The container's name
 	const std::string name;
 
+	//! Container's description
+	std::string description;
+
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
 
@@ -189,9 +192,6 @@ public:
 		)}
 	{
 	}
-
-	//! Container's description
-	std::string description;
 
 	//! What other process containers this one requires
 	std::unordered_set<std::string> dep_requires;

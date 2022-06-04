@@ -99,6 +99,8 @@ void proxy_status(const external_filedesc &privfd,
 struct container_state_info {
 	std::string state;
 
+	time_t timestamp=0;
+
 	bool enabled=false;
 
 	bool operator==(const container_state_info &) const=default;

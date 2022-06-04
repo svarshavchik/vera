@@ -1396,6 +1396,18 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 				return state;
 			}, run_info.state)
 		  << "\n";
+
+		std::visit(
+			[&]
+			(const auto &state)
+			{
+				if constexpr(std::is_same_v<std::remove_cvref_t<
+					     decltype(state)>, state_started>) {
+
+					o << "timestamp:" << state.start_time
+					  << "\n";
+				}
+			}, run_info.state);
 		o << "\n";
 	}
 
