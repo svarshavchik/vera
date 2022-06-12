@@ -1447,10 +1447,26 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 					  << "\n";
 				}
 			}, run_info.state);
+
+		if (run_info.group)
+		{
+			auto pids=run_info.group->cgroups_getpids();
+
+			if (!pids.empty())
+			{
+				o << "pids:";
+				for (auto p:pids)
+				{
+					o << " " << p;
+				}
+				o << "\n";
+			}
+		}
 		o << "\n";
 	}
 
-	efd->write_all(o.str());
+	auto s=std::move(o).str();
+	write(efd->fd, s.c_str(), s.size());
 }
 
 std::string current_containers_infoObj::runlevel(
@@ -1558,9 +1574,21 @@ void proc_do_request(external_filedesc efd)
 
 	if (ln == "status")
 	{
-		get_containers_info(nullptr)->status(efd);
+		request_fd(efd);
+
+		auto tmp=request_recvfd(efd);
+
+		if (tmp)
+			proc_do_status_request(efd, tmp);
 		return;
 	}
+}
+
+void proc_do_status_request(const external_filedesc &req,
+			    const external_filedesc &tmp)
+{
+	get_containers_info(nullptr)->status(tmp);
+	req->write_all("\n");
 }
 
 //////////////////////////////////////////////////////////////////////////

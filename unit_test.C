@@ -112,6 +112,11 @@ void proc_container_group::cgroups_sendsig(int sig)
 {
 }
 
+std::vector<pid_t> proc_container_group::cgroups_getpids()
+{
+	return {};
+}
+
 void proc_container_group::prepare_to_transfer_fd(int &fd)
 {
 	fcntl(fd, F_SETFD, 0);

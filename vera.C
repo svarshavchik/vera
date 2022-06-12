@@ -14,6 +14,7 @@
 #include "external_filedesc.H"
 #include "privrequest.H"
 #include <unistd.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -211,14 +212,38 @@ void proc_container_group::cgroups_sendsig(int sig)
 {
 	std::ifstream i{cgroups_dir() + "/cgroup.procs"};
 
-	pid_t p;
-
-	i.imbue(std::locale{"C"});
-
-	while (i >> p)
+	if (i)
 	{
-		kill(p, sig);
+		pid_t p;
+
+		i.imbue(std::locale{"C"});
+
+		while (i >> p)
+		{
+			kill(p, sig);
+		}
 	}
+}
+
+// Return all processes in a container.
+
+std::vector<pid_t> proc_container_group::cgroups_getpids()
+{
+	std::vector<pid_t> pids;
+
+	std::ifstream i{cgroups_dir() + "/cgroup.procs"};
+
+	if (i)
+	{
+		pid_t p;
+
+		i.imbue(std::locale{"C"});
+
+		while (i >> p)
+			pids.push_back(p);
+	}
+
+	return pids;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -481,13 +506,18 @@ void do_pub_request(external_filedesc pubfd)
 
 	if (cmd == "status")
 	{
+		request_fd(pubfd);
+		auto tmp=request_recvfd(pubfd);
+
 		auto fd=try_connect_vera_priv();
 
 		if (!fd)
 			return;
 
 		request_status(fd);
-		proxy_status(fd, pubfd);
+		request_fd_wait(fd);
+		request_send_fd(fd, tmp->fd);
+		request_fd_wait(fd);
 		return;
 	}
 }
@@ -619,6 +649,34 @@ void do_override(const std::string &name, const char *type)
 				  exit_code=1;
 			  });
 	exit(exit_code);
+}
+
+namespace {
+#if 0
+}
+#endif
+
+void dump_processes(const container_state_info::hier_pids &processes,
+		    size_t level)
+{
+	for (auto &[pid, procinfo] : processes)
+	{
+		std::cout << std::setw(12 + level * 4) << pid
+			  << std::setw(0);
+
+		for (auto &word:procinfo.parent_pid.cmdline)
+		{
+			std::cout << " " << word;
+		}
+		std::cout << "\n";
+
+		dump_processes(procinfo.child_pids, level+1);
+	}
+}
+
+#if 0
+{
+#endif
 }
 
 void vlad(std::vector<std::string> args)
@@ -793,31 +851,29 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() >= 1 && args[0] == "status")
 	{
+		FILE *fpfd=tmpfile();
+
 		auto fd=connect_vera_pub();
 
 		request_status(fd);
+		request_fd_wait(fd);
+		request_send_fd(fd, fileno(fpfd));
 
-		auto status=get_status(fd);
-
-		if (!status)
-		{
-			std::cerr << "Cannot retrieve current container status"
-				  << std::endl;
-			exit(1);
-		}
+		auto status=get_status(fd, fileno(fpfd));
 
 		update_status_overrides(
-			*status,
+			status,
 			INSTALLCONFIGDIR,
 			LOCALCONFIGDIR,
 			OVERRIDECONFIGDIR
 		);
 
+		// Retrieve the names of all containers and sort them.
 		std::vector<std::string> containers;
 
-		containers.reserve(status->size());
+		containers.reserve(status.size());
 
-		for (const auto &[name, status] : *status)
+		for (const auto &[name, status] : status)
 		{
 			if (args.size() >= 2 && name != args[1])
 				continue;
@@ -829,10 +885,10 @@ void vlad(std::vector<std::string> args)
 		auto now=log_current_time();
 		auto real_now=time(NULL);
 
+		// Go through the containers in sorted order.
 		for (auto &name:containers)
 		{
-			const auto &[name_ignore, info]=
-				*status->find(name);
+			auto &[name_ignore, info]=*status.find(name);
 
 			if (info.state == "stopped" && !stopped_flag)
 				continue;
@@ -900,6 +956,8 @@ void vlad(std::vector<std::string> args)
 				}
 			}
 			std::cout << "\n";
+
+			dump_processes(info.processes, 0);
 		}
 		return;
 	}

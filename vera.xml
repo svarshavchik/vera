@@ -212,11 +212,15 @@
 	  <title>Runlevels</title>
 
 	  <para>
-	    The <quote>status</quote> command takes no arguments and shows
-	    a list of all units and their current state, and
+	    The <quote>status</quote> command shows
+	    a list of all units, their current state, and their processes.
 	    <quote>current</quote> shows the current <quote>runlevel</quote>.
 	    <quote>status</quote> omits stopped units by default; the
 	    <quote>--stopped</quote> option includes them in the output.
+	    <quote>status</quote> reads unit specifications from their
+	    directories (see <xref linkend="units" />), the output may be
+	    incomplete if the running userid does not have permissions to
+	    access them.
 	  </para>
 
 	  <para>

@@ -42,6 +42,16 @@ proc_container_set current_proc_containers();
 
 void proc_do_request(external_filedesc);
 
+//! Process the STATUS request, writing the result to this file descriptor
+
+//! First parameter is the requester's connection.
+//!
+//! Second parameter is the requester's file descriptor, obtained from
+//! request_recvfd().
+
+void proc_do_status_request(const external_filedesc &req,
+			    const external_filedesc &tmp);
+
 //! All processes in the container have exited.
 
 //! Or maybe not. is_populated comes from cgroup.events. Some entry paths

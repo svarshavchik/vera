@@ -9,7 +9,9 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <optional>
+#include <signal.h>
 
 // Send requests and process responses over a privileged (root) sockets.
 
@@ -90,11 +92,25 @@ std::tuple<external_filedesc, external_filedesc> create_fake_request();
 
 void request_status(const external_filedesc &efd);
 
-// Read the status request from the daemon, save it in a temporary file,
-// send the temporary file descriptor to the requesting connection.
+// Helper function used to receive the file descriptor.
 
-void proxy_status(const external_filedesc &privfd,
-		  const external_filedesc &requestfd);
+// Parameter is the connection to the requester.
+//
+// Receives and returns the file descriptor, verifying that it is IS_REG.
+
+external_filedesc request_recvfd(const external_filedesc &efd);
+
+// Handshake: daemon: request a file descriptor
+
+void request_fd(const external_filedesc &efd);
+
+// Handshake: requester: wait for the daemon to request a file descriptor
+
+void request_fd_wait(const external_filedesc &efd);
+
+// Send a file descriptor to the requesting daemon
+
+void request_send_fd(const external_filedesc &efd, int statusfd);
 
 struct container_state_info {
 	std::string state;
@@ -103,18 +119,56 @@ struct container_state_info {
 
 	bool enabled=false;
 
+	// Bare-bounes information about a process in the container.
+	struct pid_info {
+
+		// Its parent process id
+		pid_t ppid{1};
+
+		// Its command line
+		std::vector<std::string> cmdline;
+		bool operator==(const pid_info &) const=default;
+		bool operator<=>(const pid_info &) const=default;
+	};
+
+	struct hier_pid_info;
+
+	// Processes arranged in a parent-child hierarchy
+	typedef std::map<pid_t, hier_pid_info> hier_pids;
+
+	struct hier_pid_info {
+
+		// This is actually this process's pid. Thsi is the parent
+		// of all the child_pids
+		pid_info parent_pid;
+
+		// parent_pid's child processes.
+		hier_pids child_pids;
+
+		bool operator==(const hier_pid_info &) const=default;
+		bool operator<=>(const hier_pid_info &) const=default;
+	};
+
+	// Processes in this container/
+	hier_pids processes;
+
 	bool operator==(const container_state_info &) const=default;
 };
 
 // Receive and parse the container state.
 
-// Returns a map, the key is the container name. nullopt return indicates an
-// error.
+// This is the end result of the following sequence: request_status, followed
+// by request_fd_wait, followed by request_send_fd(). get_status() gets
+// called with the daemon connection and the temporary file descriptor that
+// was passed to request_sendfd().
+//
+// Returns a map, the key is the container name.
 //
 // container_state_info does not reflect overrides.
 
-std::optional<std::unordered_map<std::string, container_state_info>> get_status(
-	const external_filedesc &requestfd
+std::unordered_map<std::string, container_state_info> get_status(
+	const external_filedesc &efd,
+	int statusfd
 );
 
 // Update the container_state_info map to reflect the current overrides

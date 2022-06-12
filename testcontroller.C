@@ -1053,24 +1053,30 @@ void test_install()
 		auto [privsocketa, privsocketb] = create_fake_request();
 
 		request_status(privsocketa);
-		proc_do_request(privsocketb);
+
+		if (privsocketb->readln() != "status")
+			throw "Did not receive status command";
+
+		FILE *fp=tmpfile();
+
+		request_fd(privsocketb);
+
+		request_fd_wait(privsocketa);
+
+		request_send_fd(privsocketa, fileno(fp));
+
+		proc_do_status_request(privsocketb,
+				       request_recvfd(privsocketb));
+
 		privsocketb=nullptr;
 
-		auto [pubsocketa, pubsocketb] = create_fake_request();
+		auto ret=get_status(privsocketa, fileno(fp));
 
-		proxy_status(privsocketa, pubsocketa);
+		for (auto &[name, state] : ret)
+			state.timestamp=0;
 
-		privsocketa=nullptr;
-
-		auto ret=get_status(pubsocketb);
-
-		if (ret)
-		{
-			for (auto &[name, state] : *ret)
-				state.timestamp=0;
-		}
-		if (!ret || *ret != std::unordered_map<std::string,
-		    container_state_info>{
+		if (ret != std::unordered_map<std::string, container_state_info>
+		    {
 			    {"installa",{"stopped"}},
 			    {"installb",{"started (manual)"}},
 			    {"installc",{"started (manual)"}}
@@ -1080,6 +1086,19 @@ void test_install()
 		}
 	}
 
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		FILE *fp=fopen("/dev/null", "r+");
+
+		if (!fp)
+			throw "cannot open /dev/null?";
+
+		request_send_fd(privsocketa, fileno(fp));
+
+		if (request_recvfd(privsocketb))
+			throw "received special file descriptor unexpectedly";
+	}
 	logged_state_changes.clear();
 
 	proc_containers_install({

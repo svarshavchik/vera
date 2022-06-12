@@ -9,6 +9,8 @@
 #include "proc_containerfwd.H"
 #include <tuple>
 #include <string>
+#include <vector>
+#include <signal.h>
 
 struct group_create_info;
 
@@ -120,6 +122,10 @@ public:
 	//! Send a signal to all processes in the group
 
 	void cgroups_sendsig(int);
+
+	//! Return a list of processes in the group
+
+	std::vector<pid_t> cgroups_getpids();
 
 	//! Record an updated container definition.
 

@@ -6,7 +6,9 @@
 #include "privrequest.H"
 #include "proc_loader.H"
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sstream>
+#include <fstream>
 #include <fcntl.h>
 #include <locale>
 #include <algorithm>
@@ -142,61 +144,8 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
 	return ret;
 }
 
-void request_status(const external_filedesc &efd)
+external_filedesc request_recvfd(const external_filedesc &efd)
 {
-	efd->write_all("status\n");
-}
-
-void proxy_status(const external_filedesc &privfd,
-		  const external_filedesc &requestfd)
-{
-	FILE *fp=tmpfile();
-
-	if (!fp)
-		return;
-
-	char buffer[1024];
-
-	ssize_t n;
-
-	while ((n=read(privfd->fd, buffer, sizeof(buffer))) > 0)
-	{
-		write(fileno(fp),buffer, n);
-	}
-
-	fseek(fp, 0L, SEEK_SET);
-
-	int fpfd=fileno(fp);
-
-	struct iovec iov{};
-	char dummy{0};
-
-	struct msghdr msg{};
-	char buf[CMSG_SPACE(sizeof(fpfd))]={0};
-
-	msg.msg_control=buf;
-	msg.msg_controllen=sizeof(buf);
-
-	auto cmsg = CMSG_FIRSTHDR(&msg);
-	cmsg->cmsg_level=SOL_SOCKET;
-	cmsg->cmsg_type=SCM_RIGHTS;
-	cmsg->cmsg_len=CMSG_LEN(sizeof(fpfd));
-	memcpy(CMSG_DATA(cmsg), &fpfd, sizeof(fpfd));
-
-	msg.msg_iov=&iov;
-	msg.msg_iovlen=1;
-	iov.iov_base=&dummy;
-	iov.iov_len=1;
-	sendmsg(requestfd->fd, &msg, MSG_NOSIGNAL);
-}
-
-std::optional<std::unordered_map<std::string, container_state_info>> get_status(
-	const external_filedesc &requestfd
-)
-{
-	std::optional<std::unordered_map<std::string, container_state_info>
-		      > ret;
-
 	int fd;
 	struct msghdr msg{};
 	char buf[CMSG_SPACE(sizeof(fd))];
@@ -212,11 +161,11 @@ std::optional<std::unordered_map<std::string, container_state_info>> get_status(
 	iov.iov_base=&dummy;
 	iov.iov_len=1;
 
-	if (recvmsg(requestfd->fd, &msg, 0) < 0)
-		return ret;
+	if (recvmsg(efd->fd, &msg, 0) < 0)
+		return nullptr;
 
 	if (msg.msg_controllen < sizeof(buf))
-		return ret;
+		return nullptr;
 
 	auto cmsg=CMSG_FIRSTHDR(&msg);
 
@@ -224,34 +173,94 @@ std::optional<std::unordered_map<std::string, container_state_info>> get_status(
 	    cmsg->cmsg_type != SCM_RIGHTS ||
 	    cmsg->cmsg_len != CMSG_LEN(sizeof(fd)))
 	{
-		return ret;
+		return nullptr;
 	}
 	memcpy(&fd, CMSG_DATA(cmsg), sizeof(fd));
 
-	auto efd=std::make_shared<external_filedescObj>(fd);
+	auto ret=std::make_shared<external_filedescObj>(fd);
+
+	// This must be a regular file.
+
+	struct stat stat_buf;
+
+	if (fstat(ret->fd, &stat_buf) < 0 ||
+	    !S_ISREG(stat_buf.st_mode))
+		return nullptr;
+
+	return ret;
+}
+
+void request_fd(const external_filedesc &efd)
+{
+	efd->write_all("\n");
+}
+
+void request_fd_wait(const external_filedesc &efd)
+{
+	efd->readln();
+}
+
+void request_send_fd(const external_filedesc &efd, int statusfd)
+{
+	struct iovec iov{};
+	char dummy{0};
+
+	struct msghdr msg{};
+	char buf[CMSG_SPACE(sizeof(statusfd))]={0};
+
+	msg.msg_control=buf;
+	msg.msg_controllen=sizeof(buf);
+
+	auto cmsg = CMSG_FIRSTHDR(&msg);
+	cmsg->cmsg_level=SOL_SOCKET;
+	cmsg->cmsg_type=SCM_RIGHTS;
+	cmsg->cmsg_len=CMSG_LEN(sizeof(statusfd));
+	memcpy(CMSG_DATA(cmsg), &statusfd, sizeof(statusfd));
+
+	msg.msg_iov=&iov;
+	msg.msg_iovlen=1;
+	iov.iov_base=&dummy;
+	iov.iov_len=1;
+	sendmsg(efd->fd, &msg, MSG_NOSIGNAL);
+}
+
+void request_status(const external_filedesc &efd)
+{
+	efd->write_all("status\n");
+}
+
+std::unordered_map<std::string, container_state_info> get_status(
+	const external_filedesc &efd,
+	int fd)
+{
+	request_fd_wait(efd);
+	std::unordered_map<std::string, container_state_info> m;
 
 	std::stringstream s;
 
 	s.imbue(std::locale{"C"});
 
+	if (lseek(fd, 0L, SEEK_SET) == 0)
 	{
 		char buffer[1024];
 
 		ssize_t n;
 
-		while ((n=read(efd->fd, buffer, sizeof(buffer))) > 0)
+		while ((n=read(fd, buffer, sizeof(buffer))) > 0)
 			s << std::string{buffer, buffer+n};
 	}
 
 	s.seekg(0);
-
-	auto &m=ret.emplace();
 
 	std::string name;
 
 	while (std::getline(s, name))
 	{
 		container_state_info info;
+
+		// Linear list of processes in the container
+		std::unordered_map<pid_t,
+				   container_state_info::pid_info> processes;
 
 		std::string line;
 
@@ -281,12 +290,116 @@ std::optional<std::unordered_map<std::string, container_state_info>> get_status(
 
 				i >> info.timestamp;
 			}
+
+			if (keyword == "pids" && p != e)
+			{
+				std::istringstream i{{++p, e}};
+
+				i.imbue(std::locale{"C"});
+
+				pid_t p;
+
+				while (i >> p)
+				{
+					auto &pid_info=processes[p];
+
+					{
+						std::ostringstream o;
+
+						o.imbue(std::locale{"C"});
+						o << "/proc/" << p << "/stat";
+
+						std::ifstream i{o.str()};
+
+						std::string s;
+
+						i >> s; // pid
+
+						i >> s; // comm
+
+						i >> s; // state
+
+						i >> pid_info.ppid;
+					}
+
+					{
+						std::ostringstream o;
+
+						o.imbue(std::locale{"C"});
+						o << "/proc/"
+						  << p << "/cmdline";
+
+						std::ifstream i{o.str()};
+
+						std::string s;
+
+						while (std::getline(i, s, '\0'))
+							pid_info.cmdline
+								.push_back(s);
+					}
+				}
+			}
 		}
+
+#if 0
+		if (name == "name2")
+		{
+			processes={
+				{2, {1, {"pid 2"}}},
+				{3, {2, {"pid 3"}}},
+				{4, {2, {"pid 4"}}},
+				{5, {1, {"pid 5"}}},
+				{6, {5, {"pid 6"}}},
+				{7, {5, {"pid 7"}}},
+				{8, {6, {"pid 8"}}},
+			};
+		}
+#endif
+		std::unordered_map<pid_t,
+				   container_state_info::hier_pid_info *
+				   > parent_pid_lookup;
+
+		while (!processes.empty())
+		{
+			auto b=processes.begin();
+
+			auto p=processes.find(b->second.ppid);
+
+			while (p != processes.end())
+			{
+				b=p;
+				p=processes.find(b->second.ppid);
+			}
+
+			auto parent=parent_pid_lookup.find(b->second.ppid);
+
+			if (parent != parent_pid_lookup.end())
+			{
+				parent_pid_lookup[b->first]=&(
+					parent->second->child_pids[b->first]=
+					container_state_info::hier_pid_info{
+						std::move(b->second)
+					}
+				);
+			}
+			else
+			{
+				parent_pid_lookup[b->first]=&(
+					info.processes[b->first]=
+					container_state_info::hier_pid_info{
+						std::move(b->second),
+						{}
+					}
+				);
+			}
+			processes.erase(b);
+		}
+
 
 		m.emplace(std::move(name), std::move(info));
 	}
 
-	return ret;
+	return m;
 }
 
 void update_status_overrides(
