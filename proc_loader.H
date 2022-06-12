@@ -176,7 +176,11 @@ bool proc_set_runlevel_default(
 	const std::string &new_runlevel,
 	const std::function<void (const std::string &)> &error);
 
+#define SYSTEM_PREFIX "system/"
+
 #define RUNLEVEL_PREFIX_BASE "runlevel "
-#define RUNLEVEL_PREFIX "system/" RUNLEVEL_PREFIX_BASE
+#define RUNLEVEL_PREFIX SYSTEM_PREFIX RUNLEVEL_PREFIX_BASE
+
+#define SIGPWR_UNIT "sigpwr"
 
 #endif

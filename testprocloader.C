@@ -222,7 +222,7 @@ int main(int argc, char **argv)
 				"# Units that should be started in this "
 				"runlevel specify:\n"
 				"#\n"
-				"# Enabled: system/" << name << "\n"
+				"# Enabled: " SYSTEM_PREFIX << name << "\n"
 				"\n"
 				"name: " << name << "\n"
 				"description: processes for runlevel "
@@ -260,7 +260,7 @@ int main(int argc, char **argv)
 			"# Units that should be started at system boot time"
 			" specify:\n"
 			"#\n"
-			"# Required-By: system/sysinit\n"
+			"# Required-By: " SYSTEM_PREFIX "sysinit\n"
 			"\n"
 			"name: sysinit\n"
 			"description: processes for system startup\n"
@@ -281,6 +281,39 @@ int main(int argc, char **argv)
 			perror(filename.c_str());
 			exit(1);
 		}
+
+		filename=args[3] + "/" SIGPWR_UNIT;
+
+		o.open(filename);
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+		o << "# This file was automatically generated\n"
+			"# Units that should be started by SIGPWR should"
+			" specify:\n"
+			"#\n"
+			"# Enabled: " SYSTEM_PREFIX SIGPWR_UNIT "\n"
+			"#\n"
+			"# Enabling the unit results in it getting started"
+			" in response to a SIGPWR event\n"
+			"\n"
+			"name: " SIGPWR_UNIT "\n"
+			"description: SIGPWR event\n"
+			"starting:\n"
+			"  type: oneshot\n"
+			"stopping:\n"
+			"  type: target\n"
+			"version: 1\n";
+		o.close();
+
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+
 		return 0;
 	}
 

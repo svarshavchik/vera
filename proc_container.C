@@ -541,6 +541,10 @@ struct sigchld_poller {
 		sigemptyset(&ss);
 		sigaddset(&ss, SIGCHLD);
 
+		// Also, hijack this to handle a few more signals
+
+		sigaddset(&ss, SIGPWR);
+
 		// If running for real-sies, block these signals too, we
 		// don't do anything for them.
 		if (getpid() == 1)
@@ -579,22 +583,41 @@ struct sigchld_poller {
 
 					for (ssize_t i=0; i<n; ++i)
 					{
-						if (buffer[i].ssi_signo !=
-						    SIGCHLD)
-							continue;
-
-						int wstatus;
-
-						wait4(buffer[i].ssi_pid,
-						      &wstatus, 0, 0);
-
-
-						runner_finished(
-							buffer[i].ssi_pid,
-							wstatus);
+						handle(buffer[i]);
 					}
 				}
 			}};
+	}
+
+	static void handle(signalfd_siginfo &ssi)
+	{
+		switch (ssi.ssi_signo) {
+		case SIGCHLD:
+			{
+				int wstatus=0;
+
+				wait4(ssi.ssi_pid, &wstatus, 0, 0);
+
+				runner_finished(ssi.ssi_pid, wstatus);
+			}
+			return;
+		case SIGPWR:
+			{
+				auto fd=dup(devnull());
+
+				if (fd < 0)
+					return;
+
+				auto efd=std::make_shared<external_filedescObj>(
+					fd
+				);
+
+				get_containers_info(NULL)->start(
+					SYSTEM_PREFIX SIGPWR_UNIT, efd
+				);
+			}
+			return;
+		}
 	}
 
 	~sigchld_poller()
