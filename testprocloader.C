@@ -218,7 +218,12 @@ int main(int argc, char **argv)
 				exit(1);
 			}
 
-			o << "# Automatically generated\n"
+			o << "# This file was automatically generated\n"
+				"# Units that should be started in this "
+				"runlevel specify:\n"
+				"#\n"
+				"# Enabled: system/" << name << "\n"
+				"\n"
 				"name: " << name << "\n"
 				"description: processes for runlevel "
 			  << name << "\n"
@@ -251,7 +256,12 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
-		o << "# Automatically generated\n"
+		o << "# This file was automatically generated\n"
+			"# Units that should be started at system boot time"
+			" specify:\n"
+			"#\n"
+			"# Required-By: system/sysinit\n"
+			"\n"
 			"name: sysinit\n"
 			"description: processes for system startup\n"
 			"required-by:\n";

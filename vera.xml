@@ -146,8 +146,8 @@
 	  </listitem>
 	  <listitem>
 	    <para>
-	      <xref linkend="additionaldocs" /> contains additional, assorted
-	      information.
+	      <xref linkend="additionaldocs" /> contains additional,
+	      miscellaneous information.
 	    </para>
 	  </listitem>
 	</itemizedlist>
@@ -523,6 +523,14 @@ vlad validate startup web/startup
 	    <filename>@INSTALLCONFIGDIR@/web/startup</filename>.
 	  </para>
 
+	  <note>
+	    <para>
+	      Verifying the validity of dependencies requires that
+	      <filename>@INSTALLCONFIGDIR@</filename> and its subdirectories
+	      are accessible to the userid that's running
+	      <quote>validate</quote>.
+	    </para>
+	  </note>
 	  <para>
 	    This is a slightly contrived example of a unit specification file
 	    that shows most of its possible settings:
@@ -1246,6 +1254,192 @@ Respawn:
 	    <quote>enabled</quote> dependencies (see
 	    <xref linkend='dependencies' />).
 	  </para>
+	</refsect2>
+
+	<refsect2>
+	  <title>Unit specification files in subdirectories</title>
+
+	  <para>
+	    It's possible to create subdirectories in
+	    <filename>@INSTALLCONFIGDIR@</filename> and install
+	    unit specification files in the subdirectories. This has
+	    several important consequences.
+	  </para>
+
+	  <itemizedlist>
+	    <listitem>
+	      <para>
+		The name each subdirectory must meet the same requirements
+		as unit specification filenames (see
+		<xref linkend="unitfilename" />) and the maximum filename length
+		applies to the entire relative pathname under
+		<filename>@INSTALLCONFIGDIR@</filename>.
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		In the unit specification file: <quote>name</quote> still
+		matches the filename (without the subdirectory's name), but
+		the unit's logical name includes its subdirectory. For example:
+		<filename>@INSTALLCONFIGDIR@/networking/vpn</filename>
+		unit's logical name is <quote>networking/vpn</quote>; and
+		it contains an identifying <quote>name: vpn</quote>.
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		<command>vlad</command> commands use unit logical names.
+		<command>vlad start networking/vpn</command> refers to the
+		<filename>vpn</filename> unit specification file in
+		the <filename>networking</filename> subdirectory.
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		Dependency names are "relative" to unit's logical name.
+		For example: <filename>networking/vpn</filename> defining
+		that it is <quote>Before: interfaces</quote> refers to
+		<filename>networking/interfaces</filename>. Its
+		<quote>Enabled: ../system/networking</quote> defines that
+		it's enabled in the <quote>system/neworking</quote> runlevel
+		(which can also be defined as
+		<quote>Enabled: /system/networking</quote>).
+	      </para>
+	    </listitem>
+	  </itemizedlist>
+
+	  <para>
+	    This happens to be how (for example)
+	    <quote>Enabled: system/graphical</quote> works in
+	    unit specification files that get installed, ordinarily,
+	    in <filename>@INSTALLCONFIGDIR@</filename>. It's just a relative
+	    pathname.
+	  </para>
+	</refsect2>
+	<refsect2>
+	  <title>Compound unit specification files</title>
+
+	  <para>
+	    It's possible to define multiple unit specification files in
+	    a single file, as multiple YAML documents. This is called
+	    a compound unit specification file. In plain terms: they're
+	    separated by a single line containing three dashes:
+	  </para>
+
+	  <blockquote>
+	    <informalexample>
+	      <programlisting>
+name: networking
+description: bring up networking
+enabled: system/networking
+requires:
+  - networking/interfaces
+  - networking/vpn
+starting:
+  type: oneshot
+stopping:
+  type: target
+---
+name: interfaces
+description: enable network interfaces
+starting:
+  command: /usr/bin/networking start
+stopping:
+  command: /usr/bin/networking stop
+---
+name: vpn
+description: enable vpns
+starting:
+  after: interfaces
+  command: /usr/bin/vpn start
+stopping:
+  before: interfaces
+  command: /usr/bin/vpn stop
+
+version: 1
+	      </programlisting>
+	    </informalexample>
+	  </blockquote>
+
+	  <para>
+	    This hypothetical compound unit specification file is presumed to
+	    be installed in
+	    <filename>@INSTALLCONFIGDIR@/networking</filename>.
+	    Summary of the end results:
+	  </para>
+
+	  <itemizedlist>
+	    <listitem>
+	      <para>
+		The name of the initial YAML section must, as usual
+		match its filename, and this sets the name of unit specification
+		file. Its logical name is also what it normally is (if this
+		unit specification file gets installed in the
+		<filename>local</filename> subdirectory, for example, its
+		logical name becomes <quote>local/networking</quote>).
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		All remaining YAML sections in the compound file define
+		additional units as if they're installed
+		in a subdirectory whose name
+		is the name of the unit specification file.
+		The above example creates logical names
+		<quote>networking/interfaces</quote> and
+		<quote>networking/vpn</quote>, in addition to the main
+		<quote>networking</quote> one.
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		All rules for specifying dependencies use
+		unit specification's logical name.
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		The
+		<quote>version: 1</quote> requirement still holds. It still
+		should be the last key in the physical file. It now logically
+		appears as part of the last YAML section, but its only
+		purpose is to enforce specification file loading integrity.
+		It has no other impact on any specification file's properties.
+	      </para>
+	    </listitem>
+	  </itemizedlist>
+
+	  <note>
+	    <para>
+	      <command>vlad enable</command>,
+	      <command>vlad disable</command> and
+	      <command>vlad mask</command> can only be used with the
+	      unit specification file's "main" logical name, in this
+	      case <quote>networking</quote>. Except for the fact that
+	      they're defined in a single, compound file,
+	      <filename>networking</filename>,
+	      <filename>networking/interfaces</filename> and
+	      <filename>networking/vpn</filename> are independent units and,
+	      subject to all the usual rules; they can be started or stopped
+	      individually. However <command>vlad mask networking</command>
+	      logically masks all of them together (same for enabling and
+	      disabling where appropriate).
+	    </para>
+
+	    <para>
+	      The alternative approach of using subdirectories allows each
+	      individual unit in the subdirectory to be masked, enabled or
+	      disabled. On the other hand, using this example, it won't
+	      be possible to have a logical <quote>networking</quote> unit,
+	      since it's the name of a subdirectory.
+	    </para>
+	  </note>
 	</refsect2>
       </refsect1>
       <refsect1 id="bugs">
