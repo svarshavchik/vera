@@ -15,62 +15,17 @@
 #include <errno.h>
 #include <string.h>
 
-void loadtest(const proc_new_container_set &res)
-{
-	for (const auto &n:res)
-	{
-		auto &name=n->new_container->name;
-
-		std::cout << name
-			  << ":start=" << n->new_container->get_start_type()
-			  << ":stop=" << n->new_container->get_stop_type()
-			  << "\n";
-		if (!n->new_container->description.empty())
-			std::cout << name << ":description="
-				  << n->new_container->description << "\n";
-		for (const auto &r:n->dep_requires)
-			std::cout << name << ":requires " << r << "\n";
-		for (const auto &r:n->dep_required_by)
-			std::cout << name << ":required-by " << r << "\n";
-
-		if (!n->new_container->starting_command.empty())
-			std::cout << name << ":starting:"
-				  << n->new_container->starting_command
-				  << "\n";
-		if (!n->new_container->stopping_command.empty())
-			std::cout << name << ":stopping:"
-				  << n->new_container->stopping_command
-				  << "\n";
-		if (n->new_container->starting_timeout !=
-		    DEFAULT_STARTING_TIMEOUT)
-			std::cout << name << ":starting_timeout "
-				  << n->new_container->starting_timeout
-				  << "\n";
-		if (n->new_container->stopping_timeout !=
-		    DEFAULT_STOPPING_TIMEOUT)
-			std::cout << name << ":stopping_timeout "
-				  << n->new_container->stopping_timeout
-				  << "\n";
-		for (const auto &r:n->starting_before)
-			std::cout << name << ":starting_before " << r << "\n";
-		for (const auto &r:n->starting_after)
-			std::cout << name << ":starting_after " << r << "\n";
-
-		for (const auto &r:n->stopping_before)
-			std::cout << name << ":stopping_before " << r << "\n";
-		for (const auto &r:n->stopping_after)
-			std::cout << name << ":stopping_after " << r << "\n";
-	}
-}
-
 void loadtest(const std::string &name, bool enabled)
 {
-	loadtest(proc_load(std::cin, "(built-in)", name, enabled,
-			   []
-			   (const std::string &error)
-			   {
-				   std::cout << "error: " << error << "\n";
-			   }));
+	proc_load_dump(
+		proc_load(std::cin, "(built-in)", name, enabled,
+			  []
+			  (const std::string &error)
+			  {
+				  std::cout << "error: " << error << "\n";
+			  }
+		)
+	);
 }
 
 int main(int argc, char **argv)
@@ -161,7 +116,7 @@ int main(int argc, char **argv)
 	}
 	if (args.size() == 5 && args[1] == "loadalltest")
 	{
-		loadtest(
+		proc_load_dump(
 			proc_load_all(
 				args[2], args[3], args[4],
 				[]

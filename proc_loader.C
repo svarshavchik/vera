@@ -11,6 +11,7 @@
 #include <array>
 #include <string>
 #include <unistd.h>
+#include <iostream>
 #include <fstream>
 #include <algorithm>
 #include <optional>
@@ -637,15 +638,11 @@ struct parsed_yaml {
 				if (!s)
 					return false;
 
-				std::filesystem::path spath{*s};
-
-				if (spath.is_absolute())
+				if (*s->c_str() == '/')
 				{
-					auto rel=spath.relative_path();
+					auto rel=s->substr(1);
 
-					if (!proc_validpath(static_cast<
-							    const std::string &>
-							    (rel)))
+					if (!proc_validpath(rel))
 					{
 						error(*s +
 						      _(": non-compliant name"))
@@ -656,15 +653,28 @@ struct parsed_yaml {
 					return true;
 				}
 
-				std::string new_path =
-					(hier_name.parent_path() / *s)
-					.lexically_normal();
+				std::string new_path;
+
+				try {
+					new_path =
+						(hier_name.parent_path() / *s)
+						.lexically_normal();
+				} catch (...) {
+
+
+				}
+
+				if (new_path.empty())
+				{
+					error(*s +
+					      _(": non-compliant name"));
+					return false;
+				}
 
 				// Drop any trailing / that lexically_normal()
 				// might produce.
 
-				if (!new_path.empty() &&
-				    new_path.back() == '/')
+				if (new_path.back() == '/')
 					new_path.pop_back();
 
 				if (!proc_validpath(new_path))
@@ -1313,6 +1323,91 @@ proc_new_container_set proc_load_all(
 		  });
 
 	return containers;
+}
+
+void proc_load_dump(const proc_new_container_set &set)
+{
+	std::vector<proc_new_container> list;
+
+	list.reserve(set.size());
+	for (auto &c:set)
+		list.push_back(c);
+	std::sort(list.begin(), list.end(),
+		  []
+		  (const auto &a, const auto &b)
+		  {
+			  return a->new_container->name
+				  < b->new_container->name;
+		  });
+
+	std::string pfix;
+
+	for (const auto &n:list)
+	{
+		std::cout << pfix;
+		pfix = "\n";
+		auto &name=n->new_container->name;
+
+		std::cout << name
+			  << ":start=" << n->new_container->get_start_type()
+			  << ":stop=" << n->new_container->get_stop_type()
+			  << "\n";
+		if (!n->new_container->description.empty())
+			std::cout << name << ":description="
+				  << n->new_container->description << "\n";
+		for (const auto &r:n->dep_requires)
+			std::cout << name << ":requires " << r << "\n";
+		for (const auto &r:n->dep_required_by)
+			std::cout << name << ":required-by " << r << "\n";
+
+		if (!n->new_container->starting_command.empty())
+			std::cout << name << ":starting:"
+				  << n->new_container->starting_command
+				  << "\n";
+		if (!n->new_container->stopping_command.empty())
+			std::cout << name << ":stopping:"
+				  << n->new_container->stopping_command
+				  << "\n";
+		if (n->new_container->starting_timeout !=
+		    DEFAULT_STARTING_TIMEOUT)
+			std::cout << name << ":starting_timeout "
+				  << n->new_container->starting_timeout
+				  << "\n";
+		if (n->new_container->stopping_timeout !=
+		    DEFAULT_STOPPING_TIMEOUT)
+			std::cout << name << ":stopping_timeout "
+				  << n->new_container->stopping_timeout
+				  << "\n";
+
+		if (!n->new_container->restarting_command.empty())
+			std::cout << name << ":restart:"
+				  << n->new_container->restarting_command
+				  << "\n";
+		if (!n->new_container->reloading_command.empty())
+			std::cout << name << ":reload:"
+				  << n->new_container->reloading_command
+				  << "\n";
+
+		if (n->new_container->respawn_attempts !=
+		    RESPAWN_ATTEMPTS_DEFAULT)
+			std::cout << name << ":respawn_attempts:"
+				  << n->new_container->respawn_attempts
+				  << "\n";
+		if (n->new_container->respawn_limit !=
+		    RESPAWN_LIMIT_DEFAULT)
+			std::cout << name << ":respawn_limit:"
+				  << n->new_container->respawn_attempts
+				  << "\n";
+		for (const auto &r:n->starting_before)
+			std::cout << name << ":starting_before " << r << "\n";
+		for (const auto &r:n->starting_after)
+			std::cout << name << ":starting_after " << r << "\n";
+
+		for (const auto &r:n->stopping_before)
+			std::cout << name << ":stopping_before " << r << "\n";
+		for (const auto &r:n->stopping_after)
+			std::cout << name << ":stopping_after " << r << "\n";
+	}
 }
 
 std::unordered_map<std::string, proc_override> proc_get_overrides(

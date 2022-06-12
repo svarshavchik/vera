@@ -55,6 +55,10 @@ void runner_finished(pid_t pid, int wstatus);
 
 #define DEFAULT_STOPPING_TIMEOUT 60
 
+#define RESPAWN_ATTEMPTS_DEFAULT 3
+
+#define RESPAWN_LIMIT_DEFAULT	30
+
 //! Container start_type
 
 //! - forking: the starting command is expected to fork and the parent exit
@@ -124,11 +128,11 @@ public:
 
 	//! respawn: limit on how many times the process can be respawned.
 
-	size_t respawn_attempts=3;
+	size_t respawn_attempts=RESPAWN_ATTEMPTS_DEFAULT;
 
 	//! Allow up to respawn_attempts within the same respawn_limit
 
-	time_t respawn_limit=30;
+	time_t respawn_limit=RESPAWN_LIMIT_DEFAULT;
 
 	//! The container's stopping type
 	stop_type_t stop_type{stop_type_t::manual};

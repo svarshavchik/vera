@@ -141,12 +141,16 @@ proc_new_container_set proc_load_all(
 	const std::function<void (const std::string &)> &error
 );
 
-// Return the current overrides
+//! Return the current overrides
 
 std::unordered_map<std::string, proc_override> proc_get_overrides(
 	const std::string &config_global,
 	const std::string &config_local,
 	const std::string &config_override);
+
+//! Dump the loaded process containers to std::cout
+
+void proc_load_dump(const proc_new_container_set &res);
 
 //! Return the default runlevel configuration
 

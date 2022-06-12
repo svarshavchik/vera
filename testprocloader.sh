@@ -129,6 +129,7 @@ $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 sort <loadtest.out >loadtest.sorted.out
 
 cat >loadtest.expected <<EOF
+
 built-in/subunit:required-by built-in/prereq1
 built-in/subunit:required-by built-in/prereq2
 built-in/subunit:requires some/other/unit/again
@@ -175,8 +176,9 @@ EOF
 
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.txt <<EOF
-built-in/sub/unit:start=oneshot:stop=automatic
 built-in:start=forking:stop=manual
+
+built-in/sub/unit:start=oneshot:stop=automatic
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -229,8 +231,9 @@ EOF
 
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.txt <<EOF
-built-in/sub.un-it:start=forking:stop=manual
 built-in:start=forking:stop=manual
+
+built-in/sub.un-it:start=forking:stop=manual
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -283,6 +286,8 @@ $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 
 sort <loadtest.out >loadtest.sorted.out
 cat >loadtest.txt <<EOF
+
+
 built-in/sub1:requires built-in
 built-in/sub1:start=forking:stop=manual
 built-in/sub2:requires built-in/sub1
@@ -454,6 +459,8 @@ sort <loadtest.out >loadtest.sorted.out
 
 cat loadtest.sorted.out
 cat >loadtest.txt <<EOF
+
+
 E: "unit1": does not match its filename
 W: globaldir/.temporary: ignoring non-compliant filename
 unit2-runlevel1:required-by runlevel1

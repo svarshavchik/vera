@@ -486,12 +486,46 @@ enabled:
 	    <command>vlad</command>
 	    <arg choice='plain'>validate</arg>
 	    <arg choice='req'>filename</arg>
+	    <arg choice='opt'>path</arg>
 	  </cmdsynopsis>
 	  <para>
 	    The
 	    <quote>validate</quote> command reads the
 	    <replaceable>filename</replaceable> and checks that it meets
-	    all formatting requirements.
+	    all formatting requirements. The command displays the parsed
+	    representation of the unit specification. <quote>validate</quote>
+	    also reads all existing unit configuration files from
+	    <filename>@INSTALLCONFIGDIR@</filename> and prints a warning
+	    message if any dependencies in the
+	    <replaceable>filename</replaceable> do not exist.
+	    This is not an error, <command>vera</command> ignores non-existent
+	    dependencies, this is to avoid unintentional typos.
+	  </para>
+
+	  <para>
+	    <quote>validate</quote> assumes that
+	    <replaceable>filename</replaceable> gets installed in
+	    <filename>@INSTALLCONFIGDIR@</filename>. If it gets installed in
+	    a subdirectory it is necessary to spell out the full subdirectory
+	    path, as an optional parameter:
+	  </para>
+	  <blockquote>
+	    <informalexample>
+	      <programlisting>
+vlad validate startup web/startup
+	      </programlisting>
+	    </informalexample>
+	  </blockquote>
+	  <para>
+	    This is an example of validating
+	    the contents of the <filename>startup</filename> file that
+	    gets installed as
+	    <filename>@INSTALLCONFIGDIR@/web/startup</filename>.
+	  </para>
+
+	  <para>
+	    This is a slightly contrived example of a unit specification file
+	    that shows most of its possible settings:
 	  </para>
 
 	  <blockquote>
@@ -537,8 +571,6 @@ Version: 1</literallayout>
 	  </blockquote>
 
 	  <para>
-	    This is a slightly contrived example of a unit specification file
-	    that shows most of its possible settings.
 	    Unit specification files use the <acronym>YAML</acronym> format.
 	    This documentation glosses over this detail, and describes the
 	    unit specification file format in more general terms.
