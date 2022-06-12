@@ -35,9 +35,11 @@
 #define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
 
 int stopped_flag;
+int waitrunlevel_flag;
 
 const struct option options[]={
 	{"stopped", 0, &stopped_flag, 1},
+	{"wait", 0, &waitrunlevel_flag, 1},
 	{nullptr},
 };
 
@@ -87,6 +89,13 @@ runlevels load_runlevelconfig()
 current_containers_infoObj::current_containers_infoObj()
 	: runlevel_configuration{load_runlevelconfig()}
 {
+}
+
+// Before re-execing turn off CLOEXEC on file descriptors
+
+void proc_container_group::prepare_to_transfer_fd(int &fd)
+{
+	fcntl(fd, F_SETFD, 0);
 }
 
 // re-exec ourselves
@@ -739,7 +748,20 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "switch")
 	{
-		request_runlevel(connect_vera_priv(), args[1]);
+		auto conn=connect_vera_priv();
+
+		request_runlevel(conn, args[1]);
+
+		auto ret=get_runlevel_status(conn);
+
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
+		if (waitrunlevel_flag)
+			conn->readln();
 		return;
 	}
 

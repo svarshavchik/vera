@@ -138,6 +138,13 @@ public:
 	//! Everything has been serialized, remove their close-on-exec flag.
 	void prepare_to_transfer();
 
+private:
+	//! Handle transferring for a given file descriptor
+
+	//! Implemented differently in unit tests.
+
+	static void prepare_to_transfer_fd(int &);
+public:
 	//! Restore the serialized file descriptors, set their close-on-exec.
 
 	//! Called in lieu of create() after a re-exec. Returns false if there

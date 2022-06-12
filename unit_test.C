@@ -112,6 +112,14 @@ void proc_container_group::cgroups_sendsig(int sig)
 {
 }
 
+void proc_container_group::prepare_to_transfer_fd(int &fd)
+{
+	fcntl(fd, F_SETFD, 0);
+	fd= -1;
+	// Unit test will rebuild everything, prevent this fd
+	// from getting closed.
+}
+
 std::function<void ()> reexec_handler;
 
 void reexec()
@@ -173,4 +181,25 @@ std::string proc_container_runlevel(const std::string &new_runlevel)
 	b=nullptr;
 
 	return get_runlevel_status(a);
+}
+
+std::string current_runlevel()
+{
+	auto [a, b] = create_fake_request();
+
+	request_current_runlevel(a);
+	proc_do_request(b);
+	b=nullptr;
+
+	auto ret=get_current_runlevel(a);
+
+	std::string s, pfix;
+
+	for (auto &n:ret)
+	{
+		s += pfix;
+		s += n;
+		pfix=":";
+	}
+	return s;
 }

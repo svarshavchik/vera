@@ -108,7 +108,7 @@ void request_reexec(const external_filedesc &efd)
 }
 
 void request_runlevel(const external_filedesc &efd,
-			     const std::string &runlevel)
+		      const std::string &runlevel)
 {
 	efd->write_all("setrunlevel\n" + runlevel + "\n");
 }
@@ -137,6 +137,8 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
 		ret.push_back(s);
 	}
 
+	if (ret.size() > 2)
+		std::sort(ret.begin()+1, ret.end());
 	return ret;
 }
 

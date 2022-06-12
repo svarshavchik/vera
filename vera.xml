@@ -83,19 +83,24 @@
 	    <arg choice='plain'>disable</arg>
 	    <arg choice='plain'>enable</arg>
 	  </group>
-	  <arg choice='req'><replaceable>unit</replaceable></arg>
+	  <arg choice='plain'><replaceable>unit</replaceable></arg>
 	</cmdsynopsis>
 
 	<cmdsynopsis>
 	  <command>vlad</command>
-	  <arg>--stopped</arg>
+	  <arg choice='opt'>--stopped</arg>
 	  <arg choice='plain'>status</arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='opt'>--wait</arg>
+	  <arg choice='plain'>switch</arg>
+	  <arg choice='plain'><replaceable>runlevel</replaceable></arg>
 	</cmdsynopsis>
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <group choice='req'>
 	    <arg choice='plain'>current</arg>
-	    <arg choice='plain'>switch <replaceable>runlevel</replaceable></arg>
 	    <arg choice='plain'>default</arg>
 	    <arg choice='plain'>default <replaceable>runlevel</replaceable></arg>
 	    <arg choice='plain'>reexec</arg>
@@ -137,6 +142,12 @@
 	    <para>
 	      <xref linkend="dependencies" /> describes how dependencies between
 	      units get defined.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <xref linkend="additionaldocs" /> contains additional, assorted
+	      information.
 	    </para>
 	  </listitem>
 	</itemizedlist>
@@ -204,6 +215,8 @@
 	    The <quote>status</quote> command takes no arguments and shows
 	    a list of all units and their current state, and
 	    <quote>current</quote> shows the current <quote>runlevel</quote>.
+	    <quote>status</quote> omits stopped units by default; the
+	    <quote>--stopped</quote> option includes them in the output.
 	  </para>
 
 	  <para>
@@ -211,7 +224,7 @@
 	    <command>init</command> process supervisor. At a given time the
 	    system is in one of several pre-defined runlevels. The runlevels
 	    determine which major system processes are running. The original
-	    runlevels were single characters, <command>vera</command> uses a
+	    runlevels were single characters, <command>vera</command> uses
 	    more descriptive labels and understands the legacy single-character
 	    runlevels as their aliases:
 	  </para>
@@ -254,12 +267,20 @@
 	  <para>
 	    The actual behavior and environment of each runlevel depends on
 	    how the system is configured. It's also possible to define new
-	    runlevels.
+	    runlevels (see <xref linkend="runlevelconfig" /> for more
+	    information).
 	    The <quote>switch</quote> command takes an argument and changes
 	    the system runlevel, for example: <command>vlad switch reboot</command>
 	    reboots the system. <command>vera</command> recognizes legacy
 	    runlevel aliases, <command>vlad switch 6</command> has the same
 	    result.
+	  </para>
+
+	  <para>
+	    <quote>switch</quote> does not wait for all processes to stop and
+	    start and returns immediately. The <quote>--wait</quote> option
+	    makes <quote>switch</quote> wait until the switch to the new
+	    runlevel finishes.
 	  </para>
 
 	  <para>
@@ -1159,7 +1180,43 @@ Respawn:
 	  </varlistentry>
 	</variablelist>
       </refsect1>
-      <refsect1>
+      <refsect1 id="additionaldocs">
+	<title>ADDITIONAL DOCUMENTATION</title>
+
+	<refsect2 id="runlevelconfig">
+	  <title>System runlevels</title>
+
+	  <para>
+	    The file <filename>@RUNLEVELCONFIG@</filename> defines system
+	    runlevels. A default one gets installed and it should only
+	    be updated by <command>vlad</command>.
+	  </para>
+
+	  <para>
+	    This file is a YAML document, a map. The map keys are the
+	    canonical names
+	    of predefined runlevels. The map values are lists of aliases for
+	    each runlevel. Exactly one of the map keys have an alias called
+	    <quote>default</quote>, this is the default system runlevel.
+	    The <command>vlad default</command> command updates this alias
+	    by rewriting the configuration file.
+	  </para>
+
+	  <para>
+	    <command>vera</command> automatically creates internal
+	    units for runlevels' canonical names. Additional unit specification
+	    files get installed in
+	    <filename>@INSTALLCONFIGDIR@/system</filename>, for each runlevel.
+	    These system units,
+	    like <quote>system/graphical</quote> and
+	    <quote>system/multiuser</quote>,
+	    are the ones that's referenced by
+	    <quote>enabled</quote> dependencies (see
+	    <xref linkend='dependencies' />).
+	  </para>
+	</refsect2>
+      </refsect1>
+      <refsect1 id="bugs">
 	<title>BUGS</title>
 
 	<para>

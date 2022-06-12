@@ -632,6 +632,10 @@ void current_containers_infoObj::check_reexec()
 	if (!poller_is_transferrable())
 		return;
 
+	if (stopping_runlevel || next_runlevel.new_runlevel ||
+	    upcoming_runlevel.new_runlevel)
+		return; // Stopping/starting runlevels
+
 	// Chances are everything is transferrable, so we'll go through all
 	// the containers, if something is not is_transferrable we bail out,
 	// otherwise we'll collect the whole thing.
@@ -1315,6 +1319,13 @@ void current_containers_infoObj::install(
 	//
 	// Update the current_runlevel and new_runlevel objects to
 	// reference the reloaded container objects.
+	//
+	// The runlevel_configuration is loaded just once, at startup,
+	// and never touched again. What can happen, though, is the
+	// runlevel_configuration getting updated followed by reexec.
+	//
+	// This is completely out of scope. The only thing we can do is
+	// just enough to keep things from crashing.
 
 	if (current_runlevel)
 	{
@@ -1336,26 +1347,26 @@ void current_containers_infoObj::install(
 
 	if (!current_runlevel)
 	{
-		if (new_runlevel)
+		if (next_runlevel.new_runlevel)
 		{
 			log_message(_("No longer switching run levels!"));
-			new_runlevel=nullptr;
+			next_runlevel.new_runlevel=nullptr;
 		}
 	}
 
-	if (new_runlevel)
+	if (next_runlevel.new_runlevel)
 	{
-		auto iter=containers.find(new_runlevel->name);
+		auto iter=containers.find(next_runlevel.new_runlevel->name);
 
 		if (iter == containers.end() ||
 		    iter->first->type != proc_container_type::runlevel)
 		{
 			log_message(_("Removed new run level!"));
-			new_runlevel=nullptr;
+			next_runlevel.new_runlevel=nullptr;
 		}
 		else
 		{
-			new_runlevel=iter->first;
+			next_runlevel.new_runlevel=iter->first;
 		}
 	}
 	find_start_or_stop_to_do();
@@ -1365,14 +1376,19 @@ void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 {
 	std::string s{"default"};
 
-	if (current_runlevel)
-		s=current_runlevel->name;
+	auto r=current_runlevel;
+
+	if (!r)
+		r=stopping_runlevel;
+
+	if (r)
+		s=r->name;
 
 	efd->write_all(s + "\n");
 
 	for (auto &[alias,c] : runlevel_containers)
 	{
-		if (current_runlevel && current_runlevel == c)
+		if (r && r == c)
 			efd->write_all(alias + "\n");
 	}
 }
@@ -1414,8 +1430,13 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 	efd->write_all(o.str());
 }
 
-std::string current_containers_infoObj::runlevel(const std::string &runlevel)
+std::string current_containers_infoObj::runlevel(
+	const std::string &runlevel,
+	const external_filedesc &requester)
 {
+	if (upcoming_runlevel.new_runlevel)
+		return _("Already switching to another runlevel");
+
 	// Check for aliases, first
 
 	auto iter=runlevel_containers.find(runlevel);
@@ -1424,7 +1445,8 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 	{
 		// Do not switch to the same runlevel
 		if (iter->second != current_runlevel)
-			new_runlevel=iter->second;
+			upcoming_runlevel.new_runlevel=iter->second;
+
 	}
 	else
 	{
@@ -1440,9 +1462,10 @@ std::string current_containers_infoObj::runlevel(const std::string &runlevel)
 
 		// Do not switch to the same runlevel
 		if (iter->first != current_runlevel)
-			new_runlevel=iter->first;
+			upcoming_runlevel.new_runlevel=iter->first;
 	}
 
+	upcoming_runlevel.requester=requester;
 	find_start_or_stop_to_do();
 
 	return "";
@@ -1496,7 +1519,9 @@ void proc_do_request(external_filedesc efd)
 
 	if (ln == "setrunlevel")
 	{
-		auto ret=get_containers_info(nullptr)->runlevel(efd->readln());
+		auto ret=get_containers_info(nullptr)->runlevel(
+			efd->readln(),
+			efd);
 
 		efd->write_all(ret + "\n");
 		return;
@@ -2223,11 +2248,26 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 		if (!do_it.starting.empty() || !do_it.stopping.empty())
 			continue;
 
+		// Time to consider the next upcoming runlevel?
+		//
 		// If we are not starting or stopping anything, the last
 		// thing to check would be whether we're switching run levels.
 
-		if (!new_runlevel)
-			continue; // Not switching run levels.
+		while (!next_runlevel.new_runlevel &&
+		       upcoming_runlevel.new_runlevel)
+		{
+			next_runlevel=upcoming_runlevel;
+			upcoming_runlevel={};
+		}
+
+		if (!next_runlevel.new_runlevel)
+		{
+			// Not switching runlevels. If we just switched,
+			// clear the requester.
+
+			current_runlevel_requester={};
+			continue;
+		}
 
 		// Is there a current run level to stop?
 
@@ -2238,7 +2278,8 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			// not require.
 
 			stop_current_runlevel should_stop{
-				*this, current_runlevel, new_runlevel
+				*this, current_runlevel,
+				next_runlevel.new_runlevel
 			};
 
 			log_message(_("Stopping ")
@@ -2261,6 +2302,7 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			}
 
 			did_something=true;
+			stopping_runlevel=current_runlevel;
 			current_runlevel = nullptr;
 			continue;
 		}
@@ -2268,8 +2310,11 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 		// The current run level has stopped, time to start the new
 		// run level.
 
-		current_runlevel=new_runlevel;
-		new_runlevel=nullptr;
+		current_runlevel=next_runlevel.new_runlevel;
+		current_runlevel_requester=next_runlevel.requester;
+		stopping_runlevel=nullptr;
+
+		next_runlevel={};
 		log_message(_("Starting ") + current_runlevel->name);
 
 		all_required_dependencies(

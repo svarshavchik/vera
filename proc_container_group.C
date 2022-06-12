@@ -254,9 +254,10 @@ void proc_container_group::save_transfer_info(std::ostream &o)
 
 void proc_container_group::prepare_to_transfer()
 {
-	fcntl(stdouterrpipe[0], F_SETFD, 0);
-	fcntl(stdouterrpipe[1], F_SETFD, 0);
-	fcntl(cgroup_eventsfd, F_SETFD, 0);
+	prepare_to_transfer_fd(stdouterrpipe[0]);
+	prepare_to_transfer_fd(stdouterrpipe[1]);
+	prepare_to_transfer_fd(cgroup_eventsfd);
+
 	log_message(container->name + _(": container prepared to re-exec"));
 }
 

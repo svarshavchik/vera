@@ -35,13 +35,41 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 	//! The current runlevel
 	proc_container current_runlevel;
 
+	//! Whoever requested the current_runlevel;
+	external_filedesc current_runlevel_requester;
+
+	/*! The stopping runlevel
+
+	  When a runlevel is getting stopped, current_runlevel is nullptr,
+	  but we stash the former runlevel here, for reporting purposes.
+	*/
+	proc_container stopping_runlevel;
+
 	//! Lookup map for runlevel containers.
 
 	std::unordered_map<std::string, proc_container> runlevel_containers;
 
-	//! When switching runlevels: the new runlevel
+	//! Next runlevel, and the connection that requested it.
 
-	proc_container new_runlevel;
+	struct next_runlevel_info {
+		proc_container new_runlevel;
+		external_filedesc requester;
+	};
+
+	/*! When switching runlevels: the new runlevel
+
+	  As soon as the stopping_runlevel is stopped, the next_runlevel
+	  starts.
+	*/
+
+	next_runlevel_info next_runlevel;
+
+	/*! And the next queued-up runlevel
+
+	  It's possible that we're switching run-levels, but have the next
+	  run-level ready to go as soon as this one's tarted.
+	 */
+	next_runlevel_info upcoming_runlevel;
 
 public:
 	//! A re-exec has been requested
@@ -303,7 +331,8 @@ public:
 	void install(proc_new_container_set &new_containers,
 		     container_install mode);
 
-	std::string runlevel(const std::string &new_runlevel);
+	std::string runlevel(const std::string &new_runlevel,
+			     const external_filedesc &requester);
 
 	void getrunlevel(const external_filedesc &efd);
 

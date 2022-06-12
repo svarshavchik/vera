@@ -104,5 +104,7 @@ std::string proc_container_stop(const std::string &s);
 //! Switch run levels
 std::string proc_container_runlevel(const std::string &new_runlevel);
 
+//! Get current runlevels
+std::string current_runlevel();
 
 #endif
