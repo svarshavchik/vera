@@ -37,10 +37,12 @@
 
 int stopped_flag;
 int waitrunlevel_flag;
+int override_flag;
 
 const struct option options[]={
 	{"stopped", 0, &stopped_flag, 1},
 	{"wait", 0, &waitrunlevel_flag, 1},
+	{"override", 0, &override_flag, 1},
 	{nullptr},
 };
 
@@ -83,6 +85,26 @@ runlevels load_runlevelconfig()
 				  "using built-in default"));
 		});
 
+	// If there's an "override" alias, it overrides the "default" one.
+
+	for (auto &[name, aliases] : rl)
+	{
+		auto iter=aliases.find("override");
+
+		if (iter == aliases.end())
+			continue;
+
+		// We remove the existing "default" alias and put it where
+		// "override" is. This way, the rest of the startup code
+		// just looks for a "default".
+		aliases.erase(iter);
+
+		for (auto &[name, aliases] : rl)
+			aliases.erase("default");
+
+		aliases.insert("default");
+		break;
+	}
 
 	return rl;
 }
@@ -981,14 +1003,16 @@ void vlad(std::vector<std::string> args)
 	{
 		if (args.size() > 1)
 		{
-			exit(proc_set_runlevel_default(
-				     runlevelconfig(),
-				     args[1],
-				     []
-				     (const std::string &error)
-				     {
-					     std::cerr << error << std::endl;
-				     }) ? 0:1);
+			exit((override_flag
+			      ? proc_set_runlevel_default_override
+			      : proc_set_runlevel_default)(
+				      runlevelconfig(),
+				      args[1],
+				      []
+				      (const std::string &error)
+				      {
+					      std::cerr << error << std::endl;
+				      }) ? 0:1);
 		}
 
 		auto rl=load_runlevelconfig();

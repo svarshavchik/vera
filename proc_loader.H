@@ -171,9 +171,26 @@ runlevels proc_get_runlevel_config(
 
 //! Update configfile to reflect the new "default" runlevel.
 
+//! Specifying a new default of "default" has the effect of removing
+//! a previous proc_set_runlevel_default_override.
+
 bool proc_set_runlevel_default(
 	const std::string &configfile,
 	const std::string &new_runlevel,
+	const std::function<void (const std::string &)> &error);
+
+//! Override the default runlevel
+
+//! Keep the default in place, but override_runlevel it.
+//!
+//! The specified override becomes the default one going forward. The override
+//! gets removed by another proc_set_runlevel_default_override(), or by
+//! a proc_set_runlevel_default(). Doing that and specifying "default"
+//! has the effect of restoring the previous default.
+
+bool proc_set_runlevel_default_override(
+	const std::string &configfile,
+	const std::string &override_runlevel,
 	const std::function<void (const std::string &)> &error);
 
 #define SYSTEM_PREFIX "system/"

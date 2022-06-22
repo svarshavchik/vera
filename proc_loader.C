@@ -1851,9 +1851,11 @@ bool proc_set_runlevel_default(
 
 	auto current_runlevels=proc_get_runlevel_config(configfile, error);
 
+	auto original_runlevels=current_runlevels;
+
 	// Go through, and:
 	//
-	// If we find a default entry, remove it.
+	// If we find a "default" or "override" entry, remove it.
 	//
 	// When we find the new default runlevel, add a "default" alias for it.
 
@@ -1861,13 +1863,14 @@ bool proc_set_runlevel_default(
 
 	for (auto &[runlevel, aliases] : current_runlevels)
 	{
-		auto iter=aliases.find("default");
+		bool found_new_default=
+			!found && (runlevel == new_runlevel ||
+				   aliases.find(new_runlevel) != aliases.end());
 
-		if (iter != aliases.end())
-			aliases.erase(iter);
+		aliases.erase("default");
+		aliases.erase("override");
 
-		if (!found && (runlevel == new_runlevel ||
-			       aliases.find(new_runlevel) != aliases.end()))
+		if (found_new_default)
 		{
 			found=true;
 			aliases.insert("default");
@@ -1877,6 +1880,56 @@ bool proc_set_runlevel_default(
 	if (!found)
 	{
 		error(configfile + ": " + new_runlevel + _(": not found"));
+		return false;
+	}
+
+	// A default of "default" gets specified in order to remove any
+	// override, this is handled by the finely-tuned logic above.
+	//
+	// Avoid rewriting the runlevel config file if nothing's changed.
+
+	if (current_runlevels == original_runlevels)
+		return true;
+
+	return proc_set_runlevel_config(configfile, current_runlevels);
+}
+
+bool proc_set_runlevel_default_override(
+	const std::string &configfile,
+	const std::string &override_runlevel,
+	const std::function<void (const std::string &)> &error)
+{
+	// First, read the current default
+
+	auto current_runlevels=proc_get_runlevel_config(configfile, error);
+
+	// Go through, and:
+	//
+	// If we find an "override" entry, remove it.
+	//
+	// When we find the new default override, add "override" to it,
+
+	bool found=false;
+
+	for (auto &[runlevel, aliases] : current_runlevels)
+	{
+		bool found_new_default=
+			!found && (runlevel == override_runlevel ||
+				   aliases.find(override_runlevel)
+				   != aliases.end());
+
+		aliases.erase("override");
+
+		if (found_new_default)
+		{
+			found=true;
+			aliases.insert("override");
+		}
+	}
+
+	if (!found)
+	{
+		error(configfile + ": " + override_runlevel + _(": not found"));
 		return false;
 	}
 
