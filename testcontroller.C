@@ -6,6 +6,7 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_container_timer.H"
+#include "external_filedesc_privcmdsocket.H"
 
 #include "unit_test.H"
 #include "privrequest.H"
@@ -2607,6 +2608,21 @@ void testmultirunlevels()
 
 	while (!poller_is_transferrable())
 		do_poll(0);
+
+	{
+		auto hold_fd=std::make_shared<
+			external_filedesc_privcmdsocketObj>(
+				open("/dev/null",
+				     O_RDONLY));
+
+		if (poller_is_transferrable())
+			throw "poller is not blocked";
+
+		hold_fd=nullptr;
+
+		if (!poller_is_transferrable())
+			throw "poller is still blocked";
+	}
 	proc_check_reexec();
 
 	logged_state_changes.clear();

@@ -28,6 +28,8 @@ libvera_a_SOURCES=						\
 	current_containers_info.H				\
 	external_filedesc.H					\
 	external_filedesc.C					\
+	external_filedesc_privcmdsocket.H			\
+	external_filedesc_privcmdsocket.C			\
 	log.C 							\
 	log.H							\
 	log_current_time.C					\

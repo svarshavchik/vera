@@ -132,6 +132,12 @@ private:
 	void destroy();
 };
 
+struct poller_transferblockObj {};
+
+typedef std::shared_ptr<poller_transferblockObj> poller_transferblock;
+
+poller_transferblock get_poller_transferblock();
+
 /*! Whether the poller is in a state that will survive a re-exec.
 
 We won't re-exec when there are pending removes or deletes. There's

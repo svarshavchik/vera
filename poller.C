@@ -377,13 +377,41 @@ void global_inotify::do_inotify()
 		installed_cb(nullptr, 0);
 	}
 }
+
+// Blocker object
+
+std::weak_ptr<poller_transferblockObj> current_poller_transferblock;
+
 #if 0
 {
 #endif
 }
 
+poller_transferblock get_poller_transferblock()
+{
+	// Is there a blocking object in existence?
+
+	auto handler=current_poller_transferblock.lock();
+
+	if (handler)
+		// Ok, return it, another reference to it.
+		return handler;
+
+	// Create a new blocking object
+	handler=std::make_shared<poller_transferblockObj>();
+
+	current_poller_transferblock=handler;
+
+	return handler;
+}
+
 bool poller_is_transferrable()
 {
+	auto handler=current_poller_transferblock.lock();
+
+	if (handler)
+		return false;
+
 	auto &in=get_inotify();
 
 	if (in.fd < 0)

@@ -12,6 +12,7 @@
 #include "log.H"
 #include "current_containers_info.H"
 #include "external_filedesc.H"
+#include "external_filedesc_privcmdsocket.H"
 #include "privrequest.H"
 #include <unistd.h>
 #include <stdio.h>
@@ -385,9 +386,10 @@ void vera_init()
 			if (conn_fd < 0)
 				return;
 
-			proc_do_request(std::make_shared<external_filedescObj>(
-						conn_fd
-					));
+			auto privcmdsocket=std::make_shared<
+				external_filedesc_privcmdsocketObj>(conn_fd);
+
+			proc_do_request(privcmdsocket);
 		}};
 
 	// Create our cgroup
