@@ -1570,7 +1570,7 @@ struct yaml_write_scalar : yaml_write_node {
 	{
 		if (!yaml_scalar_event_initialize(
 			    &event, NULL, NULL,
-			    reinterpret_cast<const yaml_char_t *>(s.c_str()),
+			    reinterpret_cast<yaml_char_t *>(s.data()),
 			    s.size(),
 			    1, 1,
 			    YAML_ANY_SCALAR_STYLE))

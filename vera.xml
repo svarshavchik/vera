@@ -122,7 +122,7 @@
 	  responsible for starting and stopping major system processes, including
 	  system startup and shutdown. <command>vera</command> also listens on
 	  an internal socket for commands that adjust the system running state.
-	  The <command>vlad</command> commands connects to <command>vera</command>'s
+	  The <command>vlad</command> command connects to that internal
 	  socket and passes along the commands (that <command>vlad</command>
 	  doesn't handle by itself).
 	</para>
@@ -350,7 +350,7 @@ multi-user                # Reverts to the previous default runlevel
 	    <para>
 	      This can be a lengthy delay when there's a respawned unit that
 	      reached its maximum number of attempts and it's waiting until
-	      it's respawnabel.
+	      it's respawnable.
 	      Additionally, <quote>reexec</quote> resets all respawned units'
 	      counters and limits.
 	    </para>
@@ -698,7 +698,7 @@ Version: 1</literallayout>
 
 	  <para>
 	    For these reasons there is no <command>vlad</command> command for
-	    installing updated or
+	    installing updated
 	    <command>vera</command> unit specification files. This
 	    happens automatically, with
 	    <citerefentry>
