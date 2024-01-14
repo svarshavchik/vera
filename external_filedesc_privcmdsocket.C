@@ -8,6 +8,4 @@
 
 external_filedesc_privcmdsocketObj::~external_filedesc_privcmdsocketObj()
 {
-	write(1, "<\n", 2);
-
 }

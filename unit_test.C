@@ -208,3 +208,11 @@ std::string current_runlevel()
 	}
 	return s;
 }
+
+void sigusr1()
+{
+}
+
+void sigusr2()
+{
+}

@@ -99,6 +99,7 @@ install-exec-hook:
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system
 	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
+	$(MKDIR_P) $(DESTDIR)$(localstatedir)
 	$(MKDIR_P) $(DESTDIR)$(LOCALCONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(OVERRIDECONFIGDIR)
 	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)

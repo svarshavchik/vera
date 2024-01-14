@@ -354,9 +354,14 @@ int create_vera_socket(const char *tmpname, const char *finalname)
 	return fd;
 }
 
-// The vera init daemon
+static int start_vera_pub();
 
-void vera_init()
+struct priv_poller {
+	std::shared_ptr<external_filedescObj> cmd_socket;
+	polledfd poll_cmd;
+};
+
+priv_poller create_priv_poller()
 {
 	umask(077);
 	int fd=create_vera_socket(PRIVCMDSOCKET ".tmp",
@@ -391,6 +396,47 @@ void vera_init()
 
 			proc_do_request(privcmdsocket);
 		}};
+
+	return {cmd_socket, std::move(poll_cmd)};
+}
+
+//
+
+static int *pubsocket_ptr;
+static priv_poller *poller_ptr;
+
+void sigusr2()
+{
+	log_message("closing sockets");
+
+	if (*pubsocket_ptr > 0)
+	{
+		close(*pubsocket_ptr);
+	}
+
+	*poller_ptr={};
+}
+
+void sigusr1()
+{
+	sigusr2();
+
+	if (!pubsocket_ptr || !poller_ptr)
+		return;
+
+	log_message("reopening sockets");
+	*pubsocket_ptr=start_vera_pub();
+	*poller_ptr=create_priv_poller();
+}
+
+// The vera init daemon
+
+void vera_init(int pubsocket)
+{
+	auto priv_poller=create_priv_poller();
+
+	pubsocket_ptr=&pubsocket;
+	poller_ptr=&priv_poller;
 
 	// Create our cgroup
 
@@ -546,6 +592,50 @@ void do_pub_request(external_filedesc pubfd)
 	}
 }
 
+// Create a pipe, both ends of the pipe have CLOEXEC set.
+// fork a child process, child process closes the write end of the pipe,
+// runs vera_pub() listening on the read end of the pipe, when it closes
+// it exits.
+//
+// Returns the write end of the pipe to the parent process.
+
+static void vera_pub();
+
+int start_vera_pub()
+{
+	int pipefd[2];
+
+	while (pipe2(pipefd, O_CLOEXEC|O_NONBLOCK) < 0)
+	{
+		log_message(_("pipe failed"));
+		sleep(5);
+	}
+
+	pid_t p;
+
+	while ((p=fork()) < 0)
+	{
+		log_message(_("fork failed"));
+		sleep(5);
+	}
+
+	if (!p)
+	{
+		close(pipefd[1]);
+
+		polledfd poll_for_exit{pipefd[0],
+			[]
+			(int fd)
+			{
+				_exit(0);
+			}};
+
+		vera_pub();
+	}
+
+	close(pipefd[0]);
+	return pipefd[1];
+}
 
 // Separate process that listens on the public socket and forwards
 // requests to the main vera init daemon.
@@ -599,41 +689,9 @@ void vera_pub()
 
 void vera()
 {
-	int pipefd[2];
-
-	while (pipe2(pipefd, O_CLOEXEC|O_NONBLOCK) < 0)
-	{
-		log_message(_("pipe failed"));
-		sleep(5);
-	}
-
-	pid_t p;
-
-	while ((p=fork()) < 0)
-	{
-		log_message(_("fork failed"));
-		sleep(5);
-	}
-
-	if (p)
-	{
-		close(pipefd[0]);
-		vera_init();
-	}
-	else
-	{
-		close(pipefd[1]);
-
-		polledfd poll_for_exit{pipefd[0],
-			[]
-			(int fd)
-			{
-				_exit(0);
-			}};
-
-		vera_pub();
-	}
+	vera_init(start_vera_pub());
 }
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Send commands to the vera daemon

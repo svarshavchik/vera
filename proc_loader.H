@@ -198,6 +198,8 @@ bool proc_set_runlevel_default_override(
 #define RUNLEVEL_PREFIX_BASE "runlevel "
 #define RUNLEVEL_PREFIX SYSTEM_PREFIX RUNLEVEL_PREFIX_BASE
 
+#define SIGINT_UNIT "sigint"
+#define SIGHUP_UNIT "sighup"
 #define SIGPWR_UNIT "sigpwr"
 
 #endif

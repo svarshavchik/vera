@@ -302,4 +302,10 @@ void proc_check_reexec();
 //! exec() or bust.
 void reexec() __attribute__((noreturn));
 
+//! sigusr1 signal received
+void sigusr1();
+
+//! sigusr2 signal received
+void sigusr2();
+
 #endif

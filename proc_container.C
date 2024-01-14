@@ -516,9 +516,9 @@ const current_containers_info &get_containers_info(
 	return containers_info;
 }
 
-//! A signal file descriptor that catches and handles SIGCHLD
+//! A signal file descriptor that catches and handles signals
 
-//! The singleton blocks SIGCHLD and sets up a poller on a signal file
+//! The singleton blocks signals and sets up a poller on a signal file
 //! descriptor.
 
 namespace {
@@ -526,13 +526,13 @@ namespace {
 }
 #endif
 
-struct sigchld_poller {
+struct signal_poller {
 
 	int fd;
 
 	polledfd handler;
 
-	sigchld_poller()
+	signal_poller()
 	{
 		// Block SIGCHLD
 
@@ -540,18 +540,14 @@ struct sigchld_poller {
 
 		sigemptyset(&ss);
 		sigaddset(&ss, SIGCHLD);
-
-		// Also, hijack this to handle a few more signals
-
 		sigaddset(&ss, SIGPWR);
+		sigaddset(&ss, SIGHUP);
+		sigaddset(&ss, SIGUSR1);
+		sigaddset(&ss, SIGUSR2);
 
-		// If running for real-sies, block these signals too, we
-		// don't do anything for them.
 		if (getpid() == 1)
 		{
-			sigaddset(&ss, SIGHUP);
 			sigaddset(&ss, SIGINT);
-			sigaddset(&ss, SIGTERM);
 		}
 		while (sigprocmask(SIG_BLOCK, &ss, NULL) < 0)
 		{
@@ -601,6 +597,38 @@ struct sigchld_poller {
 				runner_finished(ssi.ssi_pid, wstatus);
 			}
 			return;
+		case SIGHUP:
+			{
+				auto fd=dup(devnull());
+
+				if (fd < 0)
+					return;
+
+				auto efd=std::make_shared<external_filedescObj>(
+					fd
+				);
+
+				get_containers_info(NULL)->start(
+					SYSTEM_PREFIX SIGHUP_UNIT, efd
+				);
+			}
+			return;
+		case SIGINT:
+			{
+				auto fd=dup(devnull());
+
+				if (fd < 0)
+					return;
+
+				auto efd=std::make_shared<external_filedescObj>(
+					fd
+				);
+
+				get_containers_info(NULL)->start(
+					SYSTEM_PREFIX SIGINT_UNIT, efd
+				);
+			}
+			return;
 		case SIGPWR:
 			{
 				auto fd=dup(devnull());
@@ -617,10 +645,16 @@ struct sigchld_poller {
 				);
 			}
 			return;
+		case SIGUSR1:
+			sigusr1();
+			return;
+		case SIGUSR2:
+			sigusr2();
+			return;
 		}
 	}
 
-	~sigchld_poller()
+	~signal_poller()
 	{
 		handler=polledfd{};
 		close(fd);
@@ -629,7 +663,7 @@ struct sigchld_poller {
 
 void install_sighandlers()
 {
-	static sigchld_poller singleton;
+	static signal_poller singleton;
 }
 #if 0
 {

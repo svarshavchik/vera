@@ -314,6 +314,70 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
+		filename=args[3] + "/" SIGHUP_UNIT;
+
+		o.open(filename);
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+		o << "# This file was automatically generated\n"
+			"# Units that should be started by SIGHUP should"
+			" specify:\n"
+			"#\n"
+			"# Enabled: " SYSTEM_PREFIX SIGHUP_UNIT "\n"
+			"#\n"
+			"# Enabling the unit results in it getting started"
+			" in response to a SIGPWR event\n"
+			"\n"
+			"name: " SIGHUP_UNIT "\n"
+			"description: SIGPWR event\n"
+			"starting:\n"
+			"  type: oneshot\n"
+			"stopping:\n"
+			"  type: target\n"
+			"version: 1\n";
+		o.close();
+
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+
+		filename=args[3] + "/" SIGINT_UNIT;
+
+		o.open(filename);
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+		o << "# This file was automatically generated\n"
+			"# Units that should be started by SIGINT should"
+			" specify:\n"
+			"#\n"
+			"# Enabled: " SYSTEM_PREFIX SIGINT_UNIT "\n"
+			"#\n"
+			"# Enabling the unit results in it getting started"
+			" in response to a SIGPWR event\n"
+			"\n"
+			"name: " SIGINT_UNIT "\n"
+			"description: SIGPWR event\n"
+			"starting:\n"
+			"  type: oneshot\n"
+			"stopping:\n"
+			"  type: target\n"
+			"version: 1\n";
+		o.close();
+
+		if (!o)
+		{
+			perror(filename.c_str());
+			exit(1);
+		}
+
 		return 0;
 	}
 
