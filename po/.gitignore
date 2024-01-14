@@ -1,2 +1,15 @@
-vera.pot
-stamp-po
+/ChangeLog
+/Makefile.in.in
+/Makevars.template
+/POTFILES
+/POTFILES.in
+/Rules-quot
+/boldquot.sed
+/en@boldquot.header
+/en@quot.header
+/insert-header.sin
+/*.pot
+/quot.sed
+/remove-potcdate.sed
+/remove-potcdate.sin
+/stamp-po
