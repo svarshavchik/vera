@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
-		if (!proc_set_runlevel_default(args[2], "4",
+		if (!proc_set_runlevel_default(args[2], "5",
 			     [&]
 			     (auto &msg)
 			     {
@@ -268,102 +268,49 @@ int main(int argc, char **argv)
 			}
 		}
 
-		auto filename=args[3] + "/" SIGPWR_UNIT;
+		static const char * const predefinedp[][2]={
+			{SIGINT_UNIT,     "SIGINT received (ctrl-alt-del)"},
+			{SIGHUP_UNIT,     "SIGHUP received"},
+			{SIGWINCH_UNIT,   "keyboard attention signal received"},
+			{PWRFAIL_UNIT,    "SIGPWR, /etc/powerstatus=F"},
+			{PWRFAILNOW_UNIT, "SIGPWR, /etc/powerstatus=L"},
+			{PWROK_UNIT,      "SIGPWR, /etc/powerstatus=O"}
+		};
 
-		std::ofstream o;
-
-		o.open(filename);
-		if (!o)
+		for (auto &[unit, description] : predefinedp)
 		{
-			perror(filename.c_str());
-			exit(1);
-		}
-		o << "# This file was automatically generated\n"
-			"# Units that should be started by SIGPWR should"
-			" specify:\n"
-			"#\n"
-			"# Enabled: " SYSTEM_PREFIX SIGPWR_UNIT "\n"
-			"#\n"
-			"# Enabling the unit results in it getting started"
-			" in response to a SIGPWR event\n"
-			"\n"
-			"name: " SIGPWR_UNIT "\n"
-			"description: SIGPWR event\n"
-			"starting:\n"
-			"  type: oneshot\n"
-			"stopping:\n"
-			"  type: target\n"
-			"version: 1\n";
-		o.close();
+			auto filename=args[3] + "/" + unit;
 
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
-		}
+			std::ofstream o{filename};
+			if (!o)
+			{
+				perror(filename.c_str());
+				exit(1);
+			}
+			o << "# This file was automatically generated\n"
+				"# Units that should be started in this unit"
+				" should specify:\n"
+				"#\n"
+				"# Enabled: " SYSTEM_PREFIX
+			  << unit << "\n"
+				"#\n"
+				"# Enabling the unit results in it getting"
+				" started in response to this event\n"
+				"\n"
+				"name: " << unit << "\n"
+				"description: " << description << "\n"
+				"starting:\n"
+				"  type: oneshot\n"
+				"stopping:\n"
+				"  type: target\n"
+				"version: 1\n";
+			o.close();
 
-		filename=args[3] + "/" SIGHUP_UNIT;
-
-		o.open(filename);
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
-		}
-		o << "# This file was automatically generated\n"
-			"# Units that should be started by SIGHUP should"
-			" specify:\n"
-			"#\n"
-			"# Enabled: " SYSTEM_PREFIX SIGHUP_UNIT "\n"
-			"#\n"
-			"# Enabling the unit results in it getting started"
-			" in response to a SIGPWR event\n"
-			"\n"
-			"name: " SIGHUP_UNIT "\n"
-			"description: SIGPWR event\n"
-			"starting:\n"
-			"  type: oneshot\n"
-			"stopping:\n"
-			"  type: target\n"
-			"version: 1\n";
-		o.close();
-
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
-		}
-
-		filename=args[3] + "/" SIGINT_UNIT;
-
-		o.open(filename);
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
-		}
-		o << "# This file was automatically generated\n"
-			"# Units that should be started by SIGINT should"
-			" specify:\n"
-			"#\n"
-			"# Enabled: " SYSTEM_PREFIX SIGINT_UNIT "\n"
-			"#\n"
-			"# Enabling the unit results in it getting started"
-			" in response to a SIGPWR event\n"
-			"\n"
-			"name: " SIGINT_UNIT "\n"
-			"description: SIGPWR event\n"
-			"starting:\n"
-			"  type: oneshot\n"
-			"stopping:\n"
-			"  type: target\n"
-			"version: 1\n";
-		o.close();
-
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
+			if (!o)
+			{
+				perror(filename.c_str());
+				exit(1);
+			}
 		}
 
 		return 0;

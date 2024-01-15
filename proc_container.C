@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <string.h>
 #include <string_view>
+#include <fstream>
 
 const char reexec_envar[]="VERA_REEXEC_FD";
 
@@ -542,6 +543,7 @@ struct signal_poller {
 		sigaddset(&ss, SIGCHLD);
 		sigaddset(&ss, SIGPWR);
 		sigaddset(&ss, SIGHUP);
+		sigaddset(&ss, SIGWINCH);
 		sigaddset(&ss, SIGUSR1);
 		sigaddset(&ss, SIGUSR2);
 
@@ -629,7 +631,7 @@ struct signal_poller {
 				);
 			}
 			return;
-		case SIGPWR:
+		case SIGWINCH:
 			{
 				auto fd=dup(devnull());
 
@@ -641,8 +643,73 @@ struct signal_poller {
 				);
 
 				get_containers_info(NULL)->start(
-					SYSTEM_PREFIX SIGPWR_UNIT, efd
+					SYSTEM_PREFIX SIGWINCH_UNIT, efd
 				);
+			}
+			return;
+		case SIGPWR:
+			{
+				std::string s;
+
+				{
+					std::ifstream i{"/etc/powerstatus"};
+
+					std::getline(i, s);
+				}
+
+				auto fd=dup(devnull());
+
+				if (fd < 0)
+					return;
+
+				auto efd=std::make_shared<external_filedescObj>(
+					fd
+				);
+
+				auto c=get_containers_info(NULL);
+
+				auto status=*s.c_str();
+
+				if (status == 'F')
+				{
+					c->start(
+						SYSTEM_PREFIX PWRFAIL_UNIT, efd
+					);
+				}
+				else
+				{
+					c->stop(
+						SYSTEM_PREFIX PWRFAIL_UNIT, efd
+					);
+				}
+
+				if (status == 'O')
+				{
+					c->start(
+						SYSTEM_PREFIX PWROK_UNIT, efd
+					);
+				}
+				else
+				{
+					c->stop(
+						SYSTEM_PREFIX PWROK_UNIT, efd
+					);
+				}
+
+				if (status == 'L')
+				{
+					c->start(
+						SYSTEM_PREFIX PWRFAILNOW_UNIT,
+						efd
+					);
+				}
+				else
+				{
+					c->stop(
+						SYSTEM_PREFIX PWRFAILNOW_UNIT,
+						efd
+					);
+				}
 			}
 			return;
 		case SIGUSR1:

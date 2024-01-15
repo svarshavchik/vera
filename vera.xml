@@ -305,10 +305,10 @@
 		  <entry>networking</entry><entry>3</entry><entry>Network logins enabled</entry>
 		</row>
 		<row>
-		  <entry>custom</entry><entry>4</entry><entry>Unused</entry>
+		  <entry>graphical</entry><entry>4</entry><entry>Networking and X</entry>
 		</row>
 		<row>
-		  <entry>graphical</entry><entry>5</entry><entry>Networking and X</entry>
+		  <entry>custom</entry><entry>5</entry><entry>Unused</entry>
 		</row>
 		<row>
 		  <entry>reboot</entry><entry>6</entry><entry>reboot</entry>

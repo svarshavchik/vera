@@ -621,6 +621,8 @@ void monitor_hierarchy::monitor_info::event(const char *pathname, uint32_t mask)
 
 		if (!ec && new_entry.is_directory())
 			subdirectory(fullpath, pathname);
+		else if (ec || !new_entry.is_regular_file())
+			return;
 
 		(*changed)(pathname);
 		return;

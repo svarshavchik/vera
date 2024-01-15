@@ -34,6 +34,10 @@ libvera_a_SOURCES=						\
 	log.H							\
 	log_current_time.C					\
 	messages.H 						\
+	parsed_yaml.C						\
+	parsed_yaml.H						\
+	poller.C						\
+	poller.H						\
 	privrequest.C						\
 	privrequest.H						\
 	proc_container.C					\
@@ -52,9 +56,9 @@ libvera_a_SOURCES=						\
 	proc_container_timerfwd.H				\
 	proc_loader.C						\
 	proc_loader.H						\
-	poller.C						\
-	poller.H						\
-	unit_test.H
+	unit_test.H						\
+	yaml_writer.C						\
+	yaml-writer.H
 
 configdirs.h: config.status
 	echo '#define INSTALLCONFIGDIR "$(INSTALLCONFIGDIR)"' >configdirs.h.tmp

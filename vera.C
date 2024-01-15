@@ -8,6 +8,7 @@
 #include "poller.H"
 #include "proc_container_group.H"
 #include "proc_loader.H"
+#include "parsed_yaml.H"
 #include "messages.H"
 #include "log.H"
 #include "current_containers_info.H"
@@ -20,6 +21,9 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/reboot.h>
+#include <sys/kd.h>
+#include <sys/ioctl.h>
 #include <syslog.h>
 #include <iostream>
 #include <signal.h>
@@ -226,7 +230,7 @@ void log_to_real_syslog(int level, const char *program,
 void log_to_stdout(int level, const char *program,
 		   const char *message)
 {
-	std::cout << program << ": " << message << "\n";
+	std::cout << program << ": " << message << "\n" << std::flush;
 }
 
 // Send a signal to all processes in a container.
@@ -455,6 +459,26 @@ void vera_init(int pubsocket)
 	{
 		initial=true;
 		log_message("starting");
+
+		if (getpid() == 1)
+		{
+			// Disable ctrlaltdel
+
+			reboot(RB_DISABLE_CAD);
+
+			int f = open("/dev/tty", O_RDWR | O_NOCTTY);
+
+			if (f < 0)
+			{
+				f=dup(0);
+			}
+
+			if (f >= 0)
+			{
+				(void) ioctl(f, KDSIGACCEPT, SIGWINCH);
+				close(f);
+			}
+		}
 
 		proc_gc(installconfigdir(),
 			localconfigdir(),

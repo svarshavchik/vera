@@ -14,14 +14,6 @@
 #include <iostream>
 #include <optional>
 
-/*! Validate a container name
-
-Enforces naming conventions.
-
- */
-
-bool proc_validpath(const std::string_view &path);
-
 /*! Find pathnames to load
 
 Scans the global, local, and override directory. found() gets called with
@@ -204,8 +196,11 @@ bool proc_set_runlevel_default_override(
 #define RUNLEVEL_PREFIX_BASE "runlevel "
 #define RUNLEVEL_PREFIX SYSTEM_PREFIX RUNLEVEL_PREFIX_BASE
 
-#define SIGINT_UNIT "sigint"
-#define SIGHUP_UNIT "sighup"
-#define SIGPWR_UNIT "sigpwr"
+#define SIGINT_UNIT     "sigint"
+#define SIGHUP_UNIT     "sighup"
+#define SIGWINCH_UNIT	"sigwinch"
+#define PWRFAIL_UNIT    "powerfail"
+#define PWRFAILNOW_UNIT "powerfailnow"
+#define PWROK_UNIT      "powerok"
 
 #endif

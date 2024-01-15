@@ -1286,7 +1286,7 @@ void test_runlevels()
 
 		if (current_runlevel != std::vector<std::string>{
 				RUNLEVEL_PREFIX "graphical",
-				"5",
+				"4",
 				"default"
 			})
 		{
@@ -2737,7 +2737,7 @@ void testmultirunlevels()
 	do_poll(0);
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel graphical:5:default")
+	if (runlevel != "system/runlevel graphical:4:default")
 		throw "unexpected runlevel (5): " + runlevel;
 
 	if (logged_state_changes != std::vector<std::string>{
@@ -2766,7 +2766,7 @@ void testmultirunlevels()
 	runner_finished(5, 0);
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel graphical:5:default")
+	if (runlevel != "system/runlevel graphical:4:default")
 		throw "unexpected runlevel (6): " + runlevel;
 
 	if (logged_state_changes != std::vector<std::string>{

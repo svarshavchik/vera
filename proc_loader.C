@@ -5,6 +5,8 @@
 #include "config.h"
 #include "proc_loader.H"
 #include "messages.H"
+#include "yaml_writer.H"
+#include "parsed_yaml.H"
 #include <algorithm>
 #include <filesystem>
 #include <vector>
@@ -19,58 +21,6 @@
 #include <unordered_set>
 #include <errno.h>
 #include <sys/stat.h>
-#include <yaml.h>
-
-#define SPECIAL(c) \
-	((c) == '/' ||					\
-	 (c) == ' ' || (c) == '.' || (c) == '-')
-
-bool proc_validpath(const std::string_view &path)
-{
-	// cgroup directories are formed by replacing all /s with : and
-	// appending one more :, so the maximum path.size() is NAME_MAX-1.
-	// (this is checked later).
-
-	if (path.size() == 0 || path.size() >= NAME_MAX
-	    || SPECIAL(*path.data()))
-		return false;
-
-	char lastchar=0;
-
-	for (char c: path)
-	{
-		if (!
-		    ((c & 0x80)  ||
-		     SPECIAL(c) ||
-		     (c >= '0' && c <= '9') ||
-		     (c >='A' && c <= 'Z') || (c >= 'a' && c <= 'z')))
-			return false;
-
-		if (SPECIAL(c) && c == lastchar)
-			return false;
-
-		lastchar=c;
-	}
-
-	if (SPECIAL(lastchar))
-		return false;
-
-	for (auto b=path.begin(), e=path.end(); b != e; )
-	{
-		auto p=b;
-
-		b=std::find(b, e, '/');
-
-		if (*p == '.' || *p == ' ' ||
-		    b[-1] == '.' || b[-1] == ' ')
-			return false;
-
-		if (b != e)
-			++b;
-	}
-
-	return true;
-}
 
 static void proc_find(const std::filesystem::path &config_global,
 		      const std::filesystem::path &config_local,
@@ -292,545 +242,6 @@ void proc_gc(const std::string &config_global,
 	}
 }
 
-namespace {
-#if 0
-}
-#endif
-
-extern "C" int read_handler(void *,
-			    unsigned char *,
-			    size_t size,
-			    size_t *size_read);
-
-/*! Lightweight wrapper for a yaml_parser_t
-
-RAII wrapper for a yaml_parser_t, that parses YAML from a std::istream.
-The constructor takes a std::istream parameter. Check initialized after
-construction to determine if the construction succeeded.
-
-The copy constructor and assignment operator are deleted, yaml_parser_t
-is RAII-managed.
-
- */
-
-struct yaml_parser_info {
-	std::istream &input_file;
-
-	bool initialized=false;
-	yaml_parser_t parser;
-
-	yaml_parser_info(const yaml_parser_info &)=delete;
-	yaml_parser_info &operator=(const yaml_parser_info &)=delete;
-
-	yaml_parser_info(std::istream &input_file)
-		: input_file{input_file}
-	{
-		if (!yaml_parser_initialize(&parser))
-			return;
-		initialized=true;
-		yaml_parser_set_input(&parser,
-				      read_handler,
-				      reinterpret_cast<void *>(this));
-	}
-
-	~yaml_parser_info()
-	{
-		if (initialized)
-		{
-			yaml_parser_delete(&parser);
-		}
-	}
-};
-
-int read_handler(void *ptr,
-		 unsigned char *buf,
-		 size_t size,
-		 size_t *size_read)
-{
-	auto obj=reinterpret_cast<yaml_parser_info *>(ptr);
-
-	obj->input_file.read(reinterpret_cast<char *>(buf), size);
-
-	*size_read=obj->input_file.gcount();
-
-	return obj->input_file.eof() ? 1:0;
-}
-
-/*! Lightweight wrapper for a yaml_document_t
-
-The constructor takes a yaml_parser_info for a parameter and parses a
-YAML document out of it.
-
-After construction, initialized indicates whether the document was parsed.
-The remaining parameters to the constructor
-
-- filename: for including in error messages
-
-- a callback for an error message.
-*/
-
-struct parsed_yaml {
-
-	bool initialized=false;
-	bool empty=false;
-
-	yaml_document_t doc{};
-
-	parsed_yaml(yaml_parser_info &info,
-		    const std::string &filename,
-		    const std::function<void (const std::string &)> &error)
-	{
-		if (yaml_parser_load(&info.parser, &doc))
-		{
-			initialized=true;
-			return;
-		}
-
-		if (info.parser.error == YAML_NO_ERROR)
-		{
-			empty=true;
-			return;
-		}
-
-		std::ostringstream o;
-
-		o << filename << ": " << info.parser.problem
-		  << _(": line ") << info.parser.problem_mark.line
-		  << _(", column ") << info.parser.problem_mark.column;
-
-		error(o.str());
-	}
-
-	~parsed_yaml()
-	{
-		if (initialized)
-		{
-			yaml_document_delete(&doc);
-		}
-	}
-
-	static void lc(std::string &s)
-	{
-		std::transform(
-			s.begin(),
-			s.end(),
-			s.begin(),
-			[]
-			(char c)
-			{
-				if (c >= 'A' && c <= 'Z')
-					c += 'a'-'A';
-				return c;
-			});
-	}
-
-	parsed_yaml(const parsed_yaml &)=delete;
-
-	parsed_yaml &operator=(const parsed_yaml &)=delete;
-
-	/*! Parse a YAML map
-
-	  Repeatedly invokes the key_value callback with the key name, and
-	  the yaml_node_t for the key's value.
-
-	  The key's name is translated to ASCII lowercase, and incidentally
-	  has the leading and trailing whitespace trimmed.
-
-	 */
-
-	bool parse_map(yaml_node_t *n,
-		       const std::string &name,
-		       const std::function<bool (
-			       const std::string &,
-			       yaml_node_t *,
-			       const std::function<void (const std::string &
-						 )> &)> &key_value,
-		       const std::function<void (const std::string &)> &error)
-	{
-		if (!n || n->type != YAML_MAPPING_NODE)
-		{
-			error(name +
-			      _(": bad format, expected a key/value map"));
-			return false;
-		}
-
-		for (auto b=n->data.mapping.pairs.start,
-			     e=n->data.mapping.pairs.top; b != e; ++b)
-		{
-			auto key=parse_scalar(
-				yaml_document_get_node(&doc, b->key),
-				name,
-				error);
-
-			if (!key)
-				return false;
-
-			auto &keys=*key;
-
-			lc(keys);
-
-			if (!key_value(keys,
-				       yaml_document_get_node(&doc, b->value),
-				       error))
-				return false;
-		}
-
-		return true;
-	}
-
-	/*! Parse a YAML map
-
-	  Repeatedly invokes the value callback with a YAML node for each
-	  value in the sequence.
-
-	  Invokes the value callback one time if the passed-in YAML node
-	  is a scalar.
-
-	 */
-
-	bool parse_sequence(
-		yaml_node_t *n,
-		const std::string &name,
-		const std::function<bool (
-				    yaml_node_t *,
-				    const std::function<void (
-						  const std::string &
-					  )> &)> &value,
-		const std::function<void (const std::string &)> &error)
-	{
-		if (n && n->type == YAML_SCALAR_NODE)
-			return value(n, error);
-
-		if (!n || n->type != YAML_SEQUENCE_NODE)
-		{
-			error(name +
-			      _(": bad format, expected a sequence (list)"));
-			return false;
-		}
-
-		for (auto b=n->data.sequence.items.start,
-			     e=n->data.sequence.items.top; b != e; ++b)
-		{
-			auto ns=yaml_document_get_node(&doc, *b);
-
-			if (ns && !value(ns, error))
-				return false;
-		}
-
-		return true;
-	}
-
-	/*! Parse a YAML scalar string.
-
-	  Return std::nullopt if the passed-in YAML node is not a scalar node.
-
-	  Automatically trims off leading and trailing whitespace.
-
-	 */
-
-	std::optional<std::string> parse_scalar(
-		yaml_node_t *n,
-		const std::string &name,
-		const std::function<void (const std::string &)> &error)
-	{
-		if (!n || n->type != YAML_SCALAR_NODE)
-		{
-			error(name +
-			      _(": bad format, non-scalar map key"));
-			return std::nullopt;
-		}
-
-		auto b=reinterpret_cast<char *>(n->data.scalar.value);
-
-		auto e=b+n->data.scalar.length;
-
-		return std::string{b, e};
-	}
-
-	/*!
-	  Parse a YAML scalar string into a std::string
-
-	  Overload that returns a bool success indicator. An additional
-	  std::string parameter gets passed by reference. It receives
-	  the read YAML scalar string if this succeeds.
-	 */
-	bool parse_scalar(
-		yaml_node_t *n,
-		const std::string &name,
-		const std::function<void (const std::string &)> &error,
-		std::string &ret)
-	{
-		auto s=parse_scalar(n, name, error);
-
-		if (!s)
-			return false;
-
-		ret=*s;
-		return true;
-	}
-
-	/*!
-	  Parse a YAML scalar string into a numeric value.
-
-	  Overload that returns a bool success indicator. An additional
-	  std::string parameter gets passed by reference. It receives
-	  the read YAML scalar string if this succeeds.
-	 */
-
-	template<typename T>
-	std::enable_if_t<std::is_arithmetic_v<T> &&
-			 !std::is_floating_point_v<T>,
-			 bool>
-	parse_scalar(
-		yaml_node_t *n,
-		const std::string &name,
-		T &ret,
-		const std::function<void (const std::string &)> &error
-	)
-	{
-		auto s=parse_scalar(n, name, error);
-
-		if (!s)
-			return false;
-
-		std::istringstream i{*s};
-
-		i.imbue(std::locale{"C"});
-		if (i >> ret)
-		{
-			char c;
-
-			if (!(i >> c))
-				return true;
-		}
-
-		error(name + _(": cannot parse a numeric value"));
-
-		return false;
-	}
-
-
-	/*! Parse a list of requirements
-
-	  Uses parse_sequence(), processes each value, appends it to
-	  the requirements set.
-
-	  A name with the leading "/" gets it stripped off, and placed
-	  into the requirements, as is.
-
-	 */
-
-	bool parse_requirements(
-		yaml_node_t *n,
-		const std::string &name,
-		const std::function<void (const std::string &)> &error,
-		const std::filesystem::path &hier_name,
-		std::unordered_set<std::string> &requirements)
-	{
-		return parse_sequence(
-			n, name,
-			[&]
-			(yaml_node_t *n,
-			 const std::function<void (const std::string &)> &error)
-			{
-				auto s=parse_scalar(n, name, error);
-
-				if (!s)
-					return false;
-
-				if (*s->c_str() == '/')
-				{
-					auto rel=s->substr(1);
-
-					if (!proc_validpath(rel))
-					{
-						error(*s +
-						      _(": non-compliant name"))
-							;
-						return false;
-					}
-					requirements.insert(rel);
-					return true;
-				}
-
-				std::string new_path;
-
-				try {
-					new_path =
-						(hier_name.parent_path() / *s)
-						.lexically_normal();
-				} catch (...) {
-
-
-				}
-
-				if (new_path.empty())
-				{
-					error(*s +
-					      _(": non-compliant name"));
-					return false;
-				}
-
-				// Drop any trailing / that lexically_normal()
-				// might produce.
-
-				if (new_path.back() == '/')
-					new_path.pop_back();
-
-				if (!proc_validpath(new_path))
-				{
-					error(new_path +
-					      _(": non-compliant name"));
-					return false;
-				}
-
-				requirements.insert(new_path);
-				return true;
-			},
-			error);
-	}
-
-	bool starting_or_stopping(
-		yaml_node_t *n,
-		const std::string &name,
-		const std::function<void (const std::string &)> &error,
-		const std::filesystem::path &hier_name,
-		std::string &command,
-		time_t &timeout,
-		std::unordered_set<std::string> &before,
-		std::unordered_set<std::string> &after,
-		proc_containerObj &new_container,
-		bool (proc_containerObj::*set_type)(const std::string &))
-	{
-		bool found_command=false;
-		bool found_timeout=false;
-
-		return parse_map(
-			n,
-			name,
-			[&](const std::string &key, auto n,
-			    auto &error)
-			{
-				if (key == "command")
-				{
-					if (found_command)
-					{
-						error(name +
-						      _(": multiple "
-							"\"command\"s"));
-						return false;
-					}
-					found_command=true;
-
-					return parse_scalar(
-						n,
-						name + "/command",
-						error,
-						command);
-				}
-
-				if (key == "timeout")
-				{
-					if (found_timeout)
-					{
-						error(name +
-						      _(": multiple "
-							"\"timeout\"s"));
-						return false;
-					}
-					found_timeout=true;
-
-					std::string timeout_name =
-						name + "/timeout";
-
-					auto s=parse_scalar(
-						n,
-						timeout_name,
-						error);
-
-					if (!s)
-						return false;
-
-					timeout=0;
-
-					for (char c:*s)
-					{
-						if (c < '0' || c > '9')
-						{
-							error(timeout_name +
-							      _(": invalid "
-								"timeout value")
-							);
-							return false;
-						}
-
-						timeout *= 10;
-						timeout += c-'0';
-
-						if (timeout > 3600)
-						{
-							error(timeout_name +
-							      _(": invalid "
-								"timeout value")
-							);
-						}
-					}
-
-					return true;
-				}
-
-				if (key == "before")
-				{
-					return parse_requirements(
-						n,
-						name + "/before",
-						error,
-						hier_name,
-						before
-					);
-				}
-
-				if (key == "after")
-				{
-					return parse_requirements(
-						n,
-						name + "/after",
-						error,
-						hier_name,
-						after
-					);
-				}
-
-				if (key == "type")
-				{
-					auto v=parse_scalar(
-						n,
-						name + "/type",
-						error);
-
-					if (!v)
-						return false;
-
-					lc(*v);
-					if ((new_container.*set_type)(*v))
-						return true;
-
-					error(name +
-					      _(": invalid "
-						"type value")
-					);
-					return false;
-				}
-				return true;
-			},
-			error);
-	}
-};
-
-#if 0
-{
-#endif
-}
 
 static bool proc_load_container(
 	parsed_yaml &parsed,
@@ -1171,6 +582,141 @@ static bool proc_load_container(
 
 	return true;
 }
+bool parsed_yaml::starting_or_stopping(
+	yaml_node_t *n,
+	const std::string &name,
+	const std::function<void (const std::string &)> &error,
+	const std::filesystem::path &hier_name,
+	std::string &command,
+	time_t &timeout,
+	std::unordered_set<std::string> &before,
+	std::unordered_set<std::string> &after,
+	proc_containerObj &new_container,
+	bool (proc_containerObj::*set_type)(const std::string &))
+{
+	bool found_command=false;
+	bool found_timeout=false;
+
+	return parse_map(
+		n,
+		name,
+		[&](const std::string &key, auto n,
+		    auto &error)
+		{
+			if (key == "command")
+			{
+				if (found_command)
+				{
+					error(name +
+					      _(": multiple "
+						"\"command\"s"));
+					return false;
+				}
+				found_command=true;
+
+				return parse_scalar(
+					n,
+					name + "/command",
+					error,
+					command);
+			}
+
+			if (key == "timeout")
+			{
+				if (found_timeout)
+				{
+					error(name +
+					      _(": multiple "
+						"\"timeout\"s"));
+					return false;
+				}
+				found_timeout=true;
+
+				std::string timeout_name =
+					name + "/timeout";
+
+				auto s=parse_scalar(
+					n,
+					timeout_name,
+					error);
+
+				if (!s)
+					return false;
+
+				timeout=0;
+
+				for (char c:*s)
+				{
+					if (c < '0' || c > '9')
+					{
+						error(timeout_name +
+						      _(": invalid "
+							"timeout value")
+						);
+						return false;
+					}
+
+					timeout *= 10;
+					timeout += c-'0';
+
+					if (timeout > 3600)
+					{
+						error(timeout_name +
+						      _(": invalid "
+							"timeout value")
+						);
+					}
+				}
+
+				return true;
+			}
+
+			if (key == "before")
+			{
+				return parse_requirements(
+					n,
+					name + "/before",
+					error,
+					hier_name,
+					before
+				);
+			}
+
+			if (key == "after")
+			{
+				return parse_requirements(
+					n,
+					name + "/after",
+					error,
+					hier_name,
+					after
+				);
+			}
+
+			if (key == "type")
+			{
+				auto v=parse_scalar(
+					n,
+					name + "/type",
+					error);
+
+				if (!v)
+					return false;
+
+				lc(*v);
+				if ((new_container.*set_type)(*v))
+					return true;
+
+				error(name +
+				      _(": invalid "
+					"type value")
+				);
+				return false;
+			}
+			return true;
+		},
+		error);
+}
 
 void proc_set_override(
 	const std::string &config_override,
@@ -1454,220 +1000,6 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 	return ret;
 }
 
-///////////////////////////////////////////////////////////////////////////
-//
-// Some basic, generic scaffolding for writing out YAML. This is used to
-// update the runlevel configuration file, to specify the default runlevel
-
-namespace {
-#if 0
-}
-#endif
-
-// Interface libyaml to write the YAML contents to a std::ofstream
-
-extern "C" int write_runlevel(void *data,
-			      unsigned char *buffer,
-			      size_t size)
-{
-	auto stream=reinterpret_cast<std::ofstream *>(data);
-
-	stream->write( reinterpret_cast<char *>(buffer), size);
-
-	return stream->good() ? 1:0;
-}
-
-struct yaml_writer;
-
-// Write out a YAML node.
-
-struct yaml_write_node {
-
-	virtual bool write(yaml_writer &w)=0;
-};
-
-// RAII wrapper for a yaml_emitter.
-
-struct yaml_writer {
-
-	std::ofstream &o;
-	yaml_emitter_t emitter;
-	bool initialized{false};
-
-	yaml_writer(std::ofstream &o) : o{o}
-	{
-		if (!yaml_emitter_initialize(&emitter))
-			return;
-		initialized=true;
-
-		yaml_emitter_set_output(&emitter, &write_runlevel, &o);
-	}
-
-	~yaml_writer()
-	{
-		if (!initialized)
-		    return;
-
-		yaml_emitter_delete(&emitter);
-	}
-
-	// Write out the top level YAML node.
-
-	bool write(yaml_write_node &n)
-	{
-		yaml_event_t stream_start, stream_end;
-		yaml_event_t doc_start, doc_end;
-
-		if (!yaml_stream_start_event_initialize(
-			    &stream_start,
-			    YAML_ANY_ENCODING))
-			return false;
-
-		if (!yaml_emitter_emit(&emitter, &stream_start))
-			return false;
-
-		if (!yaml_document_start_event_initialize(
-			    &doc_start,
-			    NULL, NULL, NULL, 1))
-			return false;
-
-		if (!yaml_emitter_emit(&emitter, &doc_start))
-			return false;
-
-		if (!n.write(*this))
-			return false;
-
-		if (!yaml_document_end_event_initialize(&doc_end, 1))
-			return false;
-
-		if (!yaml_emitter_emit(&emitter, &doc_end))
-			return false;
-
-		if (!yaml_stream_end_event_initialize(&stream_end))
-			return false;
-
-		if (!yaml_emitter_emit(&emitter, &stream_end))
-			return false;
-
-		return true;
-	}
-};
-
-// Write out a scalar.
-
-// The object owns a std::string with the scalar's value.
-
-struct yaml_write_scalar : yaml_write_node {
-
-	std::string s;
-	yaml_event_t event;
-
-	yaml_write_scalar(std::string s) : s{std::move(s)}
-	{
-	}
-
-	bool write(yaml_writer &w) override
-	{
-		if (!yaml_scalar_event_initialize(
-			    &event, NULL, NULL,
-			    reinterpret_cast<yaml_char_t *>(s.data()),
-			    s.size(),
-			    1, 1,
-			    YAML_ANY_SCALAR_STYLE))
-			return false;
-
-		if (!yaml_emitter_emit(&w.emitter, &event))
-			return false;
-
-		return true;
-	}
-
-
-};
-
-// Write out a map. The map is represented as a vector of key/value tuples.
-
-typedef std::vector<std::tuple<std::shared_ptr<yaml_write_node>,
-			       std::shared_ptr<yaml_write_node>>> yaml_map_t;
-
-struct yaml_write_map : yaml_write_node {
-
-	yaml_event_t start_event, end_event;
-
-	yaml_map_t map;
-
-	yaml_write_map(yaml_map_t map) : map{std::move(map)}
-	{
-	}
-
-	bool write(yaml_writer &w) override
-	{
-		if (!yaml_mapping_start_event_initialize(
-			    &start_event,
-			    NULL, NULL, 1, YAML_ANY_MAPPING_STYLE
-		    ))
-			return false;
-
-		if (!yaml_emitter_emit(&w.emitter, &start_event))
-			return false;
-
-		for ( auto &[key, value] : map)
-		{
-			if (!key->write(w) || !value->write(w))
-				return false;
-		}
-
-		if (!yaml_mapping_end_event_initialize(&end_event))
-			return false;
-
-		if (!yaml_emitter_emit(&w.emitter, &end_event))
-			return false;
-
-		return true;
-	}
-};
-
-// Write out a YAML sequence. The sequence naturally gets defined as a vector.
-
-struct yaml_write_seq : yaml_write_node {
-
-	yaml_event_t start_event, end_event;
-
-	std::vector<std::shared_ptr<yaml_write_node>> seq;
-
-	yaml_write_seq(std::vector<std::shared_ptr<yaml_write_node>> seq)
-		: seq{std::move(seq)}
-	{
-	}
-
-	bool write(yaml_writer &w) override
-	{
-		if (!yaml_sequence_start_event_initialize(
-			    &start_event,
-			    NULL, NULL, 1, YAML_ANY_SEQUENCE_STYLE
-		    ))
-			return false;
-
-		if (!yaml_emitter_emit(&w.emitter, &start_event))
-			return false;
-
-		for ( auto &value : seq)
-			if (!value->write(w))
-				return false;
-
-		if (!yaml_sequence_end_event_initialize(&end_event))
-			return false;
-
-		if (!yaml_emitter_emit(&w.emitter, &end_event))
-			return false;
-		return true;
-	}
-};
-#if 0
-{
-#endif
-}
-
 bool proc_set_runlevel_config(const std::string &configfile,
 			      const runlevels &new_runlevels)
 {
@@ -1696,20 +1028,23 @@ bool proc_set_runlevel_config(const std::string &configfile,
 
 	for (auto &[name, runlevel]:new_runlevels)
 	{
-		std::vector<std::shared_ptr<yaml_write_node>> levels;
+		yaml_map_t config;
 
-		levels.reserve(runlevel.aliases.size());
+		config.reserve(runlevel.aliases.size());
+
+		auto alias=std::make_shared<yaml_write_scalar>("alias");
 
 		for (auto &a:runlevel.aliases)
 		{
-			levels.push_back(
+			config.emplace_back(
+				alias,
 				std::make_shared<yaml_write_scalar>(a)
 			);
 		}
 
 		m.emplace_back(std::make_shared<yaml_write_scalar>(name),
-			       std::make_shared<yaml_write_seq>(
-				       std::move(levels)
+			       std::make_shared<yaml_write_map>(
+				       std::move(config)
 			       )
 		);
 	}
@@ -1729,157 +1064,6 @@ bool proc_set_runlevel_config(const std::string &configfile,
 	}
 
 	return true;
-}
-
-runlevels default_runlevels()
-{
-	return {
-		{"sysinit", {
-				{},
-			},
-		},
-		{"boot", {
-				{},
-				{"sysinit"},
-			},
-		},
-		{"shutdown", {
-				{
-					"0"
-				},
-				{
-					"boot"
-				},
-			},
-		},
-		{
-			"single-user", {
-				{
-					"1",
-					"s",
-					"S"
-				},
-				{ "boot" },
-			},
-		},
-		{
-			"multi-user", {
-				{ "2" },
-				{ "boot" },
-			},
-		},
-		{
-			"networking", {
-				{ "3" },
-				{ "boot" },
-			},
-		},
-		{
-			"custom", {
-				{ "4" },
-				{ "boot" },
-			},
-		},
-		{
-			"graphical", {
-				{ "5", "default" },
-				{ "boot" },
-			},
-		},
-		{
-			"reboot", {
-				{ "6" },
-				{
-					"sysinit"
-				},
-			}
-		},
-	};
-}
-
-
-runlevels proc_get_runlevel_config(
-	const std::string &configfile,
-	const std::function<void (const std::string &)> &error)
-{
-	std::ifstream input_file{configfile};
-
-	if (!input_file)
-	{
-		error(configfile + ": " + strerror(errno));
-		return default_runlevels();
-	}
-
-	yaml_parser_info info{input_file};
-
-	if (!info.initialized)
-	{
-		error(configfile +
-		      _(": YAML parser initialization failure"));
-		return default_runlevels();
-	}
-
-	parsed_yaml parsed{info, configfile, error};
-
-	if (!parsed.initialized)
-	{
-		error(configfile +
-		      _(": loaded document was empty"));
-		return default_runlevels();
-	}
-
-	runlevels current_runlevels;
-
-	if (parsed.parse_map(
-		    yaml_document_get_root_node(&parsed.doc),
-		    configfile,
-		    [&]
-		    (const std::string &key,
-		     yaml_node_t *n,
-		     const auto &error)
-		    {
-			    std::unordered_set<std::string> aliases;
-
-			    auto this_key = configfile + "/" + key;
-
-			    if (!parsed.parse_sequence(
-					n,
-					this_key,
-					[&]
-					(yaml_node_t *n, const auto &error)
-					{
-						auto s=parsed.parse_scalar(
-							n,
-							this_key,
-							error);
-
-						if (!s)
-							return false;
-						aliases.insert(
-							std::move(*s)
-						);
-
-						return true;
-					},
-					error))
-				    return false;
-
-			    current_runlevels.emplace(
-				    key,
-				    runlevel{
-					    std::move(aliases)
-				    });
-
-			    return true;
-		    },
-		    error))
-	{
-		return current_runlevels;
-	}
-
-	current_runlevels=default_runlevels();
-
-	return current_runlevels;
 }
 
 bool proc_set_runlevel_default(
