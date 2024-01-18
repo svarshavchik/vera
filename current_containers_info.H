@@ -157,7 +157,7 @@ public:
              that requires "a".
 	*/
 
-	static void install_requires_dependency(
+	static void define_dependency(
 
 		//! Where to record dependencies
 		new_all_dependency_info_t &all_dependency_info,

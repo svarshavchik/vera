@@ -62,7 +62,7 @@ void test_deps()
 			std::cout << " " << a->name << "->"
 				  << b->name;
 
-			current_containers_infoObj::install_requires_dependency(
+			current_containers_infoObj::define_dependency(
 				all_dependency_info,
 				&dependency_info::all_requires,
 				&dependency_info::all_required_by,
@@ -166,7 +166,7 @@ void test_deps2()
 			std::cout << " " << a->name << "->"
 				  << b->name;
 
-			current_containers_infoObj::install_requires_dependency(
+			current_containers_infoObj::define_dependency(
 				all_dependency_info,
 				&dependency_info::all_requires,
 				&dependency_info::all_required_by,

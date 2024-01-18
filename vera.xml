@@ -213,11 +213,11 @@
 	    see <xref linkend="dependencies" /> for more information.
 	  </para>
 	</note>
-	<refsect2 id="runlevels">
-	  <title>Runlevels</title>
+	<refsect2 id="status">
+	  <title>The <quote>status</quote> command</title>
 
 	  <para>
-	    The <quote>status</quote> command shows
+	    This command shows
 	    a list of all units, their current state, and their processes.
 	    <quote>current</quote> shows the current <quote>runlevel</quote>.
 	    <quote>status</quote> omits stopped units by default; the
@@ -228,6 +228,50 @@
 	    access them.
 	  </para>
 
+	  <informaltable>
+	    <tgroup cols='2'>
+	      <thead>
+		<row>
+		  <entry>State</entry>
+		  <entry>Description</entry>
+		</row>
+	      </thead>
+	      <tbody>
+		<row>
+		  <entry><quote>stopped</quote></entry>
+		  <entry>This unit is stopped and is not running</entry>
+		</row>
+		<row>
+		  <entry><quote>start pending</quote> or <quote>start pending (manual)</quote></entry> <entry>This unit is not started yet and it's waiting for other units to be started first, this unit starts after other units get fully started</entry>
+		</row>
+		<row>
+		  <entry><quote>starting</quote> or <quote>starting (manual)</quote></entry>
+		  <entry>This unit is starting, but it's not finished starting</entry>
+		</row>
+		<row>
+		  <entry><quote>started</quote> or <quote>started (manual)</quote></entry>
+		  <entry>This unit is started and is running</entry>
+		</row>
+		<row>
+		  <entry><quote>stop pending</quote></entry>
+		  <entry>This unit is waiting for other units to stop, then it'll stop, this unit stops after other units finish stopping</entry>
+		</row>
+		<row>
+		  <entry><quote>stopping</quote></entry>
+		  <entry>This unit is in the process of stopping</entry>
+		</row>
+	      </tbody>
+	    </tgroup>
+	  </informaltable>
+
+	  <para>
+	    A <quote>manual</quote> annotation indicates that this unit
+	    is being started manually, by a <command>vlad start</command>
+	    command; otherwise it's started in order to start another unit.
+	  </para>
+	</refsect2>
+	<refsect2 id="runlevels">
+	  <title>Runlevels</title>
 	  <para>
 	    The term <quote>runlevel</quote> dates back to the original UNIX
 	    <command>init</command> process supervisor. At a given time the
@@ -954,8 +998,9 @@ Version: 1</literallayout>
 	  <itemizedlist>
 	    <listitem>
 	      <para>
-		Other units that are haven't started, but are
-		waiting for the failed unit start, do not
+		Other units that require this unit but are haven't started,
+		and are
+		waiting for the failed unit to start, do not
 		get started any more.
 	      </para>
 	    </listitem>
@@ -1254,6 +1299,35 @@ Respawn:
 	    </listitem>
 	  </varlistentry>
 	</variablelist>
+	<refsect2>
+	  <title>Specifying hierarchical dependencies</title>
+
+	  <para>
+	    A dependency (<quote>Requires</quote>,
+	    <quote>Required-By</quote>, and all <quote>Before</quote> and
+	    <quote>After</quote>s) can specify a hierarchical name, and
+	    it applies to all logical units in that hierarchy.
+	  </para>
+
+	  <para>
+	    See <xref linkend="additionaldocs" /> for a description of
+	    unit hierarchies. For example:
+	  </para>
+	  <blockquote>
+	    <informalexample>
+	      <programlisting>
+Before: networking
+	      </programlisting>
+	    </informalexample>
+	  </blockquote>
+
+	  <para>
+	    This defines the dependency for <quote>networking/vpn</quote>,
+	    <quote>networking/interfaces</quote> and all other units in the
+	    <quote>networking</quote> hierarchy (and to
+	    <quote>networking</quote> itself, if this unit is defined).
+	  </para>
+        </refsect2>
       </refsect1>
       <refsect1 id="additionaldocs">
 	<title>ADDITIONAL DOCUMENTATION</title>
@@ -1291,8 +1365,8 @@ Respawn:
 	  </para>
 	</refsect2>
 
-	<refsect2>
-	  <title>Unit specification files in subdirectories</title>
+	<refsect2 id="hierarchy">
+	  <title>Unit specification files hierarchy</title>
 
 	  <para>
 	    It's possible to create subdirectories in
@@ -1316,7 +1390,8 @@ Respawn:
 	      <para>
 		In the unit specification file: <quote>name</quote> still
 		matches the filename (without the subdirectory's name), but
-		the unit's logical name includes its subdirectory. For example:
+		the unit's logical, or <quote>hierarchical</quote>
+		name includes its subdirectory. For example:
 		<filename>@INSTALLCONFIGDIR@/networking/vpn</filename>
 		unit's logical name is <quote>networking/vpn</quote>; and
 		it contains an identifying <quote>name: vpn</quote>.
@@ -1325,7 +1400,7 @@ Respawn:
 
 	    <listitem>
 	      <para>
-		<command>vlad</command> commands use unit logical names.
+		<command>vlad</command> commands use hierarchical names.
 		<command>vlad start networking/vpn</command> refers to the
 		<filename>vpn</filename> unit specification file in
 		the <filename>networking</filename> subdirectory.
@@ -1334,9 +1409,9 @@ Respawn:
 
 	    <listitem>
 	      <para>
-		Dependency names are "relative" to unit's logical name.
+		Dependency names are "relative" to unit's hierarchical name.
 		For example: <filename>networking/vpn</filename> defining
-		that it is <quote>Before: interfaces</quote> refers to
+		that it <quote>Requires: interfaces</quote> refers to
 		<filename>networking/interfaces</filename>. Its
 		<quote>Enabled: ../system/networking</quote> defines that
 		it's enabled in the <quote>system/neworking</quote> runlevel
@@ -1354,7 +1429,7 @@ Respawn:
 	    pathname.
 	  </para>
 	</refsect2>
-	<refsect2>
+	<refsect2 id="compound">
 	  <title>Compound unit specification files</title>
 
 	  <para>
@@ -1410,7 +1485,8 @@ version: 1
 	    <listitem>
 	      <para>
 		The name of the initial YAML section must, as usual
-		match its filename, and this sets the name of unit specification
+		match its filename, and this sets the hierarchical name
+		of unit specification
 		file. Its logical name is also what it normally is (if this
 		unit specification file gets installed in the
 		<filename>local</filename> subdirectory, for example, its
@@ -1424,7 +1500,7 @@ version: 1
 		additional units as if they're installed
 		in a subdirectory whose name
 		is the name of the unit specification file.
-		The above example creates logical names
+		The above example creates hierarchical names
 		<quote>networking/interfaces</quote> and
 		<quote>networking/vpn</quote>, in addition to the main
 		<quote>networking</quote> one.
@@ -1434,7 +1510,7 @@ version: 1
 	    <listitem>
 	      <para>
 		All rules for specifying dependencies use
-		unit specification's logical name.
+		unit specification's hierarchical name.
 	      </para>
 	    </listitem>
 
@@ -1464,7 +1540,8 @@ version: 1
 	      subject to all the usual rules; they can be started or stopped
 	      individually. However <command>vlad mask networking</command>
 	      logically masks all of them together (same for enabling and
-	      disabling where appropriate).
+	      disabling where appropriate, see
+	      <xref linkend="hierarchy" /> for more information).
 	    </para>
 
 	    <para>

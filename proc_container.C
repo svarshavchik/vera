@@ -431,7 +431,7 @@ void proc_container_run_info::all_restored(
 		group->all_restored(create_info);
 }
 
-void current_containers_infoObj::install_requires_dependency(
+void current_containers_infoObj::define_dependency(
 
 	//! Where to record dependencies
 	new_all_dependency_info_t &all_dependency_info,
@@ -947,6 +947,263 @@ void proc_containers_install(proc_new_container_set &&new_containers,
 	get_containers_info(nullptr)->install(new_containers, mode);
 }
 
+namespace {
+#if 0
+}
+#endif
+
+// A dependency on "unit" will also pull in every "unit/subunit".
+//
+// Here we see "unit/subunit".
+//
+// Create a lookup table that has this container include as part of
+// an entry for "unit" and "unit/subunit".
+
+struct new_containers_lookup_t : std::unordered_multimap<
+	std::string, proc_new_container_set::iterator
+	>
+{
+	iterator add(proc_new_container_set::iterator new_iter)
+	{
+
+		auto b=(*new_iter)->new_container->name.begin(),
+			e=(*new_iter)->new_container->name.end(), p=b;
+
+		iterator final_iter;
+
+		do
+		{
+			if (p != b) ++p;
+
+			p=std::find(p, e, '/');
+
+			final_iter=emplace(std::string{b, p}, new_iter);
+		} while (p != e);
+
+		return final_iter;
+	}
+};
+
+/*! Propagate container dependencies.
+
+The dependencies are transitive. Each container specifies other containers
+it depends on, in some way.
+
+We calculate transitive forward and backward dependencies. If A depends on
+B, and B depends on C, the we calculate that A depends on both B and C.
+
+And for B and C we simultaneously calculate what other containers depend
+on them, also transitively.
+
+prepare() gets called first, to specify which container's dependencies are
+getting calculated, this is followed by calls to forward() and reverse().
+
+forward() and reverse() gets a dependency_list defined by the container,
+such as its "requires" and "required_by". The result is calls to
+define_dependency(). forward() passes the prepare()d container as dependency
+"a", and the containers that forward() looked up as "b". reverse() passes
+the prepare()d container as dependency "b", and each container that reverse()
+looked up as dependency "a".
+
+Each entry in the specified dependency_list, of the prepare()d container,
+is looked up in new_container_lookup, which returns all containers whose
+names start with the given dependency. If the dependency is "foo", this
+returns "foo", "foo/bar", "foo/bar/baz". If no such container exists a
+synthesized container gets created, with the specified name.
+
+The disallow_for_run_level and skip_for_run_level, if set, ignore any found
+dependencies that are runlevels, the only difference is whether a diagnostic
+message is or isn't logged, in that case.
+
+forward_dependency and backward_dependency get forwarded to every call to
+define_dependency().
+
+*/
+
+
+struct propagate_dependencies_t {
+	typedef current_containers_infoObj::all_dependencies all_dependencies;
+	typedef current_containers_infoObj::extra_dependency_info
+	extra_dependency_info;
+
+	//! Where to record dependencies
+	current_containers_infoObj::new_all_dependency_info_t &new_all_dependency_info;
+
+	/*! Lookup dependency by name
+
+	  For each dependency to container unit "X", return this unit, as well
+	  as "X/foo", "X/foo/bar", etc...
+	*/
+	new_containers_lookup_t &new_containers_lookup;
+
+	//! Containers that were loaded from the unit files.
+
+	proc_new_container_set &new_containers;
+
+	/*! Containers with dependency info
+
+	  Initially constructed, one for one, from new_containers. If
+	  a container dependency names a container that does not exist
+	  then we create a synthesized container, and then update both
+	  new_containers and new_current_containers, to serve as an anchor
+	  for those dependencies.
+	*/
+	current_containers &new_current_containers;
+
+	proc_new_container_set::value_type c;
+
+	const proc_new_container *this_proc_container;
+	const proc_new_container *other_proc_container;
+
+	void prepare(const proc_new_container_set::value_type new_c)
+	{
+		c=new_c;
+		this_proc_container=&c;
+	}
+
+	void doit(
+		const proc_new_container **requiring_ptr,
+		const proc_new_container **requirement_ptr,
+		bool disallow_for_runlevel,
+		bool skip_for_runlevel,
+		const std::unordered_set<std::string>
+		proc_new_containerObj::*dependency_list,
+		all_dependencies extra_dependency_info::*forward_dependency,
+		all_dependencies extra_dependency_info::*backward_dependency
+	);
+
+	void forward(
+		bool disallow_for_runlevel,
+		bool skip_for_runlevel,
+		const std::unordered_set<std::string>
+		proc_new_containerObj::*dependency_list,
+		all_dependencies extra_dependency_info::*forward_dependency,
+		all_dependencies extra_dependency_info::*backward_dependency
+	)
+	{
+		doit(&this_proc_container, &other_proc_container,
+		     disallow_for_runlevel, skip_for_runlevel,
+		     dependency_list,
+		     forward_dependency,
+		     backward_dependency);
+	}
+
+	void reverse(
+		bool disallow_for_runlevel,
+		bool skip_for_runlevel,
+		const std::unordered_set<std::string>
+		proc_new_containerObj::*dependency_list,
+		all_dependencies extra_dependency_info::*forward_dependency,
+		all_dependencies extra_dependency_info::*backward_dependency
+	)
+	{
+		doit(&other_proc_container, &this_proc_container,
+		     disallow_for_runlevel, skip_for_runlevel,
+		     dependency_list,
+		     forward_dependency,
+		     backward_dependency);
+	}
+};
+
+void propagate_dependencies_t::doit(
+	const proc_new_container **requiring_ptr,
+	const proc_new_container **requirement_ptr,
+	bool disallow_for_runlevel,
+	bool skip_for_runlevel,
+	const std::unordered_set<std::string>
+	proc_new_containerObj::*dependency_list,
+	all_dependencies extra_dependency_info::*forward_dependency,
+	all_dependencies extra_dependency_info::*backward_dependency)
+{
+	// Calculate only requires and required-by for runlevel
+	// entries.
+
+	if (skip_for_runlevel &&
+	    c->new_container->type ==
+	    proc_container_type::runlevel)
+		return;
+
+	for (const auto &dep:(*c).*(dependency_list))
+	{
+		// Look up the dependency container. If it
+		// does not exist we create a "synthesized"
+		// container.
+
+		auto [first, last] =
+			new_containers_lookup.equal_range(dep);
+
+		if (first == last)
+		{
+			auto newc=std::make_shared<
+				proc_new_containerObj>(dep);
+
+			newc->new_container->type=
+				proc_container_type::synthesized
+				;
+
+			auto iter=new_containers.insert(newc)
+				.first;
+			new_current_containers.emplace(
+				newc->new_container,
+				std::in_place_type_t<
+				state_stopped>{}
+			);
+
+			first=new_containers_lookup.add(iter);
+			last=first;
+			++last;
+		}
+
+		while (first != last)
+		{
+			auto iter=first->second;
+			++first;
+
+			other_proc_container=&*iter;
+
+			// Do not allow this dependency to
+			// specify a runlevel, only
+			// "required_by" is allowed to do this.
+
+			if (disallow_for_runlevel &&
+			    (*iter)->new_container->type ==
+			    proc_container_type::runlevel)
+			{
+				log_message(
+					_("Disallowed "
+					  "dependency "
+					  "on a runlevel: ")
+					+ c->new_container->name
+					+ " -> "
+					+ (*iter)->new_container
+					->name);
+				continue;
+			}
+			if (skip_for_runlevel &&
+			    (*iter)->new_container->type ==
+			    proc_container_type::runlevel)
+				continue;
+
+			auto &requiring=(**requiring_ptr)
+				->new_container;
+			auto &requirement=(**requirement_ptr)
+				->new_container;
+
+			current_containers_infoObj::define_dependency(
+				new_all_dependency_info,
+				forward_dependency,
+				backward_dependency,
+				requiring,
+				requirement
+			);
+		}
+	}
+}
+#if 0
+{
+#endif
+}
+
 void current_containers_infoObj::install(
 	proc_new_container_set &new_containers,
 	container_install mode
@@ -995,38 +1252,6 @@ void current_containers_infoObj::install(
 			);
 	}
 
-	// A dependency on "unit" will also pull in every "unit/subunit".
-	//
-	// Here we see "unit/subunit".
-	//
-	// Create a lookup table that has this container include as part of
-	// an entry for "unit" and "unit/subunit".
-
-	struct new_containers_lookup_t : std::unordered_multimap<
-		std::string, proc_new_container_set::iterator
-		> {
-
-		iterator add(proc_new_container_set::iterator new_iter)
-		{
-
-			auto b=(*new_iter)->new_container->name.begin(),
-				e=(*new_iter)->new_container->name.end(), p=b;
-
-			iterator final_iter;
-
-			do
-			{
-				if (p != b) ++p;
-
-				p=std::find(p, e, '/');
-
-				final_iter=emplace(std::string{b, p}, new_iter);
-			} while (p != e);
-
-			return final_iter;
-		}
-	};
-
 	new_containers_lookup_t new_containers_lookup;
 
 	for (auto b=new_containers.begin(), e=new_containers.end(); b != e; ++b)
@@ -1039,234 +1264,128 @@ void current_containers_infoObj::install(
 		new_containers_lookup.add(b);
 	}
 
+	propagate_dependencies_t propagate_dependencies{
+		new_all_dependency_info,
+		new_containers_lookup,
+		new_containers,
+		new_current_containers,
+	};
+
 	// Merge dep_requires and dep_required_by container declarations.
 
 	// First, iterate over each container
 
 	for (const auto &c:new_containers)
 	{
+		propagate_dependencies.prepare(c);
+
 		// Make two passes:
 		//
 		// - First pass is over dep_requires. The second pass
 		//   is over dep_required_by.
 		//
-		// - During the pass, set this_proc_container to point to c,
-		//   and other_proc_container to point to the container from
-		//   dep_requires or dep_required_by.
+		// - This is a forward and reverse dependency.
 		//
-		// - On the first pass, "this_proc_container" is the requiring
-		//   and "other_proc_container" is the required container.
-		//   On the second pass "other_proc_container" is the requiring
-		//   and "this_proc_container" is the requiring container.
+		// - They calculate all_requires and all_required_by.
+
+		propagate_dependencies.forward(
+			true,
+			false,
+			&proc_new_containerObj::dep_requires,
+			&extra_dependency_info::all_requires,
+			&extra_dependency_info::all_required_by
+		);
+
+		propagate_dependencies.reverse(
+			false,
+			false,
+			&proc_new_containerObj::dep_required_by,
+			&extra_dependency_info::all_requires,
+			&extra_dependency_info::all_required_by
+		);
+
+		// Use dep_requires and dep_requires_by to populate
 		//
-		// - At this point we declare: "requiring_ptr" requires
-		//   the "requirement_ptr.
+		// all_starting_first and all_starting_by.
+
+		propagate_dependencies.forward(
+			false,
+			true,
+			&proc_new_containerObj::dep_requires,
+			&extra_dependency_info::all_starting_first,
+			&extra_dependency_info::all_starting_first_by
+		);
+
+		propagate_dependencies.reverse(
+			false,
+			true,
+			&proc_new_containerObj::dep_required_by,
+			&extra_dependency_info::all_starting_first,
+			&extra_dependency_info::all_starting_first_by
+		);
+
+		// Use dep_requires to set all_stopping_first and
+		// all_stopping_first_by.
 		//
-		// We then make additional passes:
+		// Note that dep_requires in this context is a reverse
+		// dependency. The stopping order is the reverse of the
+		// dep_requires dependency.
 		//
-		// - The dep_requires_by and dep_required_by are used to
-		//   generate all_starting_first and all_stopping_first
-		//   dependency lists.
+		// And dep_required_by is the forward dependency.
 
-		const proc_new_container *this_proc_container=&c;
-		const proc_new_container *other_proc_container;
+		propagate_dependencies.reverse(
+			false,
+			true,
+			&proc_new_containerObj::dep_requires,
+			&extra_dependency_info::all_stopping_first,
+			&extra_dependency_info::all_stopping_first_by
+		);
 
-		for (const auto &[requiring_ptr, requirement_ptr,
-				  disallow_for_runlevel,
-				  skip_for_runlevel,
-				  forward_dependency, backward_dependency,
-				  dependency_list]
-			     : std::array< std::tuple<
-			     const proc_new_container **,
-			     const proc_new_container **,
-			     bool,
-			     bool,
-			     all_dependencies extra_dependency_info::*,
-			     all_dependencies extra_dependency_info::*,
-			     const std::unordered_set<std::string>
-			     proc_new_containerObj::*>, 10>{{
-				     { &this_proc_container,
-				       &other_proc_container,
-				       true,
-				       false,
-				       &extra_dependency_info::all_requires,
-				       &extra_dependency_info::all_required_by,
-				       &proc_new_containerObj::dep_requires},
-				     { &other_proc_container,
-				       &this_proc_container,
-				       false,
-				       false,
-				       &extra_dependency_info::all_requires,
-				       &extra_dependency_info::all_required_by,
-				       &proc_new_containerObj::dep_required_by},
+		propagate_dependencies.forward(
+			false,
+			true,
+			&proc_new_containerObj::dep_required_by,
+			&extra_dependency_info::all_stopping_first,
+			&extra_dependency_info::all_stopping_first_by
+		);
 
-				     // Automatically-generated starting_first
-				     // rules based on dep_requires and
-				     // dep_requires_by.
-				     //
-				     // requires and requires_by are basically
-				     // copied into all_starting_first(_by)?
+		// With that out of the way: the starting_after dependency
+		// defines all_starting_first and all_starting_first_by.
+		//
+		// And starting_before is the reverse dependency.
+		propagate_dependencies.forward(
+			true,
+			true,
+			&proc_new_containerObj::starting_after,
+			&extra_dependency_info::all_starting_first,
+			&extra_dependency_info::all_starting_first_by
+		);
 
-				     { &this_proc_container,
-				       &other_proc_container,
-				       false,
-				       true,
-				       &extra_dependency_info::all_starting_first,
-				       &extra_dependency_info::all_starting_first_by,
-				       &proc_new_containerObj::dep_requires},
+		propagate_dependencies.reverse(
+			true,
+			true,
+			&proc_new_containerObj::starting_before,
+			&extra_dependency_info::all_starting_first,
+			&extra_dependency_info::all_starting_first_by
+		);
 
-				     { &other_proc_container,
-				       &this_proc_container,
-				       false,
-				       true,
-				       &extra_dependency_info::all_starting_first,
-				       &extra_dependency_info::all_starting_first_by,
-				       &proc_new_containerObj::dep_required_by},
+		// stopping_after is the forward dependency, stopping_before
+		// is the reverse dependency.
+		propagate_dependencies.forward(
+			true,
+			true,
+			&proc_new_containerObj::stopping_after,
+			&extra_dependency_info::all_stopping_first,
+			&extra_dependency_info::all_stopping_first_by
+		);
 
-				     // Automatically-generated stopping_first
-				     // rules based on dep_requires and
-				     // dep_requires_by.
-				     //
-				     // This is the same as all_starting_first
-				     // except reversing the order of this and
-				     // the other containers. They get
-				     // stopped in reverse order.
-
-				     { &other_proc_container,
-				       &this_proc_container,
-				       false,
-				       true,
-				       &extra_dependency_info::all_stopping_first,
-				       &extra_dependency_info::all_stopping_first_by,
-				       &proc_new_containerObj::dep_requires},
-
-				     { &this_proc_container,
-				       &other_proc_container,
-				       false,
-				       true,
-				       &extra_dependency_info::all_stopping_first,
-				       &extra_dependency_info::all_stopping_first_by,
-				       &proc_new_containerObj::dep_required_by},
-
-
-				     { &this_proc_container,
-				       &other_proc_container,
-				       true,
-				       true,
-				       &extra_dependency_info::all_starting_first,
-				       &extra_dependency_info::all_starting_first_by,
-				       &proc_new_containerObj::starting_after},
-
-				     { &other_proc_container,
-				       &this_proc_container,
-				       true,
-				       true,
-				       &extra_dependency_info::all_starting_first,
-				       &extra_dependency_info::all_starting_first_by,
-				       &proc_new_containerObj::starting_before},
-
-				     { &this_proc_container,
-				       &other_proc_container,
-				       true,
-				       true,
-				       &extra_dependency_info::all_stopping_first,
-				       &extra_dependency_info::all_stopping_first_by,
-				       &proc_new_containerObj::stopping_after},
-
-				     { &other_proc_container,
-				       &this_proc_container,
-				       true,
-				       true,
-				       &extra_dependency_info::all_stopping_first,
-				       &extra_dependency_info::all_stopping_first_by,
-				       &proc_new_containerObj::stopping_before},
-
-			     }})
-		{
-			// Calculate only requires and required-by for runlevel
-			// entries.
-
-			if (skip_for_runlevel &&
-			    c->new_container->type ==
-			    proc_container_type::runlevel)
-				continue;
-
-			for (const auto &dep:(*c).*(dependency_list))
-			{
-				// Look up the dependency container. If it
-				// does not exist we create a "synthesized"
-				// container.
-
-				auto [first, last] =
-					new_containers_lookup.equal_range(dep);
-
-				if (first == last)
-				{
-					auto newc=std::make_shared<
-						proc_new_containerObj>(dep);
-
-					newc->new_container->type=
-						proc_container_type::synthesized
-						;
-
-					auto iter=new_containers.insert(newc)
-						.first;
-					new_current_containers.emplace(
-						newc->new_container,
-						std::in_place_type_t<
-						state_stopped>{}
-					);
-
-					first=new_containers_lookup.add(iter);
-					last=first;
-					++last;
-				}
-
-				while (first != last)
-				{
-					auto iter=first->second;
-					++first;
-
-					other_proc_container=&*iter;
-
-					// Do not allow this dependency to
-					// specify a runlevel, only
-					// "required_by" is allowed to do this.
-
-					if (disallow_for_runlevel &&
-					    (*iter)->new_container->type ==
-					    proc_container_type::runlevel)
-					{
-						log_message(
-							_("Disallowed "
-							  "dependency "
-							  "on a runlevel: ")
-							+ c->new_container->name
-							+ " -> "
-							+ (*iter)->new_container
-							->name);
-						continue;
-					}
-					if (skip_for_runlevel &&
-					    (*iter)->new_container->type ==
-					    proc_container_type::runlevel)
-						continue;
-
-					auto &requiring=(**requiring_ptr)
-						->new_container;
-					auto &requirement=(**requirement_ptr)
-						->new_container;
-
-					install_requires_dependency(
-						new_all_dependency_info,
-						forward_dependency,
-						backward_dependency,
-						requiring,
-						requirement
-					);
-				}
-			}
-		}
+		propagate_dependencies.reverse(
+			true,
+			true,
+			&proc_new_containerObj::stopping_before,
+			&extra_dependency_info::all_stopping_first,
+			&extra_dependency_info::all_stopping_first_by
+		);
 	}
 
 	// We now take the existing containers we have, and copy over their
