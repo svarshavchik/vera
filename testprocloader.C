@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 
 		std::vector<std::string> default_runlevel;
 
-		for (auto &[runlevel, aliases] : proc_get_runlevel_config(
+		for (auto &[runlevel_name, runlevel] : proc_get_runlevel_config(
 			     args[2],
 			     [&]
 			     (auto &msg)
@@ -173,8 +173,9 @@ int main(int argc, char **argv)
 				     std::cerr << msg << "\n";
 			     }))
 		{
-			if (aliases.find("default") != aliases.end())
-				default_runlevel.push_back(runlevel);
+			if (runlevel.aliases.find("default") !=
+			    runlevel.aliases.end())
+				default_runlevel.push_back(runlevel_name);
 		}
 
 		if (default_runlevel != std::vector<std::string>{"custom"})
@@ -206,7 +207,7 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
-		for (auto &[name, aliases] : rl)
+		for (auto &[name, runlevel] : rl)
 		{
 			auto filename=args[3] + "/" + name;
 
@@ -220,23 +221,44 @@ int main(int argc, char **argv)
 
 			o << "# This file was automatically generated\n"
 				"# Units that should be started in this "
-				"runlevel specify:\n"
+				"target specify:\n"
 				"#\n"
 				"# Enabled: " SYSTEM_PREFIX << name << "\n"
 				"\n"
-				"name: " << name << "\n"
-				"description: processes for runlevel "
-			  << name << "\n"
-				"required-by: '" << RUNLEVEL_PREFIX_BASE
-			  << name << "'\n"
-				"starting:\n"
-				"  after:\n"
-				"    - sysinit\n"
-				"stopping:\n"
-				"  type: target\n"
-				"  before:\n"
-				"    - sysinit\n"
-				"version: 1\n";
+				"name: " << name << "\n";
+
+			if (!runlevel.aliases.empty())
+			{
+				o << "description: processes for runlevel "
+				  << name << "\n"
+					"required-by:\n";
+
+				for (auto &alias:runlevel.aliases)
+				{
+					if (alias == "default")
+						continue;
+					o << "  - '" << RUNLEVEL_PREFIX_BASE
+					  << alias << "'\n";
+				}
+			}
+			else
+			{
+				o << "description: " << name << " target\n";
+			}
+			o << "stopping:\n"
+				"  type: target\n";
+
+			if (!runlevel.runlevel_requires.empty())
+			{
+				o << "requires:\n";
+
+				for (auto &f:runlevel.runlevel_requires)
+				{
+					o << "  - " << f << "\n";
+				}
+			}
+
+			o << "version: 1\n";
 			o.close();
 
 			if (!o)
@@ -246,43 +268,9 @@ int main(int argc, char **argv)
 			}
 		}
 
-		auto filename=args[3] + "/sysinit";
+		auto filename=args[3] + "/" SIGPWR_UNIT;
 
-		std::ofstream o{filename};
-
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
-		}
-
-		o << "# This file was automatically generated\n"
-			"# Units that should be started at system boot time"
-			" specify:\n"
-			"#\n"
-			"# Required-By: " SYSTEM_PREFIX "sysinit\n"
-			"\n"
-			"name: sysinit\n"
-			"description: processes for system startup\n"
-			"required-by:\n";
-
-		for (auto &[name, aliases] : rl)
-		{
-			o << "  - '" << RUNLEVEL_PREFIX_BASE
-			  << name << "'\n";
-		}
-		o << "stopping:\n"
-			"  type: target\n"
-			"version: 1\n";
-		o.close();
-
-		if (!o)
-		{
-			perror(filename.c_str());
-			exit(1);
-		}
-
-		filename=args[3] + "/" SIGPWR_UNIT;
+		std::ofstream o;
 
 		o.open(filename);
 		if (!o)

@@ -236,17 +236,33 @@ typedef std::unordered_set<proc_new_container, proc_container_hash,
 
 /*! Run level configuration
 
+Consists of aliases for run levels, and its predecessor(s)
+*/
+
+struct runlevel {
+
+	//! Single character aliases
+
+	//! An alias of "default" specifies the default system runlevel
+	std::unordered_set<std::string> aliases;
+
+	//! Predecessor(s)
+	std::unordered_set<std::string> runlevel_requires;
+
+	bool operator==(const runlevel &c) const
+	{
+		return aliases == c.aliases &&
+			runlevel_requires == c.runlevel_requires;
+	}
+};
+
+/*
 The set keys are the primary runlevel names: "single", "multi", "graphical",
 etc..
 
-The set values are aliases: "0", "1", "6", etc...
-
-An alias of "default" specifies the default runlevel.
-
  */
 
-typedef std::unordered_map<std::string,
-			   std::unordered_set<std::string>> runlevels;
+typedef std::unordered_map<std::string, runlevel> runlevels;
 
 //! Container installation mode.
 

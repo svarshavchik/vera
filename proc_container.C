@@ -977,7 +977,7 @@ void current_containers_infoObj::install(
 
 	std::unordered_map<std::string, proc_container> new_runlevel_containers;
 
-	for (auto &[name, aliases] : runlevel_configuration)
+	for (auto &[name, runlevel] : runlevel_configuration)
 	{
 		auto runlevel_container=
 			*new_containers.insert(
@@ -988,7 +988,7 @@ void current_containers_infoObj::install(
 		runlevel_container->new_container->type=
 			proc_container_type::runlevel;
 
-		for (auto &alias:aliases)
+		for (auto &alias:runlevel.aliases)
 			new_runlevel_containers.emplace(
 				alias,
 				runlevel_container->new_container

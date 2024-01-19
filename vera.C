@@ -88,22 +88,22 @@ runlevels load_runlevelconfig()
 
 	// If there's an "override" alias, it overrides the "default" one.
 
-	for (auto &[name, aliases] : rl)
+	for (auto &[name, runlevel] : rl)
 	{
-		auto iter=aliases.find("override");
+		auto iter=runlevel.aliases.find("override");
 
-		if (iter == aliases.end())
+		if (iter == runlevel.aliases.end())
 			continue;
 
 		// We remove the existing "default" alias and put it where
 		// "override" is. This way, the rest of the startup code
 		// just looks for a "default".
-		aliases.erase(iter);
+		runlevel.aliases.erase(iter);
 
-		for (auto &[name, aliases] : rl)
-			aliases.erase("default");
+		for (auto &[name, runlevel] : rl)
+			runlevel.aliases.erase("default");
 
-		aliases.insert("default");
+		runlevel.aliases.insert("default");
 		break;
 	}
 
@@ -1077,9 +1077,9 @@ void vlad(std::vector<std::string> args)
 
 		auto rl=load_runlevelconfig();
 
-		for (auto &[name, aliases] : rl)
+		for (auto &[name, runlevel] : rl)
 		{
-			for (auto &alias:aliases)
+			for (auto &alias:runlevel.aliases)
 			{
 				if (alias == "default")
 				{

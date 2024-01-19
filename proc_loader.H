@@ -162,6 +162,12 @@ bool proc_set_runlevel_config(const std::string &configfile,
 
 //! Retrieve the runlevel configuration
 
+//! This retrieve the truncated runlevel configuration that's needed only
+//! at runtime: the runlevel aliases, for each runlevel unit.
+//!
+//! The runlevel_requires values get encoded into the runlevel unit's
+//! dependencies.
+//!
 //! The error callback gets used to report any errors. This function always
 //! succeeds, and fallsback to default_runlevels() if necessary.
 

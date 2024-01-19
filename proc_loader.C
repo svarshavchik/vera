@@ -1694,13 +1694,13 @@ bool proc_set_runlevel_config(const std::string &configfile,
 
 	yaml_map_t m;
 
-	for (auto &[name, aliases]:new_runlevels)
+	for (auto &[name, runlevel]:new_runlevels)
 	{
 		std::vector<std::shared_ptr<yaml_write_node>> levels;
 
-		levels.reserve(aliases.size());
+		levels.reserve(runlevel.aliases.size());
 
-		for (auto &a:aliases)
+		for (auto &a:runlevel.aliases)
 		{
 			levels.push_back(
 				std::make_shared<yaml_write_scalar>(a)
@@ -1734,27 +1734,65 @@ bool proc_set_runlevel_config(const std::string &configfile,
 runlevels default_runlevels()
 {
 	return {
+		{"sysinit", {
+				{},
+			},
+		},
+		{"boot", {
+				{},
+				{"sysinit"},
+			},
+		},
 		{"shutdown", {
-			"0"
+				{
+					"0"
+				},
+				{
+					"boot"
+				},
+			},
+		},
+		{
+			"single-user", {
+				{
+					"1",
+					"s",
+					"S"
+				},
+				{ "boot" },
+			},
+		},
+		{
+			"multi-user", {
+				{ "2" },
+				{ "boot" },
+			},
+		},
+		{
+			"networking", {
+				{ "3" },
+				{ "boot" },
+			},
+		},
+		{
+			"custom", {
+				{ "4" },
+				{ "boot" },
+			},
+		},
+		{
+			"graphical", {
+				{ "5", "default" },
+				{ "boot" },
+			},
+		},
+		{
+			"reboot", {
+				{ "6" },
+				{
+					"sysinit"
+				},
 			}
-		},
-		{
-			"single-user",	{ "1", "s", "S" },
-		},
-		{
-			"multi-user",	{ "2" },
-		},
-		{
-			"networking",	{ "3" },
-		},
-		{
-			"custom",	{ "4" },
-		},
-		{
-			"graphical",	{ "5", "default" },
-		},
-		{
-			"reboot",	{ "6" }
 		},
 	};
 }
@@ -1828,7 +1866,9 @@ runlevels proc_get_runlevel_config(
 
 			    current_runlevels.emplace(
 				    key,
-				    std::move(aliases));
+				    runlevel{
+					    std::move(aliases)
+				    });
 
 			    return true;
 		    },
@@ -1861,19 +1901,20 @@ bool proc_set_runlevel_default(
 
 	bool found=false;
 
-	for (auto &[runlevel, aliases] : current_runlevels)
+	for (auto &[runlevel_name, runlevel] : current_runlevels)
 	{
 		bool found_new_default=
-			!found && (runlevel == new_runlevel ||
-				   aliases.find(new_runlevel) != aliases.end());
+			!found && (runlevel_name == new_runlevel ||
+				   runlevel.aliases.find(new_runlevel)
+				   != runlevel.aliases.end());
 
-		aliases.erase("default");
-		aliases.erase("override");
+		runlevel.aliases.erase("default");
+		runlevel.aliases.erase("override");
 
 		if (found_new_default)
 		{
 			found=true;
-			aliases.insert("default");
+			runlevel.aliases.insert("default");
 		}
 	}
 
@@ -1911,19 +1952,19 @@ bool proc_set_runlevel_default_override(
 
 	bool found=false;
 
-	for (auto &[runlevel, aliases] : current_runlevels)
+	for (auto &[runlevel_name, runlevel] : current_runlevels)
 	{
 		bool found_new_default=
-			!found && (runlevel == override_runlevel ||
-				   aliases.find(override_runlevel)
-				   != aliases.end());
+			!found && (runlevel_name == override_runlevel ||
+				   runlevel.aliases.find(override_runlevel)
+				   != runlevel.aliases.end());
 
-		aliases.erase("override");
+		runlevel.aliases.erase("override");
 
 		if (found_new_default)
 		{
 			found=true;
-			aliases.insert("override");
+			runlevel.aliases.insert("override");
 		}
 	}
 
