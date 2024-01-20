@@ -15,6 +15,7 @@
 #include "external_filedesc.H"
 #include "external_filedesc_privcmdsocket.H"
 #include "privrequest.H"
+#include "inittab.H"
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -1118,6 +1119,27 @@ void vlad(std::vector<std::string> args)
 		exit(1);
 	}
 
+	if (args.size() >= 1 && args[0] == "inittab")
+	{
+		std::ifstream etc_inittab{"/etc/inittab"};
+
+		if (!etc_inittab.is_open())
+		{
+			log_to_syslog(
+				LOG_ERR,
+				"vlad",
+				"Could not read /etc/inittab");
+		}
+
+		if (!inittab(etc_inittab,
+			     INSTALLCONFIGDIR,
+			     load_runlevelconfig()))
+		{
+			exit(1);
+		}
+
+		return;
+	}
 	if (args.size() >= 2 && args[0] == "validate")
 	{
 		if (!proc_validate(args[1], (
@@ -1126,7 +1148,8 @@ void vlad(std::vector<std::string> args)
 				   ),
 				   installconfigdir(),
 				   localconfigdir(),
-				   overrideconfigdir()))
+				   overrideconfigdir(),
+				   log_message))
 			exit(1);
 		return;
 	}
@@ -1155,17 +1178,23 @@ int main(int argc, char **argv)
 	else
 		++slash;
 
-	if (exename.substr(slash) == "vlad")
-	{
-		while (getopt_long(argc, argv, "", options, NULL) >= 0)
+	try {
+		if (exename.substr(slash) == "vlad")
+		{
+			while (getopt_long(argc, argv, "", options, NULL) >= 0)
 			;
 
-		umask(022);
-		vlad({argv+optind, argv+argc});
-	}
-	else
+			umask(022);
+			vlad({argv+optind, argv+argc});
+		}
+		else
+		{
+			vera();
+		}
+	} catch (const std::exception &e)
 	{
-		vera();
+		std::cerr << e.what() << std::endl;
+		exit(1);
 	}
 	return 0;
 }

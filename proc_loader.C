@@ -19,6 +19,7 @@
 #include <optional>
 #include <memory>
 #include <unordered_set>
+#include <set>
 #include <errno.h>
 #include <sys/stat.h>
 
@@ -718,78 +719,6 @@ bool parsed_yaml::starting_or_stopping(
 		error);
 }
 
-void proc_set_override(
-	const std::string &config_override,
-	const std::string &path,
-	const std::string &override_type,
-	const std::function<void (const std::string &)> &error)
-{
-	if (!proc_validpath(path))
-	{
-		error(path + _(": non-compliant filename"));
-		return;
-	}
-
-	// Create any parent directories, first.
-
-	std::filesystem::path fullpath{config_override};
-
-	if (override_type == "none")
-	{
-		unlink( (fullpath / path).c_str());
-
-		std::filesystem::path subdir{path};
-
-		while (subdir.has_relative_path())
-		{
-			subdir=subdir.parent_path();
-
-			if (subdir.empty())
-				break;
-
-			if (rmdir( (fullpath / subdir).c_str()) < 0)
-				break;
-		}
-
-		return;
-	}
-
-	if (override_type != "masked" && override_type != "enabled")
-	{
-		error(override_type + _(": unknown override type"));
-		return;
-	}
-
-	for (auto b=path.begin(), e=path.end(), p=b; (p=std::find(p, e, '/'))
-		     != e;
-	     ++p)
-	{
-		mkdir( (fullpath / std::string{b, p}).c_str(), 0755);
-	}
-
-	auto temppath = fullpath / (path + "~");
-
-	std::ofstream o{ temppath };
-
-	if (!o)
-	{
-		error(static_cast<std::string>(temppath) + ": " +
-		      strerror(errno));
-		return;
-	}
-
-	o << override_type << "\n";
-	o.close();
-
-	if (o.fail() ||
-	    rename(temppath.c_str(), (fullpath / path).c_str()))
-	{
-		error(static_cast<std::string>(temppath) + ": " +
-		      strerror(errno));
-		return;
-	}
-}
-
 static proc_override read_override(std::istream &i)
 {
 	std::string s;
@@ -908,10 +837,6 @@ void proc_load_dump(const proc_new_container_set &set)
 		if (!n->new_container->description.empty())
 			std::cout << name << ":description="
 				  << n->new_container->description << "\n";
-		for (const auto &r:n->dep_requires)
-			std::cout << name << ":requires " << r << "\n";
-		for (const auto &r:n->dep_required_by)
-			std::cout << name << ":required-by " << r << "\n";
 
 		if (!n->new_container->starting_command.empty())
 			std::cout << name << ":starting:"
@@ -951,15 +876,35 @@ void proc_load_dump(const proc_new_container_set &set)
 			std::cout << name << ":respawn_limit:"
 				  << n->new_container->respawn_attempts
 				  << "\n";
-		for (const auto &r:n->starting_before)
-			std::cout << name << ":starting_before " << r << "\n";
-		for (const auto &r:n->starting_after)
-			std::cout << name << ":starting_after " << r << "\n";
 
-		for (const auto &r:n->stopping_before)
-			std::cout << name << ":stopping_before " << r << "\n";
-		for (const auto &r:n->stopping_after)
-			std::cout << name << ":stopping_after " << r << "\n";
+		for (const auto &[unordered_set, label] :
+			     std::array<
+			     std::tuple<std::unordered_set<std::string>
+			     proc_new_containerObj::*,
+			     const char *>, 6>{{
+				     {&proc_new_containerObj::dep_requires,
+				      "requires"},
+				     {&proc_new_containerObj::dep_required_by,
+				      "required-by"},
+				     {&proc_new_containerObj::starting_before,
+				      "starting_before"},
+				     {&proc_new_containerObj::starting_after,
+				      "starting_after"},
+				     {&proc_new_containerObj::stopping_before,
+				      "starting_before"},
+				     {&proc_new_containerObj::stopping_after,
+				      "stopping_after"}
+			     }})
+		{
+			std::set<std::string> sorted{
+				((*n).*unordered_set).begin(),
+				((*n).*unordered_set).end(),
+			};
+
+			for (const auto &r:sorted)
+				std::cout << name << ":"
+					  << label << " " << r << "\n";
+		}
 	}
 }
 
@@ -1066,106 +1011,12 @@ bool proc_set_runlevel_config(const std::string &configfile,
 	return true;
 }
 
-bool proc_set_runlevel_default(
-	const std::string &configfile,
-	const std::string &new_runlevel,
-	const std::function<void (const std::string &)> &error)
-{
-	// First, read the current default
-
-	auto current_runlevels=proc_get_runlevel_config(configfile, error);
-
-	auto original_runlevels=current_runlevels;
-
-	// Go through, and:
-	//
-	// If we find a "default" or "override" entry, remove it.
-	//
-	// When we find the new default runlevel, add a "default" alias for it.
-
-	bool found=false;
-
-	for (auto &[runlevel_name, runlevel] : current_runlevels)
-	{
-		bool found_new_default=
-			!found && (runlevel_name == new_runlevel ||
-				   runlevel.aliases.find(new_runlevel)
-				   != runlevel.aliases.end());
-
-		runlevel.aliases.erase("default");
-		runlevel.aliases.erase("override");
-
-		if (found_new_default)
-		{
-			found=true;
-			runlevel.aliases.insert("default");
-		}
-	}
-
-	if (!found)
-	{
-		error(configfile + ": " + new_runlevel + _(": not found"));
-		return false;
-	}
-
-	// A default of "default" gets specified in order to remove any
-	// override, this is handled by the finely-tuned logic above.
-	//
-	// Avoid rewriting the runlevel config file if nothing's changed.
-
-	if (current_runlevels == original_runlevels)
-		return true;
-
-	return proc_set_runlevel_config(configfile, current_runlevels);
-}
-
-bool proc_set_runlevel_default_override(
-	const std::string &configfile,
-	const std::string &override_runlevel,
-	const std::function<void (const std::string &)> &error)
-{
-	// First, read the current default
-
-	auto current_runlevels=proc_get_runlevel_config(configfile, error);
-
-	// Go through, and:
-	//
-	// If we find an "override" entry, remove it.
-	//
-	// When we find the new default override, add "override" to it,
-
-	bool found=false;
-
-	for (auto &[runlevel_name, runlevel] : current_runlevels)
-	{
-		bool found_new_default=
-			!found && (runlevel_name == override_runlevel ||
-				   runlevel.aliases.find(override_runlevel)
-				   != runlevel.aliases.end());
-
-		runlevel.aliases.erase("override");
-
-		if (found_new_default)
-		{
-			found=true;
-			runlevel.aliases.insert("override");
-		}
-	}
-
-	if (!found)
-	{
-		error(configfile + ": " + override_runlevel + _(": not found"));
-		return false;
-	}
-
-	return proc_set_runlevel_config(configfile, current_runlevels);
-}
-
 bool proc_validate(const std::string &unitfile,
 		   const std::string &relativepath_override,
 		   const std::string &installconfigdir,
 		   const std::string &localconfigdir,
-		   const std::string &overrideconfigdir)
+		   const std::string &overrideconfigdir,
+		   const std::function<void (const std::string &)> &log_message)
 {
 	std::ifstream i{unitfile};
 
@@ -1212,7 +1063,7 @@ bool proc_validate(const std::string &unitfile,
 			installconfigdir,
 			localconfigdir,
 			overrideconfigdir,
-			[]
+			[&]
 			(const std::string &warning_message)
 			{
 				log_message(warning_message);
@@ -1266,11 +1117,21 @@ bool proc_validate(const std::string &unitfile,
 
 		for (auto &[dep_name, ptr] : dependencies)
 		{
-			for (auto &name:(*s).*(ptr))
+			auto &us=(*s).*(ptr);
+			std::set<std::string> sorted{
+				us.begin(),
+				us.end()
+			};
+
+			for (auto &name:sorted)
 			{
 				auto iter=new_configs.find(name);
 
 				if (iter != new_configs.end())
+					continue;
+
+				if (name.substr(0, sizeof(RUNLEVEL_PREFIX)-1)
+				    == RUNLEVEL_PREFIX)
 					continue;
 
 				std::cout << _("Warning: ")

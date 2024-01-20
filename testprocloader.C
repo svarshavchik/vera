@@ -339,7 +339,13 @@ int main(int argc, char **argv)
 	if (args.size() == 7 && args[1] == "validatetest")
 	{
 		if (!proc_validate(args[2], args[3],
-				   args[4], args[5], args[6]))
+				   args[4], args[5], args[6],
+				   []
+				   (const std::string &s)
+				   {
+					   std::cerr << s << std::endl;
+				   }
+		    ))
 			exit(1);
 		return 0;
 	}

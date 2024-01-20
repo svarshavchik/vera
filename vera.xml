@@ -315,6 +315,37 @@
 		</row>
 	      </tbody>
 	    </tgroup>
+	    <tgroup cols="2">
+	      <thead>
+		<row>
+		  <entry>Additional <command>vera</command> target</entry>
+		  <entry><filename>inittab</filename> entry</entry>
+		  <entry>Description</entry>
+		</row>
+	      </thead>
+	      <tbody>
+		<row>
+		  <entry>system/sigint</entry>
+		  <entry>ctrlaltdel</entry>
+		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGINT</quote> signal</entry>
+		</row>
+		<row>
+		  <entry>system/powerfail, system/powerfailnow, system/powerok</entry>
+		  <entry>powerfail, powerfailnow, powerok</entry>
+		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGPWR</quote> signal, depending on the contents of <filename>/etc/powerstatus</filename></entry>
+		</row>
+		<row>
+		  <entry>system/sighup</entry>
+		  <entry>N/A</entry>
+		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGHUP</quote> signal</entry>
+		</row>
+		<row>
+		  <entry>system/sigwinch</entry>
+		  <entry>kbrequest</entry>
+		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGWINCH</quote> signal</entry>
+		</row>
+	      </tbody>
+	    </tgroup>
 	  </informaltable>
 
 	  <para>

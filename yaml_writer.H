@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <type_traits>
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -188,6 +189,19 @@ typedef std::vector<std::shared_ptr<yaml_write_node>> yaml_seq_t;
 struct yaml_write_seq : yaml_write_node {
 
 	yaml_seq_t seq;
+
+	template<typename iter, typename=
+		 std::enable_if_t<std::is_same_v<typename iter::value_type,
+						 std::string>>>
+	yaml_write_seq(iter b, iter e)
+	{
+		seq.reserve(std::distance(b, e));
+		while (b != e)
+		{
+			seq.push_back(std::make_shared<yaml_write_scalar>(*b));
+			++b;
+		}
+	}
 
 	yaml_write_seq(yaml_seq_t seq)
 		: seq{std::move(seq)}

@@ -15,8 +15,13 @@ noinst_PROGRAMS=\
 	testcontroller3						\
 	testdepcomputations 					\
 	testpoller						\
+	testinittab						\
 	testprocloader
-EXTRA_DIST=testprocloader.sh
+
+EXTRA_DIST= 							\
+	testinittab.sh						\
+	testinittab.txt						\
+	testprocloader.sh
 
 BUILT_SOURCES=configdirs.h
 CLEANFILES=configdirs.h vlad
@@ -30,6 +35,8 @@ libvera_a_SOURCES=						\
 	external_filedesc.C					\
 	external_filedesc_privcmdsocket.H			\
 	external_filedesc_privcmdsocket.C			\
+	inittab.C						\
+	inittab.H						\
 	log.C 							\
 	log.H							\
 	log_current_time.C					\
@@ -42,6 +49,7 @@ libvera_a_SOURCES=						\
 	privrequest.H						\
 	proc_container.C					\
 	proc_container.H					\
+	proc_container2.C					\
 	proc_containerfwd.H					\
 	proc_container_group.C					\
 	proc_container_group.H					\
@@ -56,6 +64,7 @@ libvera_a_SOURCES=						\
 	proc_container_timerfwd.H				\
 	proc_loader.C						\
 	proc_loader.H						\
+	proc_loader2.C						\
 	unit_test.H						\
 	yaml_writer.C						\
 	yaml-writer.H
@@ -96,6 +105,10 @@ testprocloader_LDADD=libvera.a @YAMLLIBS@
 testpoller_SOURCES=testpoller.C unit_test.C
 testpoller_LDADD=libvera.a @YAMLLIBS@
 
+testinittab_SOURCES=testinittab.C parsed_yaml.C inittab.C yaml_writer.C \
+	proc_loader.C proc_container2.C
+testinittab_LDADD=@YAMLLIBS@
+
 install-exec-hook:
 	rm -f $(DESTDIR)$(sbindir)/vlad
 	ln $(DESTDIR)$(sbindir)/vera $(DESTDIR)$(sbindir)/vlad
@@ -110,7 +123,10 @@ install-data-local:
 	chmod 755 $(DESTDIR)$(CONFIGDIR)
 	chmod 755 $(DESTDIR)$(LOCALCONFIGDIR)
 	chmod 755 $(DESTDIR)$(OVERRIDECONFIGDIR)
-	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG) $(DESTDIR)$(INSTALLCONFIGDIR)/system
+	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG) $(DESTDIR)$(INSTALLCONFIGDIR)/system && \
+		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
+			-l $(DESTDIR)$(LOCALCONFIGDIR) \
+			-o $(DESTDIR)$(OVERRIDECONFIGDIR)
 
 uninstall-local:
 	rm -f  $(DESTDIR)$(RUNLEVELCONFIG)
@@ -129,6 +145,7 @@ check-am:
 	./testcontroller3 respawn3 "$(VALGRIND)"
 	./testcontroller3 respawn4
 	$(VALGRIND) ./testcontroller3 testnoreexec
+	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testinittab.sh "$(srcdir)"
 
 man8_MANS=vera.8 vlad.8
 

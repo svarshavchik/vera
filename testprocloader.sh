@@ -126,22 +126,20 @@ EOF
 
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 
-sort <loadtest.out >loadtest.sorted.out
-
 cat >loadtest.expected <<EOF
-
-built-in/subunit:required-by built-in/prereq1
-built-in/subunit:required-by built-in/prereq2
-built-in/subunit:requires some/other/unit/again
-built-in/subunit:start=forking:stop=manual
-built-in:required-by runlevel1
+built-in:start=forking:stop=manual
 built-in:requires built-in/subunit
 built-in:requires some/other/unit
-built-in:start=forking:stop=manual
+built-in:required-by runlevel1
+
+built-in/subunit:start=forking:stop=manual
+built-in/subunit:requires some/other/unit/again
+built-in/subunit:required-by built-in/prereq1
+built-in/subunit:required-by built-in/prereq2
 EOF
 
 cat loadtest.expected
-diff -U 3 loadtest.expected loadtest.sorted.out
+diff -U 3 loadtest.expected loadtest.out
 
 >loadtest.txt
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
@@ -284,18 +282,17 @@ version: 1
 EOF
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 
-sort <loadtest.out >loadtest.sorted.out
 cat >loadtest.txt <<EOF
-
-
-built-in/sub1:requires built-in
-built-in/sub1:start=forking:stop=manual
-built-in/sub2:requires built-in/sub1
-built-in/sub2:start=forking:stop=manual
-built-in:requires built-in/sub1
 built-in:start=forking:stop=manual
+built-in:requires built-in/sub1
+
+built-in/sub1:start=forking:stop=manual
+built-in/sub1:requires built-in
+
+built-in/sub2:start=forking:stop=manual
+built-in/sub2:requires built-in/sub1
 EOF
-diff -U 3 loadtest.txt loadtest.sorted.out
+diff -U 3 loadtest.txt loadtest.out
 
 cat >loadtest.txt <<EOF
 name: built-in
@@ -339,21 +336,22 @@ stopping:
 version: 1
 EOF
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
-sort <loadtest.out >loadtest.sorted.out
 cat >loadtest.txt <<EOF
+built-in:start=forking:stop=manual
 built-in:starting:/bin/true
-built-in:starting_after dep3
-built-in:starting_after dep4
+built-in:stopping:/bin/false
+built-in:starting_timeout 120
+built-in:stopping_timeout 180
 built-in:starting_before dep1
 built-in:starting_before dep2
-built-in:starting_timeout 120
-built-in:stopping:/bin/false
+built-in:starting_after dep3
+built-in:starting_after dep4
+built-in:starting_before dep5
+built-in:starting_before dep6
 built-in:stopping_after dep7
 built-in:stopping_after dep8
-built-in:stopping_before dep5
-built-in:stopping_before dep6
-built-in:stopping_timeout 180
 EOF
+diff -U 3 loadtest.txt loadtest.out
 
 cat >loadtest.txt <<EOF
 name: built-in
@@ -363,23 +361,21 @@ version: 1
 EOF
 
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
-sort <loadtest.out >loadtest.sorted.out
 
 cat >loadtest.expected <<EOF
+built-in:start=forking:stop=manual
 built-in:required-by graphical
 built-in:required-by one
-built-in:start=forking:stop=manual
 EOF
-diff -U 3 loadtest.expected loadtest.sorted.out
+diff -U 3 loadtest.expected loadtest.out
 
 $VALGRIND ./testprocloader disabledloadtest <loadtest.txt >loadtest.out
-sort <loadtest.out >loadtest.sorted.out
 
 cat >loadtest.expected <<EOF
-built-in:required-by one
 built-in:start=forking:stop=manual
+built-in:required-by one
 EOF
-diff -U 3 loadtest.expected loadtest.sorted.out
+diff -U 3 loadtest.expected loadtest.out
 
 mkdir -p overridedir
 
@@ -455,22 +451,20 @@ $VALGRIND ./testprocloader setoverride overridedir unit5-masked masked >loadtest
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir >loadtest.out
 
-sort <loadtest.out >loadtest.sorted.out
-
-cat loadtest.sorted.out
+cat loadtest.out
 cat >loadtest.txt <<EOF
-
-
-E: "unit1": does not match its filename
 W: globaldir/.temporary: ignoring non-compliant filename
-unit2-runlevel1:required-by runlevel1
+E: "unit1": does not match its filename
 unit2-runlevel1:start=forking:stop=manual
-unit3-runlevel2:required-by runlevel2
+unit2-runlevel1:required-by runlevel1
+
 unit3-runlevel2:start=forking:stop=manual
+unit3-runlevel2:required-by runlevel2
+
 unit4-disabled:start=forking:stop=manual
 EOF
 
-diff -U 3 loadtest.txt loadtest.sorted.out
+diff -U 3 loadtest.txt loadtest.out
 
 ./testprocloader testrunlevelconfig loadtest.txt
 
@@ -534,4 +528,4 @@ $VALGRIND ./testprocloader testupdatestatusoverrides name2 name2/a name2/b name3
 diff -U 3 loadtest.txt loadtest.out
 
 rm -rf globaldir localdir overridedir \
-    loadtest.txt loadtest.out loadtest.sorted.out loadtest.expected
+    loadtest.txt loadtest.out loadtest.expected

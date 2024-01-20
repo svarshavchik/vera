@@ -29,6 +29,7 @@ testcontroller
 testcontroller2
 testcontroller2fdleak
 testcontroller3
+testinittab
 testdepcomputations
 testpoller
 testprocloader

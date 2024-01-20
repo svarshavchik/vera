@@ -202,7 +202,8 @@ bool proc_validate(const std::string &unitfile,
 		   const std::string &relativepath_override,
 		   const std::string &installconfigdir,
 		   const std::string &localconfigdir,
-		   const std::string &overridecofigdir);
+		   const std::string &overridecofigdir,
+		   const std::function<void (const std::string &)> &error);
 
 #define SYSTEM_PREFIX "system/"
 
