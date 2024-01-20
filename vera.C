@@ -925,7 +925,7 @@ void vlad(std::vector<std::string> args)
 		}
 
 		if (waitrunlevel_flag)
-			conn->readln();
+			wait_runlevel(conn);
 		return;
 	}
 
@@ -1120,123 +1120,14 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() >= 2 && args[0] == "validate")
 	{
-		std::ifstream i{args[1]};
-
-		if (!i)
-		{
-			std::cerr << args[1] << ": " << strerror(errno)
-				  << std::endl;
+		if (!proc_validate(args[1], (
+					   args.size() >= 3
+					   ? args[2]:std::string{}
+				   ),
+				   installconfigdir(),
+				   localconfigdir(),
+				   overrideconfigdir()))
 			exit(1);
-		}
-
-		std::cout << _("Loading: ") << args[1] << "\n";
-
-		size_t n=args[1].rfind('/');
-
-		std::filesystem::path relative_path;
-
-		try {
-
-			relative_path=args[1].substr(n == args[1].npos
-						     ? 0:n+1);
-
-			if (args.size() >= 3)
-				relative_path=args[2];
-		} catch (...) {
-			std::cerr << "Invalid filename" << std::endl;
-			exit(1);
-		}
-
-		proc_new_container_set set, new_configs;
-		bool error=false;
-
-		try {
-			set=proc_load(i, args[1], relative_path, true,
-				      [&]
-				      (const auto &msg)
-				      {
-					      std::cerr << msg << std::endl;
-					      error=true;
-				      });
-
-			std::cout << _("Loading installed units") << std::endl;
-
-			auto current_configs=proc_load_all(
-				installconfigdir(),
-				localconfigdir(),
-				overrideconfigdir(),
-				[]
-				(const std::string &warning_message)
-				{
-					log_message(warning_message);
-				},
-				[&]
-				(const std::string &error_message)
-				{
-					error=true;
-					log_message(error_message);
-				});
-
-			// Take what's validated, and add in the current_configs
-			// but what's validated takes precedence, so any
-			// existing configs that are in the new set get
-			// ignored.
-
-			new_configs=set;
-			new_configs.insert(current_configs.begin(),
-					   current_configs.end());
-		} catch (...) {
-			std::cerr << args[1] << _(": parsing error")
-				  << std::endl;
-			exit(1);
-		}
-
-		if (error)
-			exit(1);
-
-		proc_load_dump(set);
-
-		for (auto &s:set)
-		{
-			static constexpr struct {
-				const char *dependency;
-				std::unordered_set<std::string>
-				proc_new_containerObj::*names;
-			} dependencies[]={
-				{"requires",
-				 &proc_new_containerObj::dep_requires},
-				{"required-by",
-				 &proc_new_containerObj::dep_required_by},
-				{"starting: before",
-				 &proc_new_containerObj::starting_before},
-				{"starting: after",
-				 &proc_new_containerObj::starting_after},
-				{"stopping: before",
-				 &proc_new_containerObj::stopping_before},
-				{"stopping: after",
-				 &proc_new_containerObj::stopping_after},
-			};
-
-			for (auto &[dep_name, ptr] : dependencies)
-			{
-				for (auto &name:(*s).*(ptr))
-				{
-					auto iter=new_configs.find(name);
-
-					if (iter != new_configs.end())
-						continue;
-
-					std::cout << _("Warning: ")
-						  << s->new_container->name
-						  << "("
-						  << dep_name
-						  << "): "
-						  << name
-						  << _(": not defined")
-						  << std::endl;
-				}
-			}
-		}
 		return;
 	}
 	std::cerr << "Unknown command" << std::endl;

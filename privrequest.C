@@ -85,6 +85,13 @@ std::string get_reload_status(const external_filedesc &efd)
 	return efd->readln();
 }
 
+int wait_runlevel(const external_filedesc &efd)
+{
+	efd->readln();
+
+	return 0;
+}
+
 int wait_reload(const external_filedesc &efd)
 {
 	auto s=efd->readln();

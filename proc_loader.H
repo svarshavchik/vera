@@ -191,6 +191,19 @@ bool proc_set_runlevel_default_override(
 	const std::string &override_runlevel,
 	const std::function<void (const std::string &)> &error);
 
+/*! Validate the unit file
+
+Takes the unit file, and the pathnames to the install, local, and override
+directories, attempts to validate the unit file.
+
+ */
+
+bool proc_validate(const std::string &unitfile,
+		   const std::string &relativepath_override,
+		   const std::string &installconfigdir,
+		   const std::string &localconfigdir,
+		   const std::string &overridecofigdir);
+
 #define SYSTEM_PREFIX "system/"
 
 #define RUNLEVEL_PREFIX_BASE "runlevel "

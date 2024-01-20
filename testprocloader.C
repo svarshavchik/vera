@@ -335,5 +335,13 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	}
+
+	if (args.size() == 7 && args[1] == "validatetest")
+	{
+		if (!proc_validate(args[2], args[3],
+				   args[4], args[5], args[6]))
+			exit(1);
+		return 0;
+	}
 	return 1;
 }

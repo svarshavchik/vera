@@ -984,6 +984,49 @@ Version: 1</literallayout>
 	    processes in the unit (which may include a stuck stopping command)
 	    receive a SIGTERM signal, followed by SIGKILL.
 	  </para>
+
+	  <para>
+	    Commands inherit the following environment variables:
+	  </para>
+	  <informaltable>
+	    <tgroup cols='2'>
+	      <thead>
+		<row>
+		  <entry>Variable</entry>
+		  <entry>Description</entry>
+		</row>
+	      </thead>
+	      <tbody>
+		<row>
+		  <entry><envar>RUNLEVEL</envar></entry>
+		  <entry>Current <link linkend="runlevels">runlevel</link></entry>
+		</row>
+		<row>
+		  <entry><envar>PREVRUNLEVEL</envar></entry>
+		  <entry>The previous <link linkend="runlevels">runlevel</link></entry>
+		</row>
+	      </tbody>
+	    </tgroup>
+	  </informaltable>
+
+	  <note>
+	    <para>
+	      <envar>RUNLEVEL</envar> and
+	      <envar>PREVRUNLEVEL</envar> are for <command>init</command>
+	      compatibility and contain
+	      the one digit <command>init</command> runlevel designations
+	      (or the full <command>vera</command> runlevel name for a
+	      non-default configuration that does not define
+	      <command>init</command> aliases.
+	    </para>
+
+	    <para>
+	      The <quote>switch</quote> command immediately updates the
+	      advertized runlevels. Commands started to stop units from the
+	      previous runlevel see the new runlevel in the
+	      <envar>RUNLEVEL</envar> environment variable.
+	    </para>
+	  </note>
 	</refsect2>
 
 	<refsect2 id="failedstart">

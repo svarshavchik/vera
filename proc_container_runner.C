@@ -196,6 +196,13 @@ proc_container_runner create_runner(
 
 			charvec.push_back(nullptr);
 
+			auto [prev, cur]=
+				all_containers->prev_current_runlevel();
+
+			setenv("PREVRUNLEVEL", prev.c_str(), 1);
+
+			setenv("RUNLEVEL", cur.c_str(), 1);
+
 			sigset_t ss;
 
 			sigemptyset(&ss);

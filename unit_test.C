@@ -209,6 +209,20 @@ std::string current_runlevel()
 	return s;
 }
 
+std::string populated_sh(const proc_container &container, bool isit)
+{
+	proc_container_group_data dummy;
+
+	dummy.container=container;
+
+	auto dir=dummy.cgroups_dir();
+
+	dir += "/cgroup.events";
+
+	return std::string{"echo \"populated "} + (isit ? "1":"0")
+							+ "\" >" + dir;
+}
+
 void sigusr1()
 {
 }

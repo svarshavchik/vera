@@ -119,6 +119,27 @@ std::tuple<int, std::string> restart_or_reload(
 	return std::tuple{ret, std::move(s)};
 }
 
+//
+// Execute a request, read its result.
+//
+// The callback gets invoked and it returns a tuple:
+//
+// - the first socket returned by create_fake_request. The callback
+//   writes a command to the first socket, passes the second socket to
+//   proc_do_request() to do the command.
+//
+// - one of the functions in privrequest that returns the result of the
+//   command written to the socket pipe, by proc_do_request. It is expected
+//   to return an empty string.
+//
+// - a second callback, that gets called using the passed in file descriptor,
+//   it gets called after the result function returns and after the passed
+//   in file descriptor is readable.
+//
+// Returns the result of the second callback, and an empty string, normally.
+// If the status function returns a non-empty string, then 256 and the string
+// gets returned.
+
 std::tuple<int, std::string> do_test_or_restart(
 	const std::function<std::tuple<external_filedesc,
 	std::string (*)(const external_filedesc &),
@@ -243,6 +264,96 @@ void test_restart()
 
 	if (WEXITSTATUS(exitcode) != 9 || message != "")
 		throw "Unexpected result of a successful reload";
+}
+
+void test_envvars()
+{
+	auto first=std::make_shared<proc_new_containerObj>("first");
+
+	first->new_container->stop_type=stop_type_t::target;
+
+	first->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
+	first->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
+
+	first->new_container->starting_command=
+		"echo \"first|start|$PREVRUNLEVEL|$RUNLEVEL\" >>log";
+	first->new_container->stopping_command=
+		"echo \"first|stop|$PREVRUNLEVEL|$RUNLEVEL\" >>log; "
+		+ populated_sh(first->new_container);
+
+	auto second=std::make_shared<proc_new_containerObj>("second");
+
+	second->new_container->stop_type=stop_type_t::target;
+	second->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
+	second->starting_after.insert("first");
+	second->stopping_before.insert("first");
+	second->new_container->starting_command=
+		"echo \"second|start|$PREVRUNLEVEL|$RUNLEVEL\" >>log";
+	second->new_container->stopping_command=
+		"echo \"second|stop|$PREVRUNLEVEL|$RUNLEVEL\" >>log; "
+		+ populated_sh(second->new_container);
+
+	proc_containers_install({
+			first, second,
+		}, container_install::update);
+
+	unlink("log");
+
+	auto ret=do_test_or_restart(
+		[]
+		{
+			auto [socketa, socketb] = create_fake_request();
+
+			request_runlevel(socketa, "networking");
+			proc_do_request(socketb);
+
+			return std::tuple{
+				socketa, get_runlevel_status, wait_runlevel
+			};
+		});
+
+	auto &[exitcode, message]=ret;
+
+	if (WEXITSTATUS(exitcode) != 0 || message != "")
+		throw "Unexpected result of switch to networking";
+
+	std::string log{std::istreambuf_iterator{std::ifstream{"log"}.rdbuf()},
+		std::istreambuf_iterator<char>{}};
+
+	if (log != "first|start||3\n"
+	    "second|start||3\n")
+	{
+		throw "Unexpected log when switching to networking";
+	}
+
+	unlink("log");
+
+	ret=do_test_or_restart(
+		[]
+		{
+			auto [socketa, socketb] = create_fake_request();
+
+			request_runlevel(socketa, "boot");
+			proc_do_request(socketb);
+
+			return std::tuple{
+				socketa, get_runlevel_status, wait_runlevel
+			};
+		});
+
+	std::cout << exitcode << " " << message << std::endl;
+	if (WEXITSTATUS(exitcode) != 0 || message != "")
+		throw "Unexpected result of switch to boot";
+
+	log=std::string{std::istreambuf_iterator{std::ifstream{"log"}.rdbuf()},
+		std::istreambuf_iterator<char>{}};
+
+	if (log != "second|stop|3|boot\n"
+	    "first|stop|3|boot\n")
+	{
+		throw "Unexpected log when switching to boot";
+	}
+	unlink("log");
 }
 
 void proc_request_reexec()
@@ -438,6 +549,11 @@ static void regular_tests()
 	test_reset();
 	test="testrestart";
 	test_restart();
+
+	test_reset();
+
+	test="testenvvars";
+	test_envvars();
 
 	test_reset();
 	test="testreexec_before";

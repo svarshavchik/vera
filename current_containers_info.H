@@ -35,6 +35,11 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 	//! The current runlevel
 	proc_container current_runlevel;
 
+	//! The description field of the former runlevel
+
+	//! For setting the environment variables.
+	std::string previous_runlevel_description;
+
 	//! Whoever requested the current_runlevel;
 	external_filedesc current_runlevel_requester;
 
@@ -75,6 +80,17 @@ public:
 	//! A re-exec has been requested
 	bool reexec_requested=false;
 
+	//! Return the previous and current rulevels
+	std::tuple<std::string, std::string> prev_current_runlevel() const
+	{
+		auto current_or_next_runlevel=
+			next_runlevel.new_runlevel ?
+			next_runlevel.new_runlevel : current_runlevel;
+
+		return std::tuple{previous_runlevel_description,
+			current_or_next_runlevel ?
+			current_or_next_runlevel->description : std::string{}};
+	}
 	//! The constructor only loads the runlevel configuration.
 
 	current_containers_infoObj();

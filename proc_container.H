@@ -125,9 +125,13 @@ class proc_containerObj {
 
 public:
 	//! The container's name
+
+	//! type=runlevel container names are RUNLEVEL_PREFIX + name
 	const std::string name;
 
 	//! Container's description
+
+	//! type=runlevel container names are their bare name
 	std::string description;
 
 	//! Its type

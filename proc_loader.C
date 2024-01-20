@@ -1160,3 +1160,130 @@ bool proc_set_runlevel_default_override(
 
 	return proc_set_runlevel_config(configfile, current_runlevels);
 }
+
+bool proc_validate(const std::string &unitfile,
+		   const std::string &relativepath_override,
+		   const std::string &installconfigdir,
+		   const std::string &localconfigdir,
+		   const std::string &overrideconfigdir)
+{
+	std::ifstream i{unitfile};
+
+	if (!i)
+	{
+		std::cerr << unitfile << ": " << strerror(errno)
+			  << std::endl;
+		return false;
+	}
+
+	std::cout << _("Loading: ") << unitfile << "\n";
+
+	size_t n=unitfile.rfind('/');
+
+	std::filesystem::path relative_path;
+
+	try {
+
+		relative_path=unitfile.substr(n == unitfile.npos
+					      ? 0:n+1);
+
+		if (!relativepath_override.empty())
+			relative_path=relativepath_override;
+	} catch (...) {
+		std::cerr << "Invalid filename" << std::endl;
+		return false;
+	}
+
+	proc_new_container_set set, new_configs;
+	bool error=false;
+
+	try {
+		set=proc_load(i, unitfile, relative_path, true,
+			      [&]
+			      (const auto &msg)
+			      {
+				      std::cerr << msg << std::endl;
+				      error=true;
+			      });
+
+		std::cout << _("Loading installed units") << std::endl;
+
+		auto current_configs=proc_load_all(
+			installconfigdir,
+			localconfigdir,
+			overrideconfigdir,
+			[]
+			(const std::string &warning_message)
+			{
+				log_message(warning_message);
+			},
+			[&]
+			(const std::string &error_message)
+			{
+				error=true;
+				log_message(error_message);
+			});
+
+		// Take what's validated, and add in the current_configs
+		// but what's validated takes precedence, so any
+		// existing configs that are in the new set get
+		// ignored.
+
+		new_configs=set;
+		new_configs.insert(current_configs.begin(),
+				   current_configs.end());
+	} catch (...) {
+		std::cerr << unitfile << _(": parsing error")
+			  << std::endl;
+		return false;
+	}
+
+	if (error)
+		return false;
+
+	proc_load_dump(set);
+
+	for (auto &s:set)
+	{
+		static constexpr struct {
+			const char *dependency;
+			std::unordered_set<std::string>
+			proc_new_containerObj::*names;
+		} dependencies[]={
+			{"requires",
+			 &proc_new_containerObj::dep_requires},
+			{"required-by",
+			 &proc_new_containerObj::dep_required_by},
+			{"starting: before",
+			 &proc_new_containerObj::starting_before},
+			{"starting: after",
+			 &proc_new_containerObj::starting_after},
+			{"stopping: before",
+			 &proc_new_containerObj::stopping_before},
+			{"stopping: after",
+			 &proc_new_containerObj::stopping_after},
+		};
+
+		for (auto &[dep_name, ptr] : dependencies)
+		{
+			for (auto &name:(*s).*(ptr))
+			{
+				auto iter=new_configs.find(name);
+
+				if (iter != new_configs.end())
+					continue;
+
+				std::cout << _("Warning: ")
+					  << s->new_container->name
+					  << "("
+					  << dep_name
+					  << "): "
+					  << name
+					  << _(": not defined")
+					  << std::endl;
+			}
+		}
+	}
+
+	return true;
+}

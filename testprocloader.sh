@@ -496,7 +496,7 @@ mkdir -p globaldir
 cd globaldir
 for f in *
 do
-    ../vlad validate $f "system/$f"
+    ../testprocloader validatetest $f "system/$f" . ../localdir ../configdir
 done
 cd ..
 rm -rf globaldir localdir overridedir

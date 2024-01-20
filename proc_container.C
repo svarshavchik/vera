@@ -1303,11 +1303,36 @@ void current_containers_infoObj::install(
 
 	for (auto &[name, runlevel] : runlevel_configuration)
 	{
+		// If someone was foolish enough to hijack the internal
+		// RUNLEVEL_PREFIX, quietly get rid of it, and replace it
+		// with our own.
+
+		std::string prefixed_name=RUNLEVEL_PREFIX + name;
+
+		auto fool=new_containers.find(prefixed_name);
+
+		if (fool != new_containers.end())
+			new_containers.erase(fool);
+
 		auto runlevel_container=
 			*new_containers.insert(
 				std::make_shared<proc_new_containerObj>(
-					RUNLEVEL_PREFIX + name
+					prefixed_name
 				)).first;
+
+		// What goes into the RUNLEVEL environment variable gets
+		// kept in the description.
+		runlevel_container->new_container->description=name;
+
+		for (auto &alias:runlevel.aliases)
+		{
+			if (alias.size() == 1 &&
+			    alias[0] >= '0' && alias[0] <= '9')
+			{
+				runlevel_container->new_container->description=
+					alias;
+			}
+		}
 
 		runlevel_container->new_container->type=
 			proc_container_type::runlevel;
@@ -2527,6 +2552,9 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 		while (!next_runlevel.new_runlevel &&
 		       upcoming_runlevel.new_runlevel)
 		{
+			if (current_runlevel)
+				previous_runlevel_description=
+					current_runlevel->description;
 			next_runlevel=upcoming_runlevel;
 			upcoming_runlevel={};
 		}

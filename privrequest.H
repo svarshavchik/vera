@@ -69,7 +69,14 @@ void request_reexec(const external_filedesc &efd);
 void request_runlevel(const external_filedesc &efd,
 		      const std::string &runlevel);
 
+// Wait for the runlevel request to be validated.
+
+// Returns an empty string if the request is processing, or an error message.
+
 std::string get_runlevel_status(const external_filedesc &efd);
+
+// Wait for the new runlevel to come up.
+int wait_runlevel(const external_filedesc &efd);
 
 // Request the current runlevel and aliases
 

@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <sstream>
+#include <string>
 
 std::vector<std::string> logged_state_changes;
 
@@ -20,6 +21,8 @@ static std::vector<std::string> logged_runners;
 static pid_t next_pid=1;
 
 void populated(const proc_container &container, bool isit);
+
+std::string populated_sh(const proc_container &container, bool isit=false);
 
 #ifndef UNIT_TEST_RUNNER
 
