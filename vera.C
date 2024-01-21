@@ -25,6 +25,7 @@
 #include <sys/reboot.h>
 #include <sys/kd.h>
 #include <sys/ioctl.h>
+#include <sys/mount.h>
 #include <syslog.h>
 #include <iostream>
 #include <signal.h>
@@ -180,7 +181,6 @@ bool proc_container_group_data::cgroups_dir_create()
 {
 	auto dir=cgroups_dir();
 
-	mkdir(get_cgroupfs_base_path(), 0755);
 	if (mkdir(dir.c_str(), 0755) < 0)
 	{
 		if (errno != EEXIST && errno != ENOENT)
@@ -438,6 +438,7 @@ void sigusr1()
 
 void vera_init(int pubsocket)
 {
+	umask(022);
 	auto priv_poller=create_priv_poller();
 
 	pubsocket_ptr=&pubsocket;
@@ -445,8 +446,22 @@ void vera_init(int pubsocket)
 
 	// Create our cgroup
 
-	mkdir(proc_container_group_data::get_cgroupfs_base_path(), 0755);
+	std::string cgroups=proc_container_group_data::get_cgroupfs_base_path();
 
+	mkdir(cgroups.c_str(), 0755);
+
+	std::string cgroups_proc = cgroups + "/cgroup.procs";
+	struct stat st;
+
+	if (stat(cgroups_proc.c_str(), &st))
+	{
+		if (mount("cgroup2", cgroups.c_str(), "cgroup2",
+			  MS_NOEXEC|MS_NOSUID|MS_NOEXEC, nullptr))
+		{
+			perror(cgroups.c_str());
+			exit(1);
+		}
+	}
 	// Garbage collection on the configuration directory.
 
 	bool initial;
@@ -570,7 +585,7 @@ external_filedesc try_connect_vera_priv()
 
 // Connect to the public socket.
 
-external_filedesc connect_vera_pub()
+external_filedesc try_connect_vera_pub()
 {
 	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
 	struct sockaddr_un sun{};
@@ -581,11 +596,23 @@ external_filedesc connect_vera_pub()
 	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
 	{
 		close(fd);
+		return {nullptr};
+	}
+
+	return std::make_shared<external_filedescObj>(fd);
+}
+
+external_filedesc connect_vera_pub()
+{
+	auto fd=try_connect_vera_pub();
+
+	if (!fd)
+	{
 		perror(PUBCMDSOCKET);
 		exit(1);
 	}
 
-	return std::make_shared<external_filedescObj>(fd);
+	return fd;
 }
 
 // Connection on the public socket.
@@ -1067,6 +1094,15 @@ void vlad(std::vector<std::string> args)
 			dump_processes(info.processes, 0);
 		}
 		return;
+	}
+
+	if (args.size() == 1 && args[0] == "vera-up")
+	{
+		auto fd=try_connect_vera_pub();
+
+		if (fd)
+			exit(0);
+		exit(1);
 	}
 
 	if (args.size() == 2 && args[0] == "enable")

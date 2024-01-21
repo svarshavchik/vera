@@ -128,6 +128,11 @@ install-data-local:
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
 			-o $(DESTDIR)$(OVERRIDECONFIGDIR)
 
+uninstall-hook:
+	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system
+	rm -rf $(DESTDIR)$(localstatedir)/vera.priv
+	rm -rf $(DESTDIR)$(localstatedir)/vera.pub
+
 uninstall-local:
 	rm -f  $(DESTDIR)$(RUNLEVELCONFIG)
 	rm -f  $(DESTDIR)$(sbindir)/vlad

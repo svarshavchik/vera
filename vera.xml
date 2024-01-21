@@ -111,7 +111,16 @@
 	    <arg choice='plain'>reexec</arg>
 	  </group>
 	</cmdsynopsis>
-
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>validate</arg>
+	  <arg choice='req'>filename</arg>
+	  <arg choice='opt'>path</arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>vera-up</arg>
+	</cmdsynopsis>
       </refsynopsisdiv>
 
       <refsect1 id="description">
@@ -151,8 +160,16 @@
 	  </listitem>
 	  <listitem>
 	    <para>
-	      <xref linkend="additionaldocs" /> contains additional,
-	      miscellaneous information.
+	      <xref linkend="additionalconfig" /> contains additional,
+	      configuration information.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      <xref linkend="switchinit" /> contains instructions for
+	      reconfiguring the system to use <command>vera</command>
+	      instead of <command>init</command>.
 	    </para>
 	  </listitem>
 	</itemizedlist>
@@ -592,12 +609,6 @@ enabled:
 	  <para>
 	    This section describes the format of unit specification files.
 	  </para>
-	  <cmdsynopsis>
-	    <command>vlad</command>
-	    <arg choice='plain'>validate</arg>
-	    <arg choice='req'>filename</arg>
-	    <arg choice='opt'>path</arg>
-	  </cmdsynopsis>
 	  <para>
 	    The
 	    <quote>validate</quote> command reads the
@@ -1373,7 +1384,7 @@ Respawn:
 	    </listitem>
 	  </varlistentry>
 	</variablelist>
-	<refsect2>
+	<refsect2 id="hierdep">
 	  <title>Specifying hierarchical dependencies</title>
 
 	  <para>
@@ -1384,7 +1395,7 @@ Respawn:
 	  </para>
 
 	  <para>
-	    See <xref linkend="additionaldocs" /> for a description of
+	    See <xref linkend="additionalconfig" /> for a description of
 	    unit hierarchies. For example:
 	  </para>
 	  <blockquote>
@@ -1403,8 +1414,8 @@ Before: networking
 	  </para>
         </refsect2>
       </refsect1>
-      <refsect1 id="additionaldocs">
-	<title>ADDITIONAL DOCUMENTATION</title>
+      <refsect1 id="additionalconfig">
+	<title>ADDITIONAL CONFIGURATION DOCUMENTATION</title>
 
 	<refsect2 id="runlevelconfig">
 	  <title>System runlevels</title>
@@ -1440,7 +1451,7 @@ Before: networking
 	</refsect2>
 
 	<refsect2 id="hierarchy">
-	  <title>Unit specification files hierarchy</title>
+	  <title>Unit specification files hierarchies</title>
 
 	  <para>
 	    It's possible to create subdirectories in
@@ -1627,6 +1638,25 @@ version: 1
 	    </para>
 	  </note>
 	</refsect2>
+      </refsect1>
+      <refsect1 id="switchinit">
+	<title>SWITCHING THE SYSTEM OVER TO <command>vera</command></title>
+
+	<para>
+	  <command>vlad vera-up</command> tries to connect to
+	  <command>vera</command>'s public socket. A successful connection
+	  indicates that <command>vera</command> is installed and
+	  running. This is indicated by a 0 exit code.
+	  A connection failure is reported by terminating with a non-0
+	  exit code (no error message is shown).
+	</para>
+	<para>
+	  Installing <command>vera</command> (from a package or by
+	  <command>make install</command>) does not touch or replace the
+	  default system <command>init</command> daemon. Additional commands
+	  must be executed, and a coordinated reboot, is required in order to
+	  roll the dice, and start <command>vera</command>.
+	</para>
       </refsect1>
       <refsect1 id="bugs">
 	<title>BUGS</title>
