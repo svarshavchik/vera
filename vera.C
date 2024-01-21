@@ -16,6 +16,7 @@
 #include "external_filedesc_privcmdsocket.H"
 #include "privrequest.H"
 #include "inittab.H"
+#include "hook.H"
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -325,32 +326,8 @@ int create_vera_socket(const char *tmpname, const char *finalname)
 
 	// Create the privileged command socket.
 
-	while (1)
+	while ((fd=try_create_vera_socket(tmpname, finalname)) < 0)
 	{
-		unlink(tmpname);
-
-		fd=socket(PF_UNIX, SOCK_STREAM, 0);
-
-		if (fd >= 0)
-		{
-			struct sockaddr_un sun{};
-
-			sun.sun_family=AF_UNIX;
-			strcpy(sun.sun_path, tmpname);
-
-			// Make sure it's nonblocking and has close-on-exec
-			// set.
-
-			if (fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 &&
-			    fcntl(fd, F_SETFL, O_NONBLOCK) == 0 &&
-			    bind(fd, reinterpret_cast<sockaddr *>(&sun),
-				 sizeof(sun)) == 0 &&
-			    listen(fd, 10) == 0 &&
-			    rename(tmpname, finalname) == 0)
-				break;
-			close(fd);
-		}
-
 		log_message(std::string{finalname} +
 			    _(": socket creation failure: ") +
 			    strerror(errno));
@@ -583,28 +560,9 @@ external_filedesc try_connect_vera_priv()
 	return std::make_shared<external_filedescObj>(fd);
 }
 
-// Connect to the public socket.
-
-external_filedesc try_connect_vera_pub()
-{
-	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
-	struct sockaddr_un sun{};
-
-	sun.sun_family=AF_UNIX;
-	strcpy(sun.sun_path, PUBCMDSOCKET);
-
-	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
-	{
-		close(fd);
-		return {nullptr};
-	}
-
-	return std::make_shared<external_filedescObj>(fd);
-}
-
 external_filedesc connect_vera_pub()
 {
-	auto fd=try_connect_vera_pub();
+	auto fd=try_connect_vera_pub(PUBCMDSOCKET);
 
 	if (!fd)
 	{
@@ -1098,11 +1056,24 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 1 && args[0] == "vera-up")
 	{
-		auto fd=try_connect_vera_pub();
+		auto fd=try_connect_vera_pub(PUBCMDSOCKET);
 
 		if (fd)
 			exit(0);
 		exit(1);
+	}
+
+	if (args.size() == 1 && args[0] == "hook")
+	{
+		if (!hook("/etc/rc.d", PKGDATADIR))
+			exit(1);
+		exit(0);
+	}
+
+	if (args.size() == 1 && args[0] == "unhook")
+	{
+		unhook("/etc/rc.d", PUBCMDSOCKET);
+		exit(0);
 	}
 
 	if (args.size() == 2 && args[0] == "enable")
@@ -1215,10 +1186,10 @@ int main(int argc, char **argv)
 		++slash;
 
 	try {
-		if (exename.substr(slash) == "vlad")
+		if (exename.substr(slash) == "vlad" || argc > 1)
 		{
 			while (getopt_long(argc, argv, "", options, NULL) >= 0)
-			;
+				;
 
 			umask(022);
 			vlad({argv+optind, argv+argc});

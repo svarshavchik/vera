@@ -72,6 +72,12 @@
       </refnamediv>
 
       <refsynopsisdiv>
+	<blockquote>
+	  <para>
+	    Controlling individual units:
+	  </para>
+	</blockquote>
+
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <group choice='req'>
@@ -91,6 +97,20 @@
 	  <arg choice='opt'>--stopped</arg>
 	  <arg choice='plain'>status</arg>
 	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>validate</arg>
+	  <arg choice='req'>filename</arg>
+	  <arg choice='opt'>path</arg>
+	</cmdsynopsis>
+
+	<blockquote>
+	  <para>
+	    Controlling runlevels:
+	  </para>
+	</blockquote>
+
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <arg choice='opt'>--wait</arg>
@@ -108,18 +128,20 @@
 	  <group choice='req'>
 	    <arg choice='plain'>current</arg>
 	    <arg choice='plain'>default</arg>
-	    <arg choice='plain'>reexec</arg>
 	  </group>
 	</cmdsynopsis>
+
+	<blockquote>
+	  <para>
+	    <command>vera</command> management
+	  </para>
+	</blockquote>
 	<cmdsynopsis>
 	  <command>vlad</command>
-	  <arg choice='plain'>validate</arg>
-	  <arg choice='req'>filename</arg>
-	  <arg choice='opt'>path</arg>
-	</cmdsynopsis>
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='plain'>vera-up</arg>
+	  <group choice='req'>
+	    <arg choice='plain'>reexec</arg>
+	    <arg choice='plain'>vera-up</arg>
+	  </group>
 	</cmdsynopsis>
       </refsynopsisdiv>
 
@@ -167,7 +189,7 @@
 
 	  <listitem>
 	    <para>
-	      <xref linkend="switchinit" /> contains instructions for
+	      <xref linkend="management" /> contains instructions for
 	      reconfiguring the system to use <command>vera</command>
 	      instead of <command>init</command>.
 	    </para>
@@ -427,31 +449,6 @@ multi-user                # Reverts to the previous default runlevel
 	    </informalexample>
 	  </blockquote>
 
-	  <para>
-	    <quote>reexec</quote> signals the <command>vera</command> system
-	    process to restart itself. This is needed after installing a new
-	    version of <command>vera</command> or one of the system libraries
-	    it uses. It's possible that <command>vera</command> will not
-	    restart immediately. If any units are in the middle of being
-	    stopped, started, restarted, or respawned a
-	    <quote>reexec</quote> gets delayed until
-	    all pending activity finishes.
-	  </para>
-
-	  <note>
-	    <para>
-	      This can be a lengthy delay when there's a respawned unit that
-	      reached its maximum number of attempts and it's waiting until
-	      it's respawnable.
-	      Additionally, <quote>reexec</quote> resets all respawned units'
-	      counters and limits.
-	    </para>
-
-	    <para>
-	      This is not considered critical, a <quote>reexec</quote> is
-	      not something that normally happens.
-	    </para>
-	  </note>
 	</refsect2>
       </refsect1>
 
@@ -484,7 +481,7 @@ multi-user                # Reverts to the previous default runlevel
 	    <filename>@LOCALCONFIGDIR@</filename> unless the original
 	    one is installed in
 	    <filename>@INSTALLCONFIGDIR@</filename>.
-	    <filename>@LOCALCONFIGDIR@</filename> overrieds, and does not
+	    <filename>@LOCALCONFIGDIR@</filename> overrides, and does not
 	    supplement, the contents of
 	    <filename>@INSTALLCONFIGDIR@</filename>.
 	  </para>
@@ -591,6 +588,17 @@ enabled:
 		  automatically in the <quote>multi-user</quote> and
 		  <quote>graphical</quote> runlevels.
 		</para>
+
+		<note>
+		  <para>
+		    Hierarchical and compound units must use absolute
+		    dependencies,
+		    <quote>/system/multi-user</quote> and
+		    <quote>/system/graphical</quote>, for example.
+		    (see <xref linkend="dependencies" />
+		    for more information).
+		  </para>
+		</note>
 	      </listitem>
 
 	      <listitem>
@@ -1059,7 +1067,7 @@ Version: 1</literallayout>
 	      the one digit <command>init</command> runlevel designations
 	      (or the full <command>vera</command> runlevel name for a
 	      non-default configuration that does not define
-	      <command>init</command> aliases.
+	      <command>init</command> aliases).
 	    </para>
 
 	    <para>
@@ -1463,7 +1471,7 @@ Before: networking
 	  <itemizedlist>
 	    <listitem>
 	      <para>
-		The name each subdirectory must meet the same requirements
+		The name of each subdirectory must meet the same requirements
 		as unit specification filenames (see
 		<xref linkend="unitfilename" />) and the maximum filename length
 		applies to the entire relative pathname under
@@ -1639,8 +1647,34 @@ version: 1
 	  </note>
 	</refsect2>
       </refsect1>
-      <refsect1 id="switchinit">
-	<title>SWITCHING THE SYSTEM OVER TO <command>vera</command></title>
+
+      <refsect1 id="management">
+	<title>MANAGING <command>vera</command></title>
+      	<para>
+	  <quote>reexec</quote> signals the <command>vera</command> system
+	  process to restart itself. This is needed after installing a new
+	  version of <command>vera</command> or one of the system libraries
+	  it uses. It's possible that <command>vera</command> will not
+	  restart immediately. If any units are in the middle of being
+	  stopped, started, restarted, or respawned a
+	  <quote>reexec</quote> gets delayed until
+	  all pending activity finishes.
+	</para>
+
+	<note>
+	  <para>
+	    This can be a lengthy delay when there's a respawned unit that
+	    reached its maximum number of attempts and it's waiting until
+	    it's respawnable.
+	    Additionally, <quote>reexec</quote> resets all respawned units'
+	    counters and limits.
+	  </para>
+
+	  <para>
+	    This is not considered critical, a <quote>reexec</quote> is
+	    not something that normally happens.
+	  </para>
+	</note>
 
 	<para>
 	  <command>vlad vera-up</command> tries to connect to
@@ -1654,10 +1688,11 @@ version: 1
 	  Installing <command>vera</command> (from a package or by
 	  <command>make install</command>) does not touch or replace the
 	  default system <command>init</command> daemon. Additional commands
-	  must be executed, and a coordinated reboot, is required in order to
+	  must be executed, and a coordinated reboot is required in order to
 	  roll the dice, and start <command>vera</command>.
 	</para>
       </refsect1>
+
       <refsect1 id="bugs">
 	<title>BUGS</title>
 

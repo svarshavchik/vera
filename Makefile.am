@@ -8,14 +8,17 @@ export LC_ALL=C
 sbin_PROGRAMS=vera
 noinst_SCRIPTS=vlad
 
+pkgdata_SCRIPTS=rc.sysvinit.vera
+
 noinst_PROGRAMS=\
 	testcontroller						\
 	testcontroller2						\
 	testcontroller2fdleak					\
 	testcontroller3						\
 	testdepcomputations 					\
-	testpoller						\
+	testhook						\
 	testinittab						\
+	testpoller						\
 	testprocloader
 
 EXTRA_DIST= 							\
@@ -24,7 +27,7 @@ EXTRA_DIST= 							\
 	testprocloader.sh
 
 BUILT_SOURCES=configdirs.h
-CLEANFILES=configdirs.h vlad
+CLEANFILES=configdirs.h
 
 noinst_LIBRARIES=libvera.a
 
@@ -35,6 +38,8 @@ libvera_a_SOURCES=						\
 	external_filedesc.C					\
 	external_filedesc_privcmdsocket.H			\
 	external_filedesc_privcmdsocket.C			\
+	hook.C							\
+	hook.H							\
 	inittab.C						\
 	inittab.H						\
 	log.C 							\
@@ -66,10 +71,12 @@ libvera_a_SOURCES=						\
 	proc_loader.H						\
 	proc_loader2.C						\
 	unit_test.H						\
+	verac_connect_sun_socket.c				\
+	verac.h							\
 	yaml_writer.C						\
 	yaml-writer.H
 
-configdirs.h: config.status
+configdirs.h: config.status Makefile
 	echo '#define INSTALLCONFIGDIR "$(INSTALLCONFIGDIR)"' >configdirs.h.tmp
 	echo '#define CONFIGDIR "$(CONFIGDIR)"' >>configdirs.h.tmp
 	echo '#define RUNLEVELCONFIG "$(RUNLEVELCONFIG)"' >>configdirs.h.tmp
@@ -77,6 +84,7 @@ configdirs.h: config.status
 	echo '#define OVERRIDECONFIGDIR "$(OVERRIDECONFIGDIR)"' >>configdirs.h.tmp
 	echo '#define LOCALSTATEDIR "$(localstatedir)"' >>configdirs.h.tmp
 	echo '#define LOCALEDIR "$(localedir)"' >> configdirs.h.tmp
+	echo '#define PKGDATADIR "$(pkgdatadir)"' >>configdirs.h.tmp
 	mv configdirs.h.tmp configdirs.h
 
 vera_SOURCES=vera.C
@@ -84,6 +92,7 @@ vera_LDADD=libvera.a @YAMLLIBS@
 
 vlad: vera
 	rm -f vlad; ln vera vlad
+CLEANFILES += vlad
 
 testcontroller_SOURCES=testcontroller.C unit_test.C
 testcontroller_LDADD=libvera.a @YAMLLIBS@
@@ -108,6 +117,9 @@ testpoller_LDADD=libvera.a @YAMLLIBS@
 testinittab_SOURCES=testinittab.C parsed_yaml.C inittab.C yaml_writer.C \
 	proc_loader.C proc_container2.C
 testinittab_LDADD=@YAMLLIBS@
+
+testhook_SOURCES=testhook.C hook.C external_filedesc.C
+testhook_LDADD=libvera.a
 
 install-exec-hook:
 	rm -f $(DESTDIR)$(sbindir)/vlad
@@ -151,6 +163,7 @@ check-am:
 	./testcontroller3 respawn4
 	$(VALGRIND) ./testcontroller3 testnoreexec
 	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testinittab.sh "$(srcdir)"
+	./testhook
 
 man8_MANS=vera.8 vlad.8
 

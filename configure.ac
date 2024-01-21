@@ -76,5 +76,9 @@ OVERRIDECONFIGDIR="$CONFIGDIR/override"
 AC_SUBST(OVERRIDECONFIGDIR)
 
 AM_CONDITIONAL(HAVE_DOCS, [test -f ${srcdir}/vera.xml])
-AC_CONFIG_FILES([Makefile po/Makefile.in])
+AC_CONFIG_FILES([
+	Makefile
+	po/Makefile.in
+	rc.sysvinit.vera
+])
 AC_OUTPUT

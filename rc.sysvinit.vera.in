@@ -1,0 +1,20 @@
+#!/bin/bash
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+sbindir=@sbindir@
+
+# The real rc.sysvinit is moved to rc.sysvinit.in. If the system was booted
+# with vera its invocation from rc.? is quietly suppressed, otherwise init
+# must still be running, so this gets forwarded normally.
+
+if @sbindir@/vlad vera-up
+then
+    exit 0
+else
+    if test ! -x /etc/rc.d/rc.sysvinit.init
+    then
+	exit 0
+    fi
+    exec /etc/rc.d/rc.sysvinit.init "$@"
+fi
