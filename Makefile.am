@@ -72,6 +72,7 @@ libvera_a_SOURCES=						\
 	proc_loader2.C						\
 	unit_test.H						\
 	verac_connect_sun_socket.c				\
+	verac_parseinittab.c					\
 	verac.h							\
 	yaml_writer.C						\
 	yaml-writer.H
@@ -116,7 +117,7 @@ testpoller_LDADD=libvera.a @YAMLLIBS@
 
 testinittab_SOURCES=testinittab.C parsed_yaml.C inittab.C yaml_writer.C \
 	proc_loader.C proc_container2.C
-testinittab_LDADD=@YAMLLIBS@
+testinittab_LDADD=libvera.a @YAMLLIBS@
 
 testhook_SOURCES=testhook.C hook.C external_filedesc.C
 testhook_LDADD=libvera.a

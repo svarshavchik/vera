@@ -5,6 +5,7 @@
 #include "config.h"
 #include "hook.H"
 #include "verac.h"
+#include <functional>
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>

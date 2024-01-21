@@ -57,20 +57,11 @@ int main(int argc, char **argv)
 		}
 
 	try {
-		std::ifstream i{inittabfile};
-
-		if (!i.is_open())
-		{
-			std::cout << "Cannot open " << inittabfile << std::endl;
-			exit(1);
-		}
-
 		auto rl=default_runlevels();
-		if (!inittab(i,
+		if (!inittab(std::move(inittabfile),
 			     configdir,
 			     rl))
 			exit(1);
-		i.close();
 
 		std::map<std::string, std::string> unitfiles;
 

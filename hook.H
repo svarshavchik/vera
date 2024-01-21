@@ -7,6 +7,7 @@
 
 #include <string>
 #include "external_filedesc.H"
+#include <functional>
 
 //! Attempt to create an AF_UNIX socket
 

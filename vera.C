@@ -1128,17 +1128,7 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() >= 1 && args[0] == "inittab")
 	{
-		std::ifstream etc_inittab{"/etc/inittab"};
-
-		if (!etc_inittab.is_open())
-		{
-			log_to_syslog(
-				LOG_ERR,
-				"vlad",
-				"Could not read /etc/inittab");
-		}
-
-		if (!inittab(etc_inittab,
+		if (!inittab("/etc/inittab",
 			     INSTALLCONFIGDIR,
 			     load_runlevelconfig()))
 		{

@@ -5,6 +5,8 @@
 #include "config.h"
 #include "inittab.H"
 #include "log.H"
+#include "hook.H"
+#include "verac.h"
 #include "yaml_writer.H"
 #include "proc_loader.H"
 #include <algorithm>
@@ -492,67 +494,113 @@ void convert_inittab::start_rc(const std::string &identifier,
 	);
 }
 
+/*
+  Metadata while parsing /etc/inittab lines.
+
+  The physical structure of /etc/inittab is parsed in C, which invokes
+  a callback with a passthrough void pointer that points to this object.
+
+  The C code trampoline invokes the closure that does the real work, and
+  traps C++ exceptions, which set the error flag.
+
+ */
+
+struct parse_inittab_data {
+	std::function<void (const char *,
+			    const char *,
+			    const char *, const char *,
+			    const char *)> *cbptr;
+	bool error;
+};
+
 #if 0
 {
 #endif
 }
 
-bool inittab(std::istream &etc_inittab,
-	     const std::string &system_dir,
-	     const runlevels &runlevels)
+extern "C" {
+
+	/*
+	** Callback from C parser.
+	*/
+
+	static void parse_inittab_trampoline(
+		const char *orig_line,
+		const char *identifier,
+		const char *runlevels,
+		const char *action,
+		const char *command,
+		void *cbarg)
+	{
+		auto *d=reinterpret_cast<parse_inittab_data *>(cbarg);
+
+		try {
+			(*d->cbptr)(orig_line,
+				    identifier,
+				    runlevels,
+				    action,
+				    command);
+		} catch (const std::exception &e)
+		{
+			std::cerr << e.what() << std::endl;
+			d->error=true;
+		}
+	}
+}
+
+bool parse_inittab(const std::string &filename,
+		   std::function<void (const char *,
+				       const char *,
+				       const char *, const char *,
+				       const char *)> parser)
 {
-	convert_inittab generator{system_dir, runlevels};
+	parse_inittab_data d{&parser, false};
+
+	FILE *fp=fopen(filename.c_str(), "r");
+
+	if (!fp)
+	{
+		std::cerr << filename << ": " << strerror(errno) << std::endl;
+		return false;
+	}
+
+	parse_inittab(fp, parse_inittab_trampoline, &d);
+
+	fclose(fp);
+	return (!d.error);
+}
+
+namespace {
+#if 0
+}
+#endif
+
+struct inittab_converter {
+
+	const std::string &system_dir;
+	const runlevels &runlevels_config;
+
+	convert_inittab generator{system_dir, runlevels_config};
 
 	std::string s;
 	size_t linenum=0;
 
 	std::unordered_set<std::string> ondemand;
 
-	while (std::getline(etc_inittab, s))
+	inittab_converter(const std::string &system_dir,
+			  const runlevels &runlevels_config)
+		: system_dir{system_dir},
+		  runlevels_config{runlevels_config},
+		  generator{system_dir, runlevels_config}
 	{
-		++linenum;
+	}
 
-		// Strip comments, look for a non-blank line.
-		s.erase(std::find(s.begin(), s.end(), '#'), s.end());
-
-		auto colon=std::find(s.begin(), s.end(), ':');
-
-		if (colon == s.end())
-			continue;
-
-		// Parse out the 1st and 2nd fields.
-
-		std::string new_entry_identifier{s.begin(), colon};
-
-		auto runlevels_iter=++colon;
-
-		colon=std::find(colon, s.end(), ':');
-
-		if (colon == s.end())
-		{
-			std::cerr << "Line " << linenum
-				  << ": cannot find runlevel string."
-				  << std::endl;
-			generator.error=true;
-			continue;
-		}
-
-		std::string runlevels{runlevels_iter, colon};
-
-		auto actions_iter=++colon;
-
-		colon=std::find(colon, s.end(), ':');
-
-		if (colon == s.end())
-		{
-			std::cerr << "Line " << linenum
-				  << ": cannot find actions string."
-				  << std::endl;
-			generator.error=true;
-		}
-
-		std::string actions{actions_iter, colon};
-
+	void operator()(const char *s,
+			std::string new_entry_identifier,
+			std::string runlevels,
+			std::string actions,
+			std::string starting_command)
+	{
 		if (!generator.ids_seen.insert(new_entry_identifier).second)
 		{
 			std::cerr << "Line " << linenum
@@ -560,19 +608,17 @@ bool inittab(std::istream &etc_inittab,
 				  << new_entry_identifier << "\""
 				  << std::endl;
 			generator.error=true;
-			continue;
+			return;
 		}
 
 		if (actions == "off")
-			continue;
+			return;
 
 		if (actions == "initdefault")
-			continue;
+			return;
 
 		if (actions == "sysinit")
-			continue;
-
-		std::string starting_command{++colon, s.end()};
+			return;
 
 		std::set<std::string> required_by_runlevel;
 		const char *start_type=nullptr;
@@ -755,6 +801,11 @@ bool inittab(std::istream &etc_inittab,
 		}
 	}
 
+	bool finish();
+};
+
+bool inittab_converter::finish()
+{
 	// Now, take each <inittab>-start script that includes the
 	// "vlad start" command for its init runlevel, and add a "vlad stop"
 	// command for all others.
@@ -795,4 +846,57 @@ bool inittab(std::istream &etc_inittab,
 	if (generator.error)
 		return false;
 	return true;
+}
+
+#if 0
+{
+	#endif
+}
+
+bool inittab(std::string filename,
+	     const std::string &system_dir,
+	     const runlevels &runlevels)
+{
+	bool error=false;
+
+	inittab_converter converter{system_dir, runlevels};
+
+	return parse_inittab(
+		filename.c_str(),
+		[&]
+		(const char *orig_line,
+		 const char *identifier,
+		 const char *runlevels,
+		 const char *action,
+		 const char *processed_command)
+		{
+			++converter.linenum;
+
+			if (!identifier)
+				return;
+
+			if (!runlevels)
+			{
+				std::cerr << "Line " << converter.linenum
+					  << ": cannot find runlevel string."
+					  << std::endl;
+				error=true;
+				return;
+			}
+
+			if (!action)
+			{
+				std::cerr << "Line " << converter.linenum
+					  << ": cannot find actions string."
+					  << std::endl;
+				error=true;
+				return;
+			}
+			converter(orig_line,
+				  identifier,
+				  runlevels,
+				  action,
+				  processed_command);
+		}
+	) && !error && converter.finish();
 }
