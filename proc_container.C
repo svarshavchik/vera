@@ -1421,15 +1421,40 @@ void current_containers_infoObj::install(
 			if (iter->first->type !=
 			    proc_container_type::loaded)
 				to_remove.push_back(iter->first);
+			else if (mode == container_install::update)
+			{
+				// Log changes to the container.
+				//
+				// required-by changes do not need to be
+				// logged by themselves, since they're always
+				// tied to "requires".
+				iter->first->compare_and_log(b->first);
 
+				compare_and_log(
+					b->first,
+					new_all_dependency_info,
+					&dependency_info::all_requires,
+					": required dependencies changed");
+				compare_and_log(
+					b->first,
+					new_all_dependency_info,
+					&dependency_info::all_starting_first,
+					": starting dependencies changes");
+				compare_and_log(
+					b->first, new_all_dependency_info,
+					&dependency_info::all_stopping_first,
+					": stopping dependencies changes");
+			}
 			continue;
 		}
 
 		// If the existing container is stopped, nothing needs to
 		// be done.
 		if (std::holds_alternative<state_stopped>(b->second.state))
+		{
+			log_message(b->first->name + _(": removed"));
 			continue;
-
+		}
 		b->second.autoremove=true;
 
 		// This is getting added after all the dependency work.
@@ -1480,6 +1505,8 @@ void current_containers_infoObj::install(
 
 		if (std::holds_alternative<state_stopped>(iter->second.state))
 			continue;
+
+		log_message(c->name + _(": removing"));
 
 		do_remove(iter, true);
 	}
@@ -3706,3 +3733,79 @@ void current_containers_infoObj::reload_or_restart(
 			requester->write_all(o.str());
 		});
 }
+
+void proc_containerObj::compare_and_log(const proc_container &new_container)
+	const
+{
+	compare(&proc_containerObj::description, new_container,
+		": description updated");
+	compare(&proc_containerObj::type, new_container,
+		": type updated");
+	compare(&proc_containerObj::start_type, new_container,
+		": start type updated");
+	compare(&proc_containerObj::respawn_attempts, new_container,
+		": respawn attempts updated");
+	compare(&proc_containerObj::respawn_limit, new_container,
+		": respawn limit");
+	compare(&proc_containerObj::stop_type, new_container,
+		": stop type");
+	compare(&proc_containerObj::starting_command, new_container,
+		": starting command");
+	compare(&proc_containerObj::starting_timeout, new_container,
+		": starting timeout");
+	compare(&proc_containerObj::stopping_command, new_container,
+		": stopping command");
+	compare(&proc_containerObj::stopping_timeout, new_container,
+		": stopping timeout");
+	compare(&proc_containerObj::restarting_command, new_container,
+		": restarting command");
+	compare(&proc_containerObj::reloading_command, new_container,
+		": reloading command");
+}
+
+void current_containers_infoObj::compare_and_log(
+	const proc_container &container,
+	const new_all_dependency_info_t &new_all_dependency_info,
+	all_dependencies dependency_info::*dependencies,
+	const char *message) const
+{
+	auto new_dependency_info=new_all_dependency_info.find(container);
+	auto dependency_info=all_dependency_info.find(container);
+
+	if (new_dependency_info == new_all_dependency_info.end())
+	{
+		if (dependency_info == all_dependency_info.end())
+			return;
+	}
+	else
+	{
+		if (dependency_info != all_dependency_info.end())
+		{
+			auto &a=
+				new_dependency_info->second.*dependencies;
+
+			auto &b=
+				dependency_info->second.*dependencies;
+
+			if (a.size() == b.size())
+			{
+				bool different=false;
+
+				for (auto &c:a)
+				{
+					if (b.find(c) == b.end())
+					{
+						different=true;
+						break;
+					}
+				}
+
+				if (!different)
+					return;
+			}
+		}
+	}
+
+	log_message(container->name + message);
+}
+					;

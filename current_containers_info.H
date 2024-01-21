@@ -189,6 +189,17 @@ public:
 private:
 	all_dependency_info_t all_dependency_info;
 
+	//! Report changes in dependencies
+
+	//! When updating process containers, log changes to dependencies.
+
+	void compare_and_log(
+		const proc_container &container,
+		const new_all_dependency_info_t &new_all_dependency_info,
+		all_dependencies dependency_info::*dependencies,
+		const char *message
+	) const;
+
 	//! Retrieve all required dependencies of a process container
 	void all_required_dependencies(
 		const proc_container &c,

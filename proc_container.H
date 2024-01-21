@@ -17,6 +17,7 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "proc_container_state.H"
+#include "log.H"
 
 //! Container type
 
@@ -189,6 +190,24 @@ public:
 
 	//! Destructor
 	~proc_containerObj();
+
+	//! Report changes
+
+	//! When reloading container configuration, see if this container's
+	//! definition changed.
+
+	void compare_and_log(const proc_container &new_container) const;
+
+private:
+	template<typename T>
+	void compare(T proc_containerObj::*field,
+		     const proc_container &new_container,
+		     const char *message) const
+	{
+		if ( (this->*field) == ((*new_container).*field))
+			return;
+		log_message(name + message);
+	}
 };
 
 //! Dependencies for a new container.

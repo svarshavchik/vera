@@ -1110,6 +1110,7 @@ void test_install()
 		container_install::update);
 
 	if (logged_state_changes != std::vector<std::string>{
+			"installb: removing",
 			"installb: force-removing",
 			"installb: stopped",
 			"installb: removed",
