@@ -5,7 +5,7 @@ AM_CXXFLAGS = -std=c++20 @YAMLCPPFLAGS@
 
 export LC_ALL=C
 
-sbin_PROGRAMS=vera
+sbin_PROGRAMS=vera vera-init
 noinst_SCRIPTS=vlad
 
 pkgdata_SCRIPTS=rc.sysvinit.vera
@@ -86,10 +86,14 @@ configdirs.h: config.status Makefile
 	echo '#define LOCALSTATEDIR "$(localstatedir)"' >>configdirs.h.tmp
 	echo '#define LOCALEDIR "$(localedir)"' >> configdirs.h.tmp
 	echo '#define PKGDATADIR "$(pkgdatadir)"' >>configdirs.h.tmp
+	echo '#define SBINDIR "$(sbindir)"' >>configdirs.h.tmp
 	mv configdirs.h.tmp configdirs.h
 
 vera_SOURCES=vera.C
 vera_LDADD=libvera.a @YAMLLIBS@
+
+vera_init_SOURCES=vera-init.c
+vera_init_LDADD=libvera.a
 
 vlad: vera
 	rm -f vlad; ln vera vlad
@@ -119,7 +123,7 @@ testinittab_SOURCES=testinittab.C parsed_yaml.C inittab.C yaml_writer.C \
 	proc_loader.C proc_container2.C
 testinittab_LDADD=libvera.a @YAMLLIBS@
 
-testhook_SOURCES=testhook.C hook.C external_filedesc.C
+testhook_SOURCES=testhook.C
 testhook_LDADD=libvera.a
 
 install-exec-hook:

@@ -133,7 +133,7 @@
 
 	<blockquote>
 	  <para>
-	    <command>vera</command> management
+	    <command>vera</command> management:
 	  </para>
 	</blockquote>
 	<cmdsynopsis>
@@ -141,6 +141,7 @@
 	  <group choice='req'>
 	    <arg choice='plain'>reexec</arg>
 	    <arg choice='plain'>vera-up</arg>
+	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
       </refsynopsisdiv>
@@ -1690,6 +1691,14 @@ version: 1
 	  default system <command>init</command> daemon. Additional commands
 	  must be executed, and a coordinated reboot is required in order to
 	  roll the dice, and start <command>vera</command>.
+	</para>
+
+	<para>
+	  A single parameter to <command>vera</command> consisting of a
+	  single letter or digit gets interpreted as a reference to an
+	  <command>init</command> runlevel, an ondemand action, or an
+	  inittab update, and triggers the equivalent <command>vera</command>
+	  command.
 	</para>
       </refsect1>
 

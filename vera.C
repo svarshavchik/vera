@@ -17,6 +17,8 @@
 #include "privrequest.H"
 #include "inittab.H"
 #include "hook.H"
+#include "verac.h"
+
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -40,8 +42,6 @@
 #include <vector>
 #include <algorithm>
 
-#define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
-#define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
 
 int stopped_flag;
 int waitrunlevel_flag;
@@ -743,6 +743,51 @@ void do_override(const std::string &name, const char *type)
 	exit(exit_code);
 }
 
+// start command request
+static void vlad_start(const std::string &unit)
+{
+	auto fd=connect_vera_priv();
+
+	send_start(fd, unit);
+
+	auto ret=get_start_status(fd);
+
+	if (!ret.empty())
+	{
+		std::cerr << ret << std::endl;
+		exit(1);
+	}
+
+	if (!get_start_result(fd))
+	{
+		std::cerr << unit
+			  << _(": could not be started, check the "
+			       "log files for more information")
+			  << std::endl;
+		exit(1);
+	}
+}
+
+// switch command request
+
+static void vlad_switch(const std::string &runlevel)
+{
+	auto conn=connect_vera_priv();
+
+	request_runlevel(conn, runlevel);
+
+	auto ret=get_runlevel_status(conn);
+
+	if (!ret.empty())
+	{
+		std::cerr << ret << std::endl;
+		exit(1);
+	}
+
+	if (waitrunlevel_flag)
+		wait_runlevel(conn);
+}
+
 namespace {
 #if 0
 }
@@ -775,26 +820,7 @@ void vlad(std::vector<std::string> args)
 {
 	if (args.size() == 2 && args[0] == "start")
 	{
-		auto fd=connect_vera_priv();
-
-		send_start(fd, args[1]);
-
-		auto ret=get_start_status(fd);
-
-		if (!ret.empty())
-		{
-			std::cerr << ret << std::endl;
-			exit(1);
-		}
-
-		if (!get_start_result(fd))
-		{
-			std::cerr << args[1]
-				  << _(": could not be started, check the "
-				       "log files for more information")
-				  << std::endl;
-			exit(1);
-		}
+		vlad_start(args[1]);
 		return;
 	}
 
@@ -898,20 +924,7 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "switch")
 	{
-		auto conn=connect_vera_priv();
-
-		request_runlevel(conn, args[1]);
-
-		auto ret=get_runlevel_status(conn);
-
-		if (!ret.empty())
-		{
-			std::cerr << ret << std::endl;
-			exit(1);
-		}
-
-		if (waitrunlevel_flag)
-			wait_runlevel(conn);
+		vlad_switch(args[1]);
 		return;
 	}
 
@@ -1065,14 +1078,19 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 1 && args[0] == "hook")
 	{
-		if (!hook("/etc/rc.d", PKGDATADIR))
+		if (!hook("/etc/rc.d",
+			  "/sbin",
+			  SBINDIR "/vera-init",
+			  PKGDATADIR))
 			exit(1);
 		exit(0);
 	}
 
 	if (args.size() == 1 && args[0] == "unhook")
 	{
-		unhook("/etc/rc.d", PUBCMDSOCKET);
+		unhook("/etc/rc.d",
+		       "/sbin",
+		       PUBCMDSOCKET);
 		exit(0);
 	}
 
@@ -1149,6 +1167,41 @@ void vlad(std::vector<std::string> args)
 				   log_message))
 			exit(1);
 		return;
+	}
+
+	// Handle one-character init-style commands.
+
+	if (args.size() == 1 && args[0].size() == 1)
+	{
+		switch (args[0][0]) {
+		case 'q':
+		case 'Q':
+			if (!inittab("/etc/inittab",
+				     INSTALLCONFIGDIR,
+				     load_runlevelconfig()))
+			{
+				exit(1);
+			}
+			return;
+		case 'u':
+		case 'U':
+			request_reexec(connect_vera_priv());
+			return;
+		}
+
+		// "a", "b", or "c"
+
+		std::string ondemand{INSTALLCONFIGDIR "/" SYSTEM_PREFIX};
+
+		ondemand += args[0];
+
+		if (std::filesystem::exists(ondemand))
+		{
+			vlad_start(std::string{SYSTEM_PREFIX} + args[0]);
+			return;
+		}
+
+		vlad_switch(args[0]);
 	}
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);

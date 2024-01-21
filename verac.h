@@ -3,6 +3,9 @@
 
 #include <stdio.h>
 
+#define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
+#define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
