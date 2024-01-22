@@ -32,6 +32,14 @@ void parse_inittab(FILE *fp,
 			      void *cbarg),
 		   void *cbarg);
 
+/*
+** Parse the inittab file and run all sysinit entries.
+**
+** This is executed, in C, by vera-init, after which the system should be
+** sufficiently up to cut over to vera.
+*/
+void run_sysinit(const char *etc_inittab);
+
 #if 0
 {
 #endif

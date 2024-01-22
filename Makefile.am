@@ -73,6 +73,7 @@ libvera_a_SOURCES=						\
 	unit_test.H						\
 	verac_connect_sun_socket.c				\
 	verac_parseinittab.c					\
+	verac_runsysinit.c					\
 	verac.h							\
 	yaml_writer.C						\
 	yaml-writer.H

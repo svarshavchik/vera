@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <set>
+#include <string>
 
 int sim_error=0;
 
@@ -160,6 +162,44 @@ void testhook()
 		);
 }
 
+static void testsysinit()
+{
+	std::error_code ec;
+
+	std::filesystem::remove_all("testhook.etcrc", ec);
+
+	if (!std::filesystem::create_directory("testhook.etcrc"))
+		throw std::runtime_error("Cannot create directories");
+
+	std::ofstream o{"testhook.etcrc/sysinit"};
+
+	o << "si1:S:sysinit:echo 1 >testhook.etcrc/sysinit.1\n"
+		"si2:12345:wait:echo 2>testhook.etcrc/sysinit.2\n"
+		"si3:S:sysinit:echo 3 >testhook.etcrc/sysinit.3\n";
+	o.close();
+
+	if (o.fail())
+		throw std::runtime_error{"Cannot create fake sysinit"};
+
+	run_sysinit("testhook.etcrc/sysinit");
+
+	std::set<std::string> entries;
+
+	for (auto b=std::filesystem::directory_iterator{"testhook.etcrc"},
+		     e=std::filesystem::directory_iterator{};
+	     b != e; ++b)
+	{
+		entries.insert(b->path().filename());
+	}
+
+	for (auto &e:entries)
+		std::cout << e << std::endl;
+
+	if (entries != std::set<std::string>{"sysinit", "sysinit.1",
+					     "sysinit.3"})
+		throw std::runtime_error{"sysinit execution failed"};
+}
+
 int main(int argc, char **argv)
 {
 	umask(022);
@@ -177,6 +217,8 @@ int main(int argc, char **argv)
 			throw std::runtime_error("Cannot create directories");
 
 		testhook();
+
+		testsysinit();
 
 		std::filesystem::remove_all("testhook.etcrc", ec);
 		std::filesystem::remove_all("testhook.pkgdata", ec);
