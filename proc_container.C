@@ -1126,7 +1126,9 @@ void propagate_dependencies_t::doit(
 			newc->new_container->type=
 				proc_container_type::synthesized
 				;
-
+			newc->new_container->description=
+				_("(synthesized container for dependency"
+				  " tracking purposes)");
 			auto iter=new_containers.insert(newc)
 				.first;
 			new_current_containers.emplace(
@@ -1615,8 +1617,13 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 	for (auto &[pc, run_info] : containers)
 	{
-		if (pc->type != proc_container_type::loaded)
+		switch (pc->type) {
+		case proc_container_type::loaded:
+		case proc_container_type::synthesized:
+			break;
+		case proc_container_type::runlevel:
 			continue;
+		}
 
 		o << pc->name << "\n";
 		o << "status:" << std::visit(
@@ -1627,6 +1634,30 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 			}, run_info.state)
 		  << "\n";
 
+		auto dep_info=all_dependency_info.find(pc);
+
+		for (const auto &[map, label] : std::array<std::tuple<
+			     all_dependencies dependency_info::*,
+			     const char *>, 4>{{
+				     {&dependency_info::all_requires,
+				      "requires" },
+				     {&dependency_info::all_required_by,
+				      "required-by" },
+				     {&dependency_info::all_starting_first,
+				      "starting-first"},
+				     {&dependency_info::all_stopping_first,
+				      "stopping-first"}
+			     }})
+		{
+			if (dep_info == all_dependency_info.end())
+				continue;
+
+			for (auto &c:dep_info->second.*map)
+			{
+				o << label << ":" << c->name
+				  << "\n";
+			}
+		}
 		std::visit(
 			[&]
 			(const auto &state)

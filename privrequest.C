@@ -311,6 +311,22 @@ std::unordered_map<std::string, container_state_info> get_status(
 				i >> info.timestamp;
 			}
 
+			if (keyword == "requires" && p != e)
+			{
+				info.dep_requires.emplace(++p, e);
+			}
+			if (keyword == "required-by" && p != e)
+			{
+				info.dep_required_by.emplace(++p, e);
+			}
+			if (keyword == "starting-first" && p != e)
+			{
+				info.dep_starting_first.emplace(++p, e);
+			}
+			if (keyword == "stopping-first" && p != e)
+			{
+				info.dep_stopping_first.emplace(++p, e);
+			}
 			if (keyword == "pids" && p != e)
 			{
 				std::istringstream i{{++p, e}};

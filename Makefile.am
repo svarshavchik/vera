@@ -145,7 +145,7 @@ install-data-local:
 	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG) $(DESTDIR)$(INSTALLCONFIGDIR)/system && \
 		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
-			-o $(DESTDIR)$(OVERRIDECONFIGDIR)
+			-o $(DESTDIR)$(OVERRIDECONFIGDIR) >/dev/null
 
 uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system

@@ -615,16 +615,22 @@ void testreexec_after(const std::string &socket_str)
 	       != "reexec_a: test")
 		do_poll(1000);
 
+	// the reexec file comes from an unordered container. Intelligently
+	// parse the restoral messages.
+
+	std::sort(logged_state_changes.begin(),
+		  logged_state_changes.end());
+
 	if (logged_state_changes != std::vector<std::string>{
-			"reexec: " RUNLEVEL_PREFIX "networking",
 			"re-exec: reexec_a",
-			"reexec_a: container was started as a dependency",
-			"reexec_a: restored preserved state: started (dependency)",
-			"reexec_a: restored after re-exec",
 			"re-exec: reexec_b",
-			"reexec_b: restored preserved state: stopped",
+			"reexec: " RUNLEVEL_PREFIX "networking",
+			"reexec_a: container was started as a dependency",
 			"reexec_a: reactivated after re-exec",
+			"reexec_a: restored after re-exec",
+			"reexec_a: restored preserved state: started (dependency)",
 			"reexec_a: test",
+			"reexec_b: restored preserved state: stopped",
 		})
 		throw "Unexpected state change after reexec";
 	close(socketfd);

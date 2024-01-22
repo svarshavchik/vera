@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <map>
 #include <optional>
 #include <signal.h>
@@ -167,8 +168,13 @@ struct container_state_info {
 		bool operator<=>(const hier_pid_info &) const=default;
 	};
 
-	// Processes in this container/
+	// Processes in this container.
 	hier_pids processes;
+
+	// The dependencies
+	std::unordered_set<std::string> dep_requires, dep_required_by,
+		dep_starting_first, dep_stopping_first;
+
 
 	bool operator==(const container_state_info &) const=default;
 };

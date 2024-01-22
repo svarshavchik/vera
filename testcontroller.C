@@ -2451,10 +2451,12 @@ void testtarget1()
 
 	proc_container_start("target1a");
 
+	std::sort(logged_state_changes.begin(), logged_state_changes.begin()+3);
+
 	if (logged_state_changes != std::vector<std::string>{
 			"target1a: start pending (manual)",
-			"target1c: start pending",
 			"target1b: start pending",
+			"target1c: start pending",
 			"target1b: cgroup created",
 			"target1b: starting",
 		})

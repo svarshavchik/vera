@@ -95,7 +95,9 @@
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <arg choice='opt'>--stopped</arg>
+	  <arg choice='opt'>--dependencies</arg>
 	  <arg choice='plain'>status</arg>
+	  <arg choice='opt' rep='repeat'>unit</arg>
 	</cmdsynopsis>
 
 	<cmdsynopsis>
@@ -257,11 +259,15 @@
 	  <title>The <quote>status</quote> command</title>
 
 	  <para>
-	    This command shows
-	    a list of all units, their current state, and their processes.
+	    This command shows a list of all units (or just the units given
+	    as optional parameters), their current state, and their processes.
 	    <quote>current</quote> shows the current <quote>runlevel</quote>.
 	    <quote>status</quote> omits stopped units by default; the
 	    <quote>--stopped</quote> option includes them in the output.
+	    <quote>--dependencies</quote> lists all units' dependencies
+	    (which all other units it requires, its required by,
+	    and which ones must be started or stopped first, as calculated
+	    from the unit's specification, see blow).
 	    <quote>status</quote> reads unit specifications from their
 	    directories (see <xref linkend="units" />), the output may be
 	    incomplete if the running userid does not have permissions to

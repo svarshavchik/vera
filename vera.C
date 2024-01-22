@@ -40,15 +40,18 @@
 #include <iomanip>
 #include <string>
 #include <vector>
+#include <set>
 #include <algorithm>
 
 
 int stopped_flag;
+int dependencies_flag;
 int waitrunlevel_flag;
 int override_flag;
 
 const struct option options[]={
 	{"stopped", 0, &stopped_flag, 1},
+	{"dependencies", 0, &dependencies_flag, 1},
 	{"wait", 0, &waitrunlevel_flag, 1},
 	{"override", 0, &override_flag, 1},
 	{nullptr},
@@ -437,6 +440,11 @@ void vera_init(int pubsocket)
 		{
 			perror(cgroups.c_str());
 			exit(1);
+		}
+
+		if (chmod(cgroups.c_str(), 0755) < 0)
+		{
+			perror(("chmod 0755 " + cgroups).c_str());
 		}
 	}
 	// Garbage collection on the configuration directory.
@@ -978,18 +986,23 @@ void vlad(std::vector<std::string> args)
 		);
 
 		// Retrieve the names of all containers and sort them.
-		std::vector<std::string> containers;
+		std::set<std::string> containers;
 
-		containers.reserve(status.size());
-
-		for (const auto &[name, status] : status)
+		if (args.size() >= 2)
 		{
-			if (args.size() >= 2 && name != args[1])
-				continue;
-			containers.push_back(name);
-		}
+			for (size_t i=1; i<args.size(); ++i)
+			{
+				auto iter=status.find(args[i]);
 
-		std::sort(containers.begin(), containers.end());
+				if (iter != status.end())
+					containers.insert(args[i]);
+			}
+		}
+		else
+		{
+			for (const auto &[name, status] : status)
+				containers.insert(name);
+		}
 
 		auto now=log_current_time();
 		auto real_now=time(NULL);
@@ -1001,7 +1014,7 @@ void vlad(std::vector<std::string> args)
 
 			if (info.state == "stopped" && !stopped_flag)
 				continue;
-			std::cout << name << "\n";
+			std::cout << name << ":\n";
 			std::cout << "    " << info.state;
 
 			if (info.enabled)
@@ -1065,6 +1078,45 @@ void vlad(std::vector<std::string> args)
 				}
 			}
 			std::cout << "\n";
+
+			if (dependencies_flag)
+			{
+				for (const auto &[setptr, label]
+					     : std::array<std::tuple<
+					     std::unordered_set<std::string>
+					     container_state_info::*,
+					     const char *>,
+					     4>{{{&container_state_info
+							     ::dep_requires,
+							     _("Requires:")},
+						 {&container_state_info
+						  ::dep_required_by,
+						  _("Required By:")},
+						 {&container_state_info
+						  ::dep_starting_first,
+						  _("Starts after:")},
+						 {&container_state_info
+						  ::dep_stopping_first,
+						  _("Stops after:"),
+						 }
+					     }})
+				{
+					auto &set=info.*setptr;
+
+					std::cout << "    "
+						  << label << "\n";
+
+					std::set<std::string> sorted_deps{
+						set.begin(),
+						set.end()};
+
+					for (auto &dep:sorted_deps)
+					{
+						std::cout << "        "
+							  << dep << "\n";
+					}
+				}
+			}
 
 			dump_processes(info.processes, 0);
 		}
