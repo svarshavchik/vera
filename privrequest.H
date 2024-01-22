@@ -61,6 +61,17 @@ std::string get_reload_status(const external_filedesc &efd);
 // Wait for the reload request to finish.
 int wait_reload(const external_filedesc &efd);
 
+// Request vera to terminate and replace itself with another process.
+// This is used to execute rc.0 or rc.6, which ends in a reboot.
+
+void send_sysdown(const external_filedesc &efd,
+		  std::string runlevel,
+		  std::string command);
+
+// Acknowledge that system down is in progress.
+
+std::string get_sysdown_status(const external_filedesc &efd);
+
 // Request a re-exec
 void request_reexec(const external_filedesc &efd);
 

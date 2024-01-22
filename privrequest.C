@@ -85,6 +85,19 @@ std::string get_reload_status(const external_filedesc &efd)
 	return efd->readln();
 }
 
+void send_sysdown(const external_filedesc &efd,
+		  std::string runlevel,
+		  std::string command)
+{
+	efd->write_all(std::string{"sysdown\n"} + runlevel + "\n" +
+		       command + "\n");
+}
+
+std::string get_sysdown_status(const external_filedesc &efd)
+{
+	return efd->readln();
+}
+
 int wait_runlevel(const external_filedesc &efd)
 {
 	efd->readln();

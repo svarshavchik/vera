@@ -1741,6 +1741,17 @@ void proc_do_request(external_filedesc efd)
 		return;
 	}
 
+	if (ln == "sysdown")
+	{
+		auto runlevel=efd->readln();
+		auto command=efd->readln();
+
+		setenv("RUNLEVEL", runlevel.c_str(), 1);
+		execl("/bin/sh", "/bin/sh", "-c", command.c_str(), nullptr);
+		efd->write_all(command + ": " + strerror(errno));
+		return;
+	}
+
 	if (ln == "reexec")
 	{
 		get_containers_info(nullptr)->reexec_requested=true;

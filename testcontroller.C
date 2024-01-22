@@ -11,9 +11,12 @@
 #include "unit_test.H"
 #include "privrequest.H"
 
+#include <iterator>
+#include <fstream>
 #include "proc_loader.H"
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 void test_proc_new_container_set()
 {
@@ -1085,6 +1088,7 @@ void test_install()
 		{
 			throw "did not receive expected status response";
 		}
+		fclose(fp);
 	}
 
 	{
@@ -1099,6 +1103,7 @@ void test_install()
 
 		if (request_recvfd(privsocketb))
 			throw "received special file descriptor unexpectedly";
+		fclose(fp);
 	}
 	logged_state_changes.clear();
 
@@ -2824,6 +2829,61 @@ void testmultirunlevels()
 		throw "unexpected reexec results";
 }
 
+void testsysdown()
+{
+	proc_new_container_set pcs;
+	proc_containers_install(pcs, container_install::update);
+
+	auto [sda, sdb] = create_fake_request();
+
+	send_sysdown(sda,
+		     "0",
+		     "echo RUNLEVEL:$RUNLEVEL >sysdown.out; exec ./testcontroller2fdleak");
+
+	pid_t p=fork();
+
+	if (p < 0)
+	{
+		perror("fork");
+		exit(1);
+	}
+
+	if (p == 0)
+	{
+		proc_do_request(sdb);
+		fprintf(stderr, "Should not've finished the request");
+		exit(1);
+	}
+
+	sdb=nullptr;
+
+	auto status=get_sysdown_status(sda);
+	sda=nullptr;
+
+	int waitstat;
+
+	if (waitpid(p, &waitstat, 0) != p)
+	{
+		perror("waitpid failed");
+		exit(1);
+	}
+
+	if (!WIFEXITED(waitstat) || WEXITSTATUS(waitstat))
+	{
+		std::cerr << "sysdown script failed\n";
+		exit(1);
+	}
+
+	std::ifstream i{"sysdown.out"};
+
+	std::string c{std::istreambuf_iterator<char>{i},
+		std::istreambuf_iterator<char>{}};
+
+	if (c != "RUNLEVEL:0\n")
+		throw "Did not see the expected contents of sysdown.out";
+	unlink("sysdown.out");
+}
+
 int main()
 {
 	alarm(60);
@@ -2979,6 +3039,8 @@ int main()
 		testmultirunlevels();
 
 		test_reset();
+		test="sysdown";
+		testsysdown();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

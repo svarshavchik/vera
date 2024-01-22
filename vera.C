@@ -699,6 +699,10 @@ void vera_pub()
 
 void vera()
 {
+	setenv("PATH",
+	       "/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin",
+	       1);
+
 	vera_init(start_vera_pub());
 }
 
@@ -1169,6 +1173,22 @@ void vlad(std::vector<std::string> args)
 		return;
 	}
 
+	if (args.size() == 3 && args[0] == "sysdown")
+	{
+		auto fd=connect_vera_priv();
+
+		send_sysdown(fd, std::move(args[1]),
+			     std::move(args[2]));
+
+		auto ret=get_sysdown_status(fd);
+
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+		exit(0);
+	}
 	// Handle one-character init-style commands.
 
 	if (args.size() == 1 && args[0].size() == 1)
