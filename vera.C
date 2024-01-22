@@ -1085,7 +1085,21 @@ void vlad(std::vector<std::string> args)
 		if (!hook("/etc/rc.d",
 			  "/sbin",
 			  SBINDIR "/vera-init",
-			  PKGDATADIR))
+			  PKGDATADIR,
+			  HOOKFILE,
+			  false))
+			exit(1);
+		exit(0);
+	}
+
+	if (args.size() == 1 && args[0] == "hookonce")
+	{
+		if (!hook("/etc/rc.d",
+			  "/sbin",
+			  SBINDIR "/vera-init",
+			  PKGDATADIR,
+			  HOOKFILE,
+			  true))
 			exit(1);
 		exit(0);
 	}
@@ -1094,7 +1108,8 @@ void vlad(std::vector<std::string> args)
 	{
 		unhook("/etc/rc.d",
 		       "/sbin",
-		       PUBCMDSOCKET);
+		       PUBCMDSOCKET,
+		       HOOKFILE);
 		exit(0);
 	}
 

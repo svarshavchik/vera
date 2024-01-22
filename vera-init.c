@@ -5,31 +5,23 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
-
-/*
-  Chain to the real init, or vlad, depending upon our luck with the probe
-  socket.
-*/
-
-static void chain(int socket_probe, char **argv)
-{
-	if (socket_probe < 0)
-	{
-		execv("/sbin/init.init", argv);
-		perror("/sbin/init.init");
-	}
-	else
-	{
-		execv(SBINDIR "/vlad", argv);
-		perror(SBINDIR "/vlad");
-	}
-	exit (1);
-}
 
 int main(int argc, char **argv)
 {
 	int vera_socket;
+
+	if (getpid() == 1)
+	{
+		const char *chain_to=check_hookfile(HOOKFILE, run_sysinit,
+						    "/sbin/init.init",
+						    SBINDIR "/vera");
+
+		execv(chain_to, argv);
+		perror(chain_to);
+		exit(1);
+	}
 
 	/*
 	** When root poke the private socket, to avoid interference from
@@ -40,8 +32,15 @@ int main(int argc, char **argv)
 		connect_sun_socket(geteuid() ? PUBCMDSOCKET:PRIVCMDSOCKET);
 
 	if (vera_socket >= 0)
+	{
 		close(vera_socket);
-
-	chain(vera_socket, argv);
+		execv(SBINDIR "/vlad", argv);
+		perror(SBINDIR "/vlad");
+	}
+	else
+	{
+		execv("/sbin/init.init", argv);
+		perror("/sbin/init.init");
+	}
 	return 0;
 }

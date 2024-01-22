@@ -13,6 +13,7 @@
 #include <sys/un.h>
 #include <filesystem>
 #include <iostream>
+#include <fstream>
 
 int try_create_vera_socket(const char *tmpname, const char *finalname)
 {
@@ -57,10 +58,30 @@ external_filedesc try_connect_vera_pub(const char *socketname)
 	return std::make_shared<external_filedescObj>(fd);
 }
 
+static void sethookfile(const std::string &hookfile,
+			bool once)
+{
+	std::ofstream o{hookfile};
+
+	o << (once ? HOOKED_ONCE:HOOKED_ON);
+	o << "\n#\n"
+		"# This file is automatically updated by \"vlad hook\""
+		" and \"vlad unhook\".\n"
+		"# Do not modify this file manually\n";
+	o.close();
+	if (o.fail())
+	{
+		std::cerr << hookfile << ": " << strerror(errno)
+			  << std::endl;
+	}
+}
+
 bool hook(std::string etc_sysinit_dir,
 	  std::string sbindir,
 	  std::string vera_init,
-	  std::string pkgdatadir)
+	  std::string pkgdatadir,
+	  std::string hookfile,
+	  bool once)
 {
 	std::error_code ec;
 
@@ -79,6 +100,7 @@ bool hook(std::string etc_sysinit_dir,
 	{
 		std::cerr << "init appears to be hooked already: "
 			  << hooked_rc_sysvinit << " exists" << std::endl;
+		sethookfile(hookfile, once);
 		return false;
 	}
 
@@ -184,24 +206,31 @@ bool hook(std::string etc_sysinit_dir,
 
 		return false;
 	}
+	sethookfile(hookfile, once);
 	return true;
 }
 
 void unhook(std::string etc_sysinit_dir,
 	    std::string sbindir,
-	    std::string pubcmdsocket)
+	    std::string pubcmdsocket,
+	    std::string hookfile)
 {
+	std::error_code ec;
+
+	std::filesystem::remove(hookfile, ec);
+
 	auto fd=try_connect_vera_pub(pubcmdsocket.c_str());
 
 	if (fd)
+	{
 		throw std::runtime_error{
-			"Cannot unhook, use restore and reboot, first."
+			"Reboot and execute the unhook command again."
 				};
-
+	}
 	// Restore rc.sysvinit from rc.sysvinit.init
 
 	// Restore /sbin/init from /sbin/init.init
-	std::error_code ec;
+
 
 	std::string rc_sysvinit{etc_sysinit_dir + "/rc.sysvinit"};
 	std::string hooked_rc_sysvinit{etc_sysinit_dir + "/rc.sysvinit.init"};

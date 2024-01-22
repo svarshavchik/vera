@@ -72,6 +72,7 @@ libvera_a_SOURCES=						\
 	proc_loader2.C						\
 	unit_test.H						\
 	verac_connect_sun_socket.c				\
+	verac_check_hook.c					\
 	verac_parseinittab.c					\
 	verac_runsysinit.c					\
 	verac.h							\
@@ -150,6 +151,7 @@ uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system
 	rm -rf $(DESTDIR)$(localstatedir)/vera.priv
 	rm -rf $(DESTDIR)$(localstatedir)/vera.pub
+	rm -rf $(DESTDIR)$(sysconfdir)/vera
 
 uninstall-local:
 	rm -f  $(DESTDIR)$(RUNLEVELCONFIG)

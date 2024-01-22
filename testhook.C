@@ -28,6 +28,14 @@ int sim_error=0;
 
 #include "hook.C"
 
+#define FAKEHOOKFILE "testhook.etcrc/hook"
+static int fake_run_sysinit_called;
+
+static void fake_run_sysinit(const char *)
+{
+	++fake_run_sysinit_called;
+}
+
 void testhook()
 {
 	{
@@ -67,17 +75,44 @@ void testhook()
 			std::filesystem::perms::owner_all);
 	}
 
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       "init", "vera")} != "init" ||
+		fake_run_sysinit_called)
+	{
+		throw std::runtime_error{"hook not ignored when not hooked"};
+	}
+
 	if (!hook("testhook.etcrc",
 		  "testhook.sbin",
 		  "testhook.sbin/vlad",
-		  "../testhook.pkgdata"
+		  "../testhook.pkgdata",
+		  FAKEHOOKFILE,
+		  true
 	    ))
 		throw std::runtime_error{"Hook failed"};
+
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       "init", "vera")} != "vera" ||
+		fake_run_sysinit_called != 1)
+	{
+		throw std::runtime_error{"hook was ignored the first time"};
+	}
+
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       "init", "vera")} != "init" ||
+		fake_run_sysinit_called != 1)
+	{
+		throw std::runtime_error{
+			"hook was not ignored the second time"};
+	}
 
 	if (hook("testhook.etcrc",
 		 "testhook.sbin",
 		 "testhook.sbin/vlad",
-		 "../testhook.pkgdata"))
+		 "../testhook.pkgdata",
+		  FAKEHOOKFILE,
+		  true
+	    ))
 		throw std::runtime_error{"Hook succeeded unexpectedly"};
 
 	if (WEXITSTATUS(system("testhook.etcrc/rc.sysvinit")) != 6)
@@ -101,7 +136,9 @@ void testhook()
 	try {
 		unhook("testhook.etcrc",
 		       "testhook.sbin",
-		       "testhook.etcrc/socket");
+		       "testhook.etcrc/socket",
+		       FAKEHOOKFILE
+);
 	} catch (const std::runtime_error &ec)
 	{
 		caught=true;
@@ -115,7 +152,8 @@ void testhook()
 
 	unhook("testhook.etcrc",
 	       "testhook.sbin",
-	       "testhook.etcrc/socket");
+	       "testhook.etcrc/socket",
+	       FAKEHOOKFILE);
 
 	if (WEXITSTATUS(system("testhook.etcrc/rc.sysvinit")) != 5 ||
 	    WEXITSTATUS(system("testhook.sbin/init")) != 3)
@@ -125,14 +163,30 @@ void testhook()
 	if (!hook("testhook.etcrc",
 		  "testhook.sbin",
 		  "testhook.sbin/vlad",
-		  "../testhook.pkgdata"))
+		  "../testhook.pkgdata",
+		  FAKEHOOKFILE, false))
 		throw std::runtime_error{"Hook failed unexpectedly"};
+
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       "init", "vera")} != "vera" ||
+		fake_run_sysinit_called != 2)
+	{
+		throw std::runtime_error{"permanent hook ignored"};
+	}
+
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       "init", "vera")} != "vera" ||
+		fake_run_sysinit_called != 3)
+	{
+		throw std::runtime_error{"permanent hook ignored 2nd time"};
+	}
 
 	std::filesystem::remove("testhook.etcrc/socket");
 
 	unhook("testhook.etcrc",
 	       "testhook.sbin",
-	       "testhook.etcrc/socket");
+	       "testhook.etcrc/socket",
+	       FAKEHOOKFILE);
 
 	if (WEXITSTATUS(system("testhook.etcrc/rc.sysvinit")) != 5 ||
 	    WEXITSTATUS(system("testhook.sbin/init")) != 3)
@@ -144,7 +198,8 @@ void testhook()
 	if (hook("testhook.etcrc",
 		 "testhook.sbin",
 		 "testhook.sbin/vlad",
-		 "../testhook.pkgdata"))
+		 "../testhook.pkgdata",
+		 FAKEHOOKFILE, true))
 		throw std::runtime_error(
 			"hook() succeed despite a simulated error"
 		);
@@ -205,6 +260,8 @@ int main(int argc, char **argv)
 	umask(022);
 	alarm(15);
 	try {
+		testsysinit();
+
 		std::error_code ec;
 
 		std::filesystem::remove_all("testhook.sbin", ec);
@@ -218,11 +275,10 @@ int main(int argc, char **argv)
 
 		testhook();
 
-		testsysinit();
-
 		std::filesystem::remove_all("testhook.etcrc", ec);
 		std::filesystem::remove_all("testhook.pkgdata", ec);
 		std::filesystem::remove_all("testhook.sbin", ec);
+
 	} catch (const std::exception &e)
 	{
 		std::cerr << e.what() << std::endl;

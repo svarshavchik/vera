@@ -5,6 +5,10 @@
 
 #define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
 #define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
+#define HOOKFILE CONFIGDIR "/hook"
+
+#define HOOKED_ON	"hooked=on"
+#define HOOKED_ONCE	"hooked=once"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +43,23 @@ void parse_inittab(FILE *fp,
 ** sufficiently up to cut over to vera.
 */
 void run_sysinit(const char *etc_inittab);
+
+/*
+** Check and process the hook file that's read at boot by pid 1, to determine
+** what to do.
+**
+** hookfile is the HOOKFILE installed by "vlad hook".
+**
+** run_sysinit_cb points to run_sysinit which gets invoked if vera is to start.
+**
+** Returns either the init_path, if the hook file is not installed, or the
+** vera_path.
+*/
+
+const char *check_hookfile(const char *hookfile,
+			   void (*run_sysinit_cb)(const char *inittab),
+			   const char *init_path,
+			   const char *vera_path);
 
 #if 0
 {

@@ -29,13 +29,16 @@ external_filedesc try_connect_vera_pub(const char *socketname);
 bool hook(std::string etc_sysinit_dir, //!< "/etc/rc.d"
 	  std::string sbindir,   //!< Directory with init
 	  std::string vera_init, //!< Pathname to vera-init
-	  std::string pkgdatadir //!< Directory with rc.sysvinit.vera
+	  std::string pkgdatadir, //!< Directory with rc.sysvinit.vera
+	  std::string hookfile, //!< /etc/vera/hook
+	  bool hookonce
 );
 
 //! Unhook /etc/rc.sysvinit
 void unhook(std::string etc_sysinit_dir, //!< "/etc/rc.d"
 	    std::string sbindir,   //!< Directory with init
-	    std::string pubcmdsocket //!< Connection attempt to pub socket
+	    std::string pubcmdsocket, //!< Connection attempt to pub socket
+	    std::string hookfile //!< /etc/vera/hook
 );
 
 #endif
