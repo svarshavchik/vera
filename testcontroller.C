@@ -2439,7 +2439,7 @@ void testtarget1()
 	b->dep_required_by.insert("target1a");
 	c->dep_required_by.insert("target1a");
 	b->starting_before.insert("target1c");
-	c->stopping_after.insert("target1c");
+	b->stopping_after.insert("target1c");
 
 	a->new_container->stop_type=stop_type_t::target;
 	b->new_container->starting_command="start";
@@ -2476,7 +2476,6 @@ void testtarget1()
 			"target1c: termination signal: 1",
 			"target1c: removing",
 			"target1c: sending SIGTERM",
-			"target1a: started (manual)",
 		})
 		throw "Unexpected starting state changes (3)";
 	logged_state_changes.clear();
@@ -2484,6 +2483,7 @@ void testtarget1()
 	if (logged_state_changes != std::vector<std::string>{
 			"target1c: cgroup removed",
 			"target1c: stopped",
+			"target1a: started (manual)",
 		})
 		throw "Unexpected starting state changes (4)";
 	logged_state_changes.clear();

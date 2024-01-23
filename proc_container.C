@@ -2529,26 +2529,19 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			}, run_info.state);
 		}
 
-		if (!do_it.starting.empty())
-		{
-			if (do_start(do_it.starting))
-			{
-				did_something=true;
-				continue;
-			}
-		}
-
 		if (!do_it.stopping.empty())
 		{
 			if (do_stop(do_it.stopping))
-			{
 				did_something=true;
-				continue;
-			}
+			continue;
 		}
 
-		if (!do_it.starting.empty() || !do_it.stopping.empty())
+		if (!do_it.starting.empty())
+		{
+			if (do_start(do_it.starting))
+				did_something=true;
 			continue;
+		}
 
 		// Time to consider the next upcoming runlevel?
 		//
