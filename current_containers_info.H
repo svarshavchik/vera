@@ -43,13 +43,6 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 	//! Whoever requested the current_runlevel;
 	external_filedesc current_runlevel_requester;
 
-	/*! The stopping runlevel
-
-	  When a runlevel is getting stopped, current_runlevel is nullptr,
-	  but we stash the former runlevel here, for reporting purposes.
-	*/
-	proc_container stopping_runlevel;
-
 	//! Lookup map for runlevel containers.
 
 	std::unordered_map<std::string, proc_container> runlevel_containers;

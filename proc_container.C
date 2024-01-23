@@ -680,7 +680,7 @@ void current_containers_infoObj::check_reexec()
 	if (!poller_is_transferrable())
 		return;
 
-	if (stopping_runlevel || next_runlevel.new_runlevel ||
+	if (next_runlevel.new_runlevel ||
 	    upcoming_runlevel.new_runlevel)
 		return; // Stopping/starting runlevels
 
@@ -1611,9 +1611,6 @@ void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 	std::string s{"default"};
 
 	auto r=current_runlevel;
-
-	if (!r)
-		r=stopping_runlevel;
 
 	if (r)
 		s=r->name;
@@ -2600,23 +2597,13 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			}
 
 			did_something=true;
-			stopping_runlevel=current_runlevel;
 			current_runlevel = nullptr;
-			continue;
 		}
 
-		// The current run level has stopped, time to start the new
-		// run level.
-
-		current_runlevel=next_runlevel.new_runlevel;
-		current_runlevel_requester=next_runlevel.requester;
-		stopping_runlevel=nullptr;
-
-		next_runlevel={};
-		log_message(_("Starting ") + current_runlevel->name);
+		log_message(_("Starting ") + next_runlevel.new_runlevel->name);
 
 		all_required_dependencies(
-			current_runlevel,
+			next_runlevel.new_runlevel,
 			[&, this]
 			(const current_container &dep)
 			{
@@ -2633,6 +2620,14 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 				log_state_change(pc, run_info.state);
 			}
 		);
+
+		// The current run level has stopped, time to start the new
+		// run level.
+
+		current_runlevel=next_runlevel.new_runlevel;
+		current_runlevel_requester=next_runlevel.requester;
+
+		next_runlevel={};
 		did_something=true;
 	}
 }

@@ -1314,10 +1314,10 @@ void test_runlevels()
 	if (logged_state_changes != std::vector<std::string>{
 			"Stopping " RUNLEVEL_PREFIX "graphical",
 			"runlevel1prog: stop pending",
-			"runlevel1prog: removing",
-			"runlevel1prog: stopped",
 			"Starting " RUNLEVEL_PREFIX "multi-user",
 			"runlevel2prog: start pending",
+			"runlevel1prog: removing",
+			"runlevel1prog: stopped",
 			"runlevel2prog: started",
 		})
 		throw "Unexpected state changes for runlevel2 (2)";
@@ -1377,13 +1377,13 @@ void test_before_after1()
 			"testbefore_after_1: stop pending",
 			"testbefore_after_2: stop pending",
 			"testbefore_after_3: stop pending",
+			"Starting " RUNLEVEL_PREFIX "multi-user",
 			"testbefore_after_1: removing",
 			"testbefore_after_1: stopped",
 			"testbefore_after_2: removing",
 			"testbefore_after_2: stopped",
 			"testbefore_after_3: removing",
 			"testbefore_after_3: stopped",
-			"Starting " RUNLEVEL_PREFIX "multi-user"
 		})
 	{
 		throw "Unexpected state change after first container stopped";
@@ -1443,13 +1443,13 @@ void test_before_after2()
 			"testbefore_after_1: stop pending",
 			"testbefore_after_2: stop pending",
 			"testbefore_after_3: stop pending",
+			"Starting " RUNLEVEL_PREFIX "multi-user",
 			"testbefore_after_3: removing",
 			"testbefore_after_3: stopped",
 			"testbefore_after_2: removing",
 			"testbefore_after_2: stopped",
 			"testbefore_after_1: removing",
 			"testbefore_after_1: stopped",
-			"Starting " RUNLEVEL_PREFIX "multi-user"
 		})
 	{
 		throw "Unexpected state change after first container stopped";
@@ -2639,6 +2639,8 @@ void testmultirunlevels()
 			"multi1: started",
 			"Stopping system/runlevel single-user",
 			"multi1: stop pending",
+			"Starting system/runlevel multi-user",
+			"multi2: start pending",
 			"multi1: stopping",
 		})
 		throw "unexpected state changes (2)";
@@ -2660,7 +2662,7 @@ void testmultirunlevels()
 	proc_check_reexec();
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel single-user:1:S:s")
+	if (runlevel != "system/runlevel multi-user:2")
 		throw "unexpected runlevel (2): " + runlevel;
 
 	logged_state_changes.clear();
@@ -2678,8 +2680,6 @@ void testmultirunlevels()
 	if (logged_state_changes != std::vector<std::string>{
 			"multi1: cgroup removed",
 			"multi1: stopped",
-			"Starting system/runlevel multi-user",
-			"multi2: start pending",
 			"multi2: cgroup created",
 			"multi2: starting",
 			"reexec delayed by a starting container: multi2",
@@ -2705,6 +2705,8 @@ void testmultirunlevels()
 			"multi2: started",
 			"Stopping system/runlevel multi-user",
 			"multi2: stop pending",
+			"Starting system/runlevel graphical",
+			"multi3: start pending",
 			"multi2: stopping",
 		})
 		throw "unexpected state changes (4)";
@@ -2717,7 +2719,7 @@ void testmultirunlevels()
 	proc_check_reexec();
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel multi-user:2")
+	if (runlevel != "system/runlevel graphical:4:default")
 		throw "unexpected runlevel (3): " + runlevel;
 
 	logged_state_changes.clear();
@@ -2725,10 +2727,9 @@ void testmultirunlevels()
 
 	while (!poller_is_transferrable())
 		do_poll(0);
-	proc_check_reexec();
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel multi-user:2")
+	if (runlevel != "system/runlevel graphical:4:default")
 		throw "unexpected runlevel (4): " + runlevel;
 
 	if (logged_state_changes != std::vector<std::string>{
@@ -2751,8 +2752,6 @@ void testmultirunlevels()
 	if (logged_state_changes != std::vector<std::string>{
 			"multi2: cgroup removed",
 			"multi2: stopped",
-			"Starting system/runlevel graphical",
-			"multi3: start pending",
 			"multi3: cgroup created",
 			"multi3: starting"
 		})
