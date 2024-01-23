@@ -233,13 +233,8 @@ int main(int argc, char **argv)
 				  << name << "\n"
 					"required-by:\n";
 
-				for (auto &alias:runlevel.aliases)
-				{
-					if (alias == "default")
-						continue;
-					o << "  - '" << RUNLEVEL_PREFIX_BASE
-					  << alias << "'\n";
-				}
+				o << "  - '" << RUNLEVEL_PREFIX_BASE
+				  << name << "'\n";
 			}
 			else
 			{

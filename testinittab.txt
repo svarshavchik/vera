@@ -9,14 +9,14 @@ Loading installed units
 system/custom:start=forking:stop=target
 system/custom:description=processes for runlevel custom
 system/custom:requires system/boot
-system/custom:required-by system/runlevel 5
+system/custom:required-by system/runlevel custom
 # system/graphical
 Loading: testinittab.dir/vera/system/graphical
 Loading installed units
 system/graphical:start=forking:stop=target
 system/graphical:description=processes for runlevel graphical
 system/graphical:requires system/boot
-system/graphical:required-by system/runlevel 4
+system/graphical:required-by system/runlevel graphical
 # system/inittab/a1
 Loading: testinittab.dir/vera/system/inittab/a1
 Loading installed units
@@ -385,14 +385,14 @@ Loading installed units
 system/multi-user:start=forking:stop=target
 system/multi-user:description=processes for runlevel multi-user
 system/multi-user:requires system/boot
-system/multi-user:required-by system/runlevel 2
+system/multi-user:required-by system/runlevel multi-user
 # system/networking
 Loading: testinittab.dir/vera/system/networking
 Loading installed units
 system/networking:start=forking:stop=target
 system/networking:description=processes for runlevel networking
 system/networking:requires system/boot
-system/networking:required-by system/runlevel 3
+system/networking:required-by system/runlevel networking
 # system/powerfail
 Loading: testinittab.dir/vera/system/powerfail
 Loading installed units
@@ -454,14 +454,14 @@ Loading installed units
 system/reboot:start=forking:stop=target
 system/reboot:description=processes for runlevel reboot
 system/reboot:requires system/boot
-system/reboot:required-by system/runlevel 6
+system/reboot:required-by system/runlevel reboot
 # system/shutdown
 Loading: testinittab.dir/vera/system/shutdown
 Loading installed units
 system/shutdown:start=forking:stop=target
 system/shutdown:description=processes for runlevel shutdown
 system/shutdown:requires system/boot
-system/shutdown:required-by system/runlevel 0
+system/shutdown:required-by system/runlevel shutdown
 # system/sighup
 Loading: testinittab.dir/vera/system/sighup
 Loading installed units
@@ -483,6 +483,4 @@ Loading installed units
 system/single-user:start=forking:stop=target
 system/single-user:description=processes for runlevel single-user
 system/single-user:requires system/boot
-system/single-user:required-by system/runlevel 1
-system/single-user:required-by system/runlevel S
-system/single-user:required-by system/runlevel s
+system/single-user:required-by system/runlevel single-user

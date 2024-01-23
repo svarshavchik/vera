@@ -2688,7 +2688,7 @@ void testmultirunlevels()
 
 	auto [socketa, socketb] = create_fake_request();
 
-	request_runlevel(socketa, "graphical");
+	request_runlevel(socketa, "default");
 	proc_do_request(socketb);
 	socketb=nullptr;
 
