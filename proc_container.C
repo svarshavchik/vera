@@ -30,6 +30,11 @@
 
 const char reexec_envar[]="VERA_REEXEC_FD";
 
+#define DEP_DEBUG(x) (std::cout << x << "\n")
+
+#undef DEP_DEBUG
+#define DEP_DEBUG(x) do {}while(0)
+
 state_stopped::operator std::string() const
 {
 	return "stopped";
@@ -1269,6 +1274,7 @@ void current_containers_infoObj::install(
 
 	for (auto b=new_containers.begin(), e=new_containers.end(); b != e; ++b)
 	{
+		DEP_DEBUG("Install: " << (*b)->new_container->name);
 		new_current_containers.emplace(
 			(*b)->new_container,
 			std::in_place_type_t<state_stopped>{}
@@ -1287,9 +1293,21 @@ void current_containers_infoObj::install(
 	// Merge dep_requires and dep_required_by container declarations.
 
 	// First, iterate over each container
+	//
+	// For dependency tracking purposes a dependency naming a non-existent
+	// container creates a synthesized container.
+	//
+	// The synthesized container gets added to new_containers, so we need
+	// to make a copy of it, first, then iterate over the copy.
 
-	for (const auto &c:new_containers)
+	std::vector<proc_new_container>
+		orig_new_containers{new_containers.begin(),
+		new_containers.end()};
+
+	for (const auto &c:orig_new_containers)
 	{
+		DEP_DEBUG("Calculating dependencies for "
+			  << c->new_container->name);
 		propagate_dependencies.prepare(c);
 
 		// Make two passes:
@@ -2645,6 +2663,8 @@ bool current_containers_infoObj::do_start(
 	const current_container_lookup_t &containers
 )
 {
+	DEP_DEBUG("==== do_start ====");
+
 	return do_dependencies(
 		containers,
 		[]
@@ -2689,6 +2709,8 @@ bool current_containers_infoObj::do_start(
 					[&](const current_container &iter,
 					    state_starting &info)
 					{
+						DEP_DEBUG("Found blocking starting dependency: "
+							  << iter->first->name);
 						notready=true;
 					}}
 			);
@@ -2770,6 +2792,8 @@ bool current_containers_infoObj::do_dependencies(
 
 		bool found_runner=false;
 
+		DEP_DEBUG("");
+
 		for (auto iter=containers.begin();
 		     iter != containers.end(); ++iter)
 		{
@@ -2789,16 +2813,21 @@ bool current_containers_infoObj::do_dependencies(
 				continue;
 
 			case blocking_dependency::no:
+				DEP_DEBUG(pc->name << ": found ready container");
 				found_ready_container=true;
 				break;
 
 			case blocking_dependency::yes:
+				DEP_DEBUG(pc->name << ": found ready container and runner");
 				found_ready_container=true;
 				found_runner=true;
 				continue;
 			}
 
 			bool is_not_ready=notready(pc);
+
+			if (is_not_ready)
+				DEP_DEBUG(pc->name << ": is_not_ready");
 
 			// If we're in this pass and the circular_dependency
 			// flag is already set: forget all this work, and
@@ -2814,6 +2843,17 @@ bool current_containers_infoObj::do_dependencies(
 					_("detected a circular dependency"
 					  " requirement"));
 				circular_dependency=false;
+
+				DEP_DEBUG(
+					({
+						std::ostringstream o;
+
+						o << "Circular dependency:";
+						for (auto &c:containers)
+							o << " "
+							  << c.first->name;
+						o.str();
+					}));
 			}
 
 			// This container is waiting for other container(s)
@@ -2821,11 +2861,17 @@ bool current_containers_infoObj::do_dependencies(
 			if (is_not_ready)
 				continue;
 
+			DEP_DEBUG(pc->name << " doing something");
 			// We're about to do something.
 			keepgoing=true;
 			do_something(iter->second);
 			did_something=true;
 		}
+
+		DEP_DEBUG("found_ready_container: "
+			  << found_ready_container
+			  << ", keepgoing: " << keepgoing
+			  << ", found_runner: " << found_runner);
 
 		if (!found_ready_container)
 			// We did not see anything in a starting_state
@@ -3310,6 +3356,8 @@ bool current_containers_infoObj::do_stop(
 	const current_container_lookup_t &containers
 )
 {
+	DEP_DEBUG("==== do_start ====");
+
 	return do_dependencies(
 		containers,
 		[]
@@ -3850,4 +3898,3 @@ void current_containers_infoObj::compare_and_log(
 
 	log_message(container->name + message);
 }
-					;
