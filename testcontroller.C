@@ -2585,13 +2585,12 @@ void testmultirunlevels()
 	c->new_container->stopping_command="stop3";
 	proc_containers_install({a, b, c}, container_install::update);
 
-	if (!proc_container_runlevel("single-user").empty() ||
-	    !proc_container_runlevel("multi-user").empty())
-		throw "unable to request the first two runlevels";
+	if (!proc_container_runlevel("single-user").empty())
+		throw "unable to request the first runlevel";
 
 	if (proc_container_runlevel("graphical") !=
 	    "Already switching to another runlevel")
-		throw "unexpected success requesting third runlevel";
+		throw "unexpected success requesting second runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting system/runlevel single-user",
@@ -2606,7 +2605,6 @@ void testmultirunlevels()
 	if (runlevel != "system/runlevel single-user:1:S:s")
 		throw "unexpected runlevel (1): " + runlevel;
 
-	std::cout << runlevel << "\n";
 	{
 		auto [a, b]=create_fake_request();
 
@@ -2637,13 +2635,21 @@ void testmultirunlevels()
 	runner_finished(1, 0);
 	if (logged_state_changes != std::vector<std::string>{
 			"multi1: started",
+		})
+		throw "unexpected state changes (2)";
+
+	logged_state_changes.clear();
+
+	if (!proc_container_runlevel("multi-user").empty())
+		throw "unable to request the second runlevel";
+
+	if (logged_state_changes != std::vector<std::string>{
 			"Stopping system/runlevel single-user",
 			"multi1: stop pending",
 			"Starting system/runlevel multi-user",
 			"multi2: start pending",
 			"multi1: stopping",
 		})
-		throw "unexpected state changes (2)";
 
 	while (!poller_is_transferrable())
 		do_poll(0);
@@ -2686,6 +2692,17 @@ void testmultirunlevels()
 		})
 		throw "unexpected state changes (3)";
 
+	logged_state_changes.clear();
+	runner_finished(3, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"multi2: started",
+		})
+	{
+		throw "unexpected state changes (4)";
+	}
+
+	logged_state_changes.clear();
 	auto [socketa, socketb] = create_fake_request();
 
 	request_runlevel(socketa, "default");
@@ -2698,18 +2715,14 @@ void testmultirunlevels()
 	if (socketa->ready())
 		throw "requesting socket was closed too soon (1)";
 
-	logged_state_changes.clear();
-	runner_finished(3, 0);
-
 	if (logged_state_changes != std::vector<std::string>{
-			"multi2: started",
 			"Stopping system/runlevel multi-user",
 			"multi2: stop pending",
 			"Starting system/runlevel graphical",
 			"multi3: start pending",
 			"multi2: stopping",
 		})
-		throw "unexpected state changes (4)";
+		throw "unexpected state changes (5)";
 
 	if (socketa->ready())
 		throw "requesting socket was closed too soon (2)";
@@ -2736,7 +2749,7 @@ void testmultirunlevels()
 			"multi2: removing",
 			"multi2: sending SIGTERM",
 		})
-		throw "unexpected state changes (5)";
+		throw "unexpected state changes (6)";
 
 	if (socketa->ready())
 		throw "requesting socket was closed too soon (3)";
@@ -2755,7 +2768,7 @@ void testmultirunlevels()
 			"multi3: cgroup created",
 			"multi3: starting"
 		})
-		throw "unexpected state changes (6)";
+		throw "unexpected state changes (7)";
 
 	logged_state_changes.clear();
 	while (!poller_is_transferrable())
@@ -2765,7 +2778,7 @@ void testmultirunlevels()
 	if (logged_state_changes != std::vector<std::string>{
 			"reexec delayed by a starting container: multi3",
 		})
-		throw "unexpected state changes (7)";
+		throw "unexpected state changes (8)";
 
 	if (socketa->ready())
 		throw "requesting socket was closed too soon (4)";
@@ -2779,7 +2792,7 @@ void testmultirunlevels()
 	if (logged_state_changes != std::vector<std::string>{
 			"multi3: started",
 		})
-		throw "unexpected state changes (8)";
+		throw "unexpected state changes (9)";
 
 	if (!socketa->ready())
 		throw "requesting socket is not ready for some reason";

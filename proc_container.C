@@ -680,8 +680,7 @@ void current_containers_infoObj::check_reexec()
 	if (!poller_is_transferrable())
 		return;
 
-	if (next_runlevel.new_runlevel ||
-	    upcoming_runlevel.new_runlevel)
+	if (global_runlevels.upcoming)
 		return; // Stopping/starting runlevels
 
 	// Chances are everything is transferrable, so we'll go through all
@@ -723,8 +722,8 @@ void current_containers_infoObj::check_reexec()
 
 		// REEXEC FILE: runlevel
 
-		fprintf(fp, "1\n%s\n", current_runlevel ?
-			current_runlevel->name.c_str():"default");
+		fprintf(fp, "1\n%s\n", global_runlevels.active ?
+			global_runlevels.active->name.c_str():"default");
 
 		if ((s.size() > 0 && fwrite(s.data(), s.size(), 1, fp) != 1) ||
 		    fflush(fp) < 0 ||
@@ -835,7 +834,7 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 
 	runlevel->type=proc_container_type::runlevel;
 
-	current_runlevel=runlevel;
+	global_runlevels.active=runlevel;
 
 	log_message(_("reexec: ") + s);
 
@@ -1512,7 +1511,7 @@ void current_containers_infoObj::install(
 	// And now we can install the new ones
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
-	runlevel_containers=std::move(new_runlevel_containers);
+	global_runlevels.containers=std::move(new_runlevel_containers);
 
 	// Figure out what to do with the ones that are no longer defined.
 
@@ -1551,7 +1550,7 @@ void current_containers_infoObj::install(
 
 	/////////////////////////////////////////////////////////////
 	//
-	// Update the current_runlevel and new_runlevel objects to
+	// Update the global_runlevels.active and new_runlevel objects to
 	// reference the reloaded container objects.
 	//
 	// The runlevel_configuration is loaded just once, at startup,
@@ -1561,9 +1560,9 @@ void current_containers_infoObj::install(
 	// This is completely out of scope. The only thing we can do is
 	// just enough to keep things from crashing.
 
-	if (current_runlevel)
+	if (global_runlevels.active)
 	{
-		auto iter=containers.find(current_runlevel->name);
+		auto iter=containers.find(global_runlevels.active->name);
 
 		if (iter == containers.end() ||
 		    iter->first->type != proc_container_type::runlevel)
@@ -1571,36 +1570,36 @@ void current_containers_infoObj::install(
 			// Don't panic. This happens in unit tests.
 
 			log_message(_("Removed current run level!"));
-			current_runlevel=nullptr;
+			global_runlevels.active=nullptr;
 		}
 		else
 		{
-			current_runlevel=iter->first;
+			global_runlevels.active=iter->first;
 		}
 	}
 
-	if (!current_runlevel)
+	if (!global_runlevels.active)
 	{
-		if (next_runlevel.new_runlevel)
+		if (global_runlevels.upcoming)
 		{
 			log_message(_("No longer switching run levels!"));
-			next_runlevel.new_runlevel=nullptr;
+			global_runlevels.upcoming=nullptr;
 		}
 	}
 
-	if (next_runlevel.new_runlevel)
+	if (global_runlevels.upcoming)
 	{
-		auto iter=containers.find(next_runlevel.new_runlevel->name);
+		auto iter=containers.find(global_runlevels.upcoming->name);
 
 		if (iter == containers.end() ||
 		    iter->first->type != proc_container_type::runlevel)
 		{
 			log_message(_("Removed new run level!"));
-			next_runlevel.new_runlevel=nullptr;
+			global_runlevels.upcoming=nullptr;
 		}
 		else
 		{
-			next_runlevel.new_runlevel=iter->first;
+			global_runlevels.upcoming=iter->first;
 		}
 	}
 	find_start_or_stop_to_do();
@@ -1610,14 +1609,14 @@ void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 {
 	std::string s{"default"};
 
-	auto r=current_runlevel;
+	auto r=global_runlevels.active;
 
 	if (r)
 		s=r->name;
 
 	efd->write_all(s + "\n");
 
-	for (auto &[alias,c] : runlevel_containers)
+	for (auto &[alias,c] : global_runlevels.containers)
 	{
 		if (r && r == c)
 			efd->write_all(alias + "\n");
@@ -1710,18 +1709,18 @@ std::string current_containers_infoObj::runlevel(
 	const std::string &runlevel,
 	const external_filedesc &requester)
 {
-	if (upcoming_runlevel.new_runlevel)
+	if (global_runlevels.upcoming || global_runlevels.requester)
 		return _("Already switching to another runlevel");
 
 	// Check for aliases, first
 
-	auto iter=runlevel_containers.find(runlevel);
+	auto iter=global_runlevels.containers.find(runlevel);
 
-	if (iter != runlevel_containers.end())
+	if (iter != global_runlevels.containers.end())
 	{
 		// Do not switch to the same runlevel
-		if (iter->second != current_runlevel)
-			upcoming_runlevel.new_runlevel=iter->second;
+		if (iter->second != global_runlevels.active)
+			global_runlevels.upcoming=iter->second;
 
 	}
 	else
@@ -1737,11 +1736,11 @@ std::string current_containers_infoObj::runlevel(
 		}
 
 		// Do not switch to the same runlevel
-		if (iter->first != current_runlevel)
-			upcoming_runlevel.new_runlevel=iter->first;
+		if (iter->first != global_runlevels.active)
+			global_runlevels.upcoming=iter->first;
 	}
 
-	upcoming_runlevel.requester=requester;
+	global_runlevels.requester=requester;
 	find_start_or_stop_to_do();
 
 	return "";
@@ -2540,45 +2539,30 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			continue;
 		}
 
-		// Time to consider the next upcoming runlevel?
-		//
-		// If we are not starting or stopping anything, the last
-		// thing to check would be whether we're switching run levels.
-
-		while (!next_runlevel.new_runlevel &&
-		       upcoming_runlevel.new_runlevel)
-		{
-			if (current_runlevel)
-				previous_runlevel_description=
-					current_runlevel->description;
-			next_runlevel=upcoming_runlevel;
-			upcoming_runlevel={};
-		}
-
-		if (!next_runlevel.new_runlevel)
+		if (!global_runlevels.upcoming)
 		{
 			// Not switching runlevels. If we just switched,
 			// clear the requester.
 
-			current_runlevel_requester={};
+			global_runlevels.requester={};
 			continue;
 		}
 
 		// Is there a current run level to stop?
 
-		if (current_runlevel)
+		if (global_runlevels.active)
 		{
 			// Compare everything that the new run level
 			// requires that the current run level does
 			// not require.
 
 			stop_current_runlevel should_stop{
-				*this, current_runlevel,
-				next_runlevel.new_runlevel
+				*this, global_runlevels.active,
+				global_runlevels.upcoming
 			};
 
 			log_message(_("Stopping ")
-				    + current_runlevel->name);
+				    + global_runlevels.active->name);
 			for (auto b=containers.begin(),
 				     e=containers.end(); b != e; ++b)
 			{
@@ -2596,14 +2580,14 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 				}
 			}
 
-			did_something=true;
-			current_runlevel = nullptr;
+			previous_runlevel_description=
+				global_runlevels.active->description;
 		}
 
-		log_message(_("Starting ") + next_runlevel.new_runlevel->name);
+		log_message(_("Starting ") + global_runlevels.upcoming->name);
 
 		all_required_dependencies(
-			next_runlevel.new_runlevel,
+			global_runlevels.upcoming,
 			[&, this]
 			(const current_container &dep)
 			{
@@ -2624,10 +2608,9 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 		// The current run level has stopped, time to start the new
 		// run level.
 
-		current_runlevel=next_runlevel.new_runlevel;
-		current_runlevel_requester=next_runlevel.requester;
+		global_runlevels.active=global_runlevels.upcoming;
+		global_runlevels.upcoming=nullptr;
 
-		next_runlevel={};
 		did_something=true;
 	}
 }

@@ -32,42 +32,10 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 	//! The containers themselves
 	current_containers containers;
 
-	//! The current runlevel
-	proc_container current_runlevel;
-
 	//! The description field of the former runlevel
 
 	//! For setting the environment variables.
 	std::string previous_runlevel_description;
-
-	//! Whoever requested the current_runlevel;
-	external_filedesc current_runlevel_requester;
-
-	//! Lookup map for runlevel containers.
-
-	std::unordered_map<std::string, proc_container> runlevel_containers;
-
-	//! Next runlevel, and the connection that requested it.
-
-	struct next_runlevel_info {
-		proc_container new_runlevel;
-		external_filedesc requester;
-	};
-
-	/*! When switching runlevels: the new runlevel
-
-	  As soon as the stopping_runlevel is stopped, the next_runlevel
-	  starts.
-	*/
-
-	next_runlevel_info next_runlevel;
-
-	/*! And the next queued-up runlevel
-
-	  It's possible that we're switching run-levels, but have the next
-	  run-level ready to go as soon as this one's tarted.
-	 */
-	next_runlevel_info upcoming_runlevel;
 
 public:
 	//! A re-exec has been requested
@@ -77,8 +45,8 @@ public:
 	std::tuple<std::string, std::string> prev_current_runlevel() const
 	{
 		auto current_or_next_runlevel=
-			next_runlevel.new_runlevel ?
-			next_runlevel.new_runlevel : current_runlevel;
+			global_runlevels.upcoming ?
+			global_runlevels.upcoming : global_runlevels.active;
 
 		return std::tuple{previous_runlevel_description,
 			current_or_next_runlevel ?
@@ -180,6 +148,28 @@ public:
 		const proc_container &b);
 
 private:
+	//! Alternate runmodes, or runlevels
+
+	struct alternate_runmodes {
+
+		//! Lookup map for the mutex containers
+
+		std::unordered_map<std::string, proc_container> containers;
+
+		//! The currently active runmode, or runlevel;
+		proc_container active;
+
+		//! Whoever requested the current_runlevel;
+		external_filedesc requester;
+
+		//! Next container, when switching alternates
+		proc_container upcoming;
+	};
+
+	//! Global runlevels
+
+	alternate_runmodes global_runlevels;
+
 	all_dependency_info_t all_dependency_info;
 
 	//! Report changes in dependencies
