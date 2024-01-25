@@ -24,8 +24,6 @@ system/inittab/a1:start=oneshot:stop=manual
 system/inittab/a1:description=a1: ondemandcmd1
 system/inittab/a1:starting:ondemandcmd1
 system/inittab/a1:required-by system/a
-system/inittab/a1:starting_after system/inittab/bo2
-system/inittab/a1:starting_before system/inittab/bo2
 Warning: system/inittab/a1(required-by): system/a: not defined
 # system/inittab/a2
 Loading: testinittab.dir/vera/system/inittab/a2
@@ -51,8 +49,6 @@ system/inittab/bo2:start=forking:stop=manual
 system/inittab/bo2:description=bo2: bootcmd
 system/inittab/bo2:starting:bootcmd
 system/inittab/bo2:required-by system/boot
-system/inittab/bo2:starting_after system/inittab/bo1
-system/inittab/bo2:starting_before system/inittab/bo1
 # system/inittab/c1
 Loading: testinittab.dir/vera/system/inittab/c1
 Loading installed units
@@ -64,8 +60,16 @@ system/inittab/c1:required-by system/graphical
 system/inittab/c1:required-by system/multi-user
 system/inittab/c1:required-by system/networking
 system/inittab/c1:required-by system/single-user
-system/inittab/c1:starting_after system/inittab/p2
-system/inittab/c1:starting_before system/inittab/p2
+system/inittab/c1:starting_after system/inittab/rc-started-custom
+system/inittab/c1:starting_after system/inittab/rc-started-graphical
+system/inittab/c1:starting_after system/inittab/rc-started-multi-user
+system/inittab/c1:starting_after system/inittab/rc-started-networking
+system/inittab/c1:starting_after system/inittab/su-started-single-user
+system/inittab/c1:starting_before system/inittab/rc-started-custom
+system/inittab/c1:starting_before system/inittab/rc-started-graphical
+system/inittab/c1:starting_before system/inittab/rc-started-multi-user
+system/inittab/c1:starting_before system/inittab/rc-started-networking
+system/inittab/c1:starting_before system/inittab/su-started-single-user
 # system/inittab/c2
 Loading: testinittab.dir/vera/system/inittab/c2
 Loading installed units
@@ -86,8 +90,6 @@ system/inittab/ca:start=oneshot:stop=manual
 system/inittab/ca:description=ca: /sbin/shutdown -t5 -r now
 system/inittab/ca:starting:/sbin/shutdown -t5 -r now
 system/inittab/ca:required-by system/sigint
-system/inittab/ca:starting_after system/inittab/rc-started
-system/inittab/ca:starting_before system/inittab/rc-started
 # system/inittab/kb
 Loading: testinittab.dir/vera/system/inittab/kb
 Loading installed units
@@ -95,8 +97,6 @@ system/inittab/kb:start=oneshot:stop=manual
 system/inittab/kb:description=kb: kbrequestcmd
 system/inittab/kb:starting:kbrequestcmd
 system/inittab/kb:required-by system/sigwinch
-system/inittab/kb:starting_after system/inittab/ca
-system/inittab/kb:starting_before system/inittab/ca
 # system/inittab/l0
 Loading: testinittab.dir/vera/system/inittab/l0
 Loading installed units
@@ -104,8 +104,8 @@ system/inittab/l0:start=forking:stop=manual
 system/inittab/l0:description=l0: /etc/rc.d/rc.0
 system/inittab/l0:starting:vlad sysdown 0 /etc/rc.d/rc.0
 system/inittab/l0:required-by system/shutdown
-system/inittab/l0:starting_after system/inittab/l0-started
-system/inittab/l0:starting_before system/inittab/l0-started
+system/inittab/l0:starting_after system/inittab/l0-started-shutdown
+system/inittab/l0:starting_before system/inittab/l0-started-shutdown
 # system/inittab/l0-start-shutdown
 Loading: testinittab.dir/vera/system/inittab/l0-start-shutdown
 Loading installed units
@@ -120,25 +120,19 @@ system/inittab/l0-start-shutdown:starting:vlad start system/rc.shutdown &&\
     vlad stop system/rc.single-user
 system/inittab/l0-start-shutdown:required-by system/shutdown
 system/inittab/l0-start-shutdown:starting_before system/rc
-system/inittab/l0-start-shutdown:starting_after system/inittab/kb
-system/inittab/l0-start-shutdown:starting_before system/inittab/kb
 system/inittab/l0-start-shutdown:stopping_after system/rc
 Warning: system/inittab/l0-start-shutdown(starting: before): system/rc: not defined
 Warning: system/inittab/l0-start-shutdown(stopping: after): system/rc: not defined
-# system/inittab/l0-started
-Loading: testinittab.dir/vera/system/inittab/l0-started
+# system/inittab/l0-started-shutdown
+Loading: testinittab.dir/vera/system/inittab/l0-started-shutdown
 Loading installed units
-system/inittab/l0-started:start=oneshot:stop=target
-system/inittab/l0-started:description=l0: started rc.d scripts
-system/inittab/l0-started:required-by system/shutdown
-system/inittab/l0-started:starting_after system/inittab/kb
-system/inittab/l0-started:starting_after system/inittab/l0-start-shutdown
-system/inittab/l0-started:starting_after system/rc
-system/inittab/l0-started:starting_before system/inittab/kb
-system/inittab/l0-started:starting_before system/inittab/l0-start-shutdown
-system/inittab/l0-started:starting_before system/rc
-Warning: system/inittab/l0-started(starting: after): system/rc: not defined
-Warning: system/inittab/l0-started(stopping: before): system/rc: not defined
+system/inittab/l0-started-shutdown:start=oneshot:stop=target
+system/inittab/l0-started-shutdown:description=l0: started rc.d scripts
+system/inittab/l0-started-shutdown:required-by system/shutdown
+system/inittab/l0-started-shutdown:starting_after system/rc
+system/inittab/l0-started-shutdown:starting_before system/rc
+Warning: system/inittab/l0-started-shutdown(starting: after): system/rc: not defined
+Warning: system/inittab/l0-started-shutdown(stopping: before): system/rc: not defined
 # system/inittab/l6
 Loading: testinittab.dir/vera/system/inittab/l6
 Loading installed units
@@ -146,8 +140,8 @@ system/inittab/l6:start=forking:stop=manual
 system/inittab/l6:description=l6: /etc/rc.d/rc.6
 system/inittab/l6:starting:vlad sysdown 6 /etc/rc.d/rc.6
 system/inittab/l6:required-by system/reboot
-system/inittab/l6:starting_after system/inittab/l6-started
-system/inittab/l6:starting_before system/inittab/l6-started
+system/inittab/l6:starting_after system/inittab/l6-started-reboot
+system/inittab/l6:starting_before system/inittab/l6-started-reboot
 # system/inittab/l6-start-reboot
 Loading: testinittab.dir/vera/system/inittab/l6-start-reboot
 Loading installed units
@@ -162,25 +156,19 @@ system/inittab/l6-start-reboot:starting:vlad start system/rc.reboot &&\
     vlad stop system/rc.single-user
 system/inittab/l6-start-reboot:required-by system/reboot
 system/inittab/l6-start-reboot:starting_before system/rc
-system/inittab/l6-start-reboot:starting_after system/inittab/l0
-system/inittab/l6-start-reboot:starting_before system/inittab/l0
 system/inittab/l6-start-reboot:stopping_after system/rc
 Warning: system/inittab/l6-start-reboot(starting: before): system/rc: not defined
 Warning: system/inittab/l6-start-reboot(stopping: after): system/rc: not defined
-# system/inittab/l6-started
-Loading: testinittab.dir/vera/system/inittab/l6-started
+# system/inittab/l6-started-reboot
+Loading: testinittab.dir/vera/system/inittab/l6-started-reboot
 Loading installed units
-system/inittab/l6-started:start=oneshot:stop=target
-system/inittab/l6-started:description=l6: started rc.d scripts
-system/inittab/l6-started:required-by system/reboot
-system/inittab/l6-started:starting_after system/inittab/l0
-system/inittab/l6-started:starting_after system/inittab/l6-start-reboot
-system/inittab/l6-started:starting_after system/rc
-system/inittab/l6-started:starting_before system/inittab/l0
-system/inittab/l6-started:starting_before system/inittab/l6-start-reboot
-system/inittab/l6-started:starting_before system/rc
-Warning: system/inittab/l6-started(starting: after): system/rc: not defined
-Warning: system/inittab/l6-started(stopping: before): system/rc: not defined
+system/inittab/l6-started-reboot:start=oneshot:stop=target
+system/inittab/l6-started-reboot:description=l6: started rc.d scripts
+system/inittab/l6-started-reboot:required-by system/reboot
+system/inittab/l6-started-reboot:starting_after system/rc
+system/inittab/l6-started-reboot:starting_before system/rc
+Warning: system/inittab/l6-started-reboot(starting: after): system/rc: not defined
+Warning: system/inittab/l6-started-reboot(stopping: before): system/rc: not defined
 # system/inittab/p1
 Loading: testinittab.dir/vera/system/inittab/p1
 Loading installed units
@@ -188,8 +176,6 @@ system/inittab/p1:start=forking:stop=manual
 system/inittab/p1:description=p1: /sbin/genpowerfail stop
 system/inittab/p1:starting:/sbin/genpowerfail stop
 system/inittab/p1:required-by system/powerok
-system/inittab/p1:starting_after system/inittab/pfn
-system/inittab/p1:starting_before system/inittab/pfn
 # system/inittab/p2
 Loading: testinittab.dir/vera/system/inittab/p2
 Loading installed units
@@ -197,8 +183,6 @@ system/inittab/p2:start=oneshot:stop=manual
 system/inittab/p2:description=p2: /sbin/genpowerfail stop
 system/inittab/p2:starting:/sbin/genpowerfail stop
 system/inittab/p2:required-by system/powerok
-system/inittab/p2:starting_after system/inittab/p1
-system/inittab/p2:starting_before system/inittab/p1
 # system/inittab/pf
 Loading: testinittab.dir/vera/system/inittab/pf
 Loading installed units
@@ -206,8 +190,6 @@ system/inittab/pf:start=oneshot:stop=manual
 system/inittab/pf:description=pf: /sbin/genpowerfail start
 system/inittab/pf:starting:/sbin/genpowerfail start
 system/inittab/pf:required-by system/powerfail
-system/inittab/pf:starting_after system/inittab/l6
-system/inittab/pf:starting_before system/inittab/l6
 # system/inittab/pfn
 Loading: testinittab.dir/vera/system/inittab/pfn
 Loading installed units
@@ -215,8 +197,6 @@ system/inittab/pfn:start=oneshot:stop=manual
 system/inittab/pfn:description=pfn: /sbin/genpowerfail start
 system/inittab/pfn:starting:/sbin/genpowerfail start
 system/inittab/pfn:required-by system/powerfailnow
-system/inittab/pfn:starting_after system/inittab/pf
-system/inittab/pfn:starting_before system/inittab/pf
 # system/inittab/rc
 Loading: testinittab.dir/vera/system/inittab/rc
 Loading installed units
@@ -227,8 +207,6 @@ system/inittab/rc:required-by system/custom
 system/inittab/rc:required-by system/graphical
 system/inittab/rc:required-by system/multi-user
 system/inittab/rc:required-by system/networking
-system/inittab/rc:starting_after system/inittab/su-started
-system/inittab/rc:starting_before system/inittab/su-started
 # system/inittab/rc-start-custom
 Loading: testinittab.dir/vera/system/inittab/rc-start-custom
 Loading installed units
@@ -305,29 +283,54 @@ system/inittab/rc-start-networking:starting_before system/inittab/rc
 system/inittab/rc-start-networking:stopping_after system/rc
 Warning: system/inittab/rc-start-networking(starting: before): system/rc: not defined
 Warning: system/inittab/rc-start-networking(stopping: after): system/rc: not defined
-# system/inittab/rc-started
-Loading: testinittab.dir/vera/system/inittab/rc-started
+# system/inittab/rc-started-custom
+Loading: testinittab.dir/vera/system/inittab/rc-started-custom
 Loading installed units
-system/inittab/rc-started:start=oneshot:stop=target
-system/inittab/rc-started:description=rc: started rc.d scripts
-system/inittab/rc-started:required-by system/custom
-system/inittab/rc-started:required-by system/graphical
-system/inittab/rc-started:required-by system/multi-user
-system/inittab/rc-started:required-by system/networking
-system/inittab/rc-started:starting_after system/inittab/rc
-system/inittab/rc-started:starting_after system/inittab/rc-start-custom
-system/inittab/rc-started:starting_after system/inittab/rc-start-graphical
-system/inittab/rc-started:starting_after system/inittab/rc-start-multi-user
-system/inittab/rc-started:starting_after system/inittab/rc-start-networking
-system/inittab/rc-started:starting_after system/rc
-system/inittab/rc-started:starting_before system/inittab/rc
-system/inittab/rc-started:starting_before system/inittab/rc-start-custom
-system/inittab/rc-started:starting_before system/inittab/rc-start-graphical
-system/inittab/rc-started:starting_before system/inittab/rc-start-multi-user
-system/inittab/rc-started:starting_before system/inittab/rc-start-networking
-system/inittab/rc-started:starting_before system/rc
-Warning: system/inittab/rc-started(starting: after): system/rc: not defined
-Warning: system/inittab/rc-started(stopping: before): system/rc: not defined
+system/inittab/rc-started-custom:start=oneshot:stop=target
+system/inittab/rc-started-custom:description=rc: started rc.d scripts
+system/inittab/rc-started-custom:required-by system/custom
+system/inittab/rc-started-custom:starting_after system/inittab/rc
+system/inittab/rc-started-custom:starting_after system/rc
+system/inittab/rc-started-custom:starting_before system/inittab/rc
+system/inittab/rc-started-custom:starting_before system/rc
+Warning: system/inittab/rc-started-custom(starting: after): system/rc: not defined
+Warning: system/inittab/rc-started-custom(stopping: before): system/rc: not defined
+# system/inittab/rc-started-graphical
+Loading: testinittab.dir/vera/system/inittab/rc-started-graphical
+Loading installed units
+system/inittab/rc-started-graphical:start=oneshot:stop=target
+system/inittab/rc-started-graphical:description=rc: started rc.d scripts
+system/inittab/rc-started-graphical:required-by system/graphical
+system/inittab/rc-started-graphical:starting_after system/inittab/rc
+system/inittab/rc-started-graphical:starting_after system/rc
+system/inittab/rc-started-graphical:starting_before system/inittab/rc
+system/inittab/rc-started-graphical:starting_before system/rc
+Warning: system/inittab/rc-started-graphical(starting: after): system/rc: not defined
+Warning: system/inittab/rc-started-graphical(stopping: before): system/rc: not defined
+# system/inittab/rc-started-multi-user
+Loading: testinittab.dir/vera/system/inittab/rc-started-multi-user
+Loading installed units
+system/inittab/rc-started-multi-user:start=oneshot:stop=target
+system/inittab/rc-started-multi-user:description=rc: started rc.d scripts
+system/inittab/rc-started-multi-user:required-by system/multi-user
+system/inittab/rc-started-multi-user:starting_after system/inittab/rc
+system/inittab/rc-started-multi-user:starting_after system/rc
+system/inittab/rc-started-multi-user:starting_before system/inittab/rc
+system/inittab/rc-started-multi-user:starting_before system/rc
+Warning: system/inittab/rc-started-multi-user(starting: after): system/rc: not defined
+Warning: system/inittab/rc-started-multi-user(stopping: before): system/rc: not defined
+# system/inittab/rc-started-networking
+Loading: testinittab.dir/vera/system/inittab/rc-started-networking
+Loading installed units
+system/inittab/rc-started-networking:start=oneshot:stop=target
+system/inittab/rc-started-networking:description=rc: started rc.d scripts
+system/inittab/rc-started-networking:required-by system/networking
+system/inittab/rc-started-networking:starting_after system/inittab/rc
+system/inittab/rc-started-networking:starting_after system/rc
+system/inittab/rc-started-networking:starting_before system/inittab/rc
+system/inittab/rc-started-networking:starting_before system/rc
+Warning: system/inittab/rc-started-networking(starting: after): system/rc: not defined
+Warning: system/inittab/rc-started-networking(stopping: before): system/rc: not defined
 # system/inittab/su
 Loading: testinittab.dir/vera/system/inittab/su
 Loading installed units
@@ -335,8 +338,6 @@ system/inittab/su:start=forking:stop=manual
 system/inittab/su:description=su: /etc/rc.d/rc.K
 system/inittab/su:starting:/etc/rc.d/rc.K
 system/inittab/su:required-by system/single-user
-system/inittab/su:starting_after system/inittab/a2
-system/inittab/su:starting_before system/inittab/a2
 # system/inittab/su-start-single-user
 Loading: testinittab.dir/vera/system/inittab/su-start-single-user
 Loading installed units
@@ -356,20 +357,18 @@ system/inittab/su-start-single-user:starting_before system/inittab/su
 system/inittab/su-start-single-user:stopping_after system/rc
 Warning: system/inittab/su-start-single-user(starting: before): system/rc: not defined
 Warning: system/inittab/su-start-single-user(stopping: after): system/rc: not defined
-# system/inittab/su-started
-Loading: testinittab.dir/vera/system/inittab/su-started
+# system/inittab/su-started-single-user
+Loading: testinittab.dir/vera/system/inittab/su-started-single-user
 Loading installed units
-system/inittab/su-started:start=oneshot:stop=target
-system/inittab/su-started:description=su: started rc.d scripts
-system/inittab/su-started:required-by system/single-user
-system/inittab/su-started:starting_after system/inittab/su
-system/inittab/su-started:starting_after system/inittab/su-start-single-user
-system/inittab/su-started:starting_after system/rc
-system/inittab/su-started:starting_before system/inittab/su
-system/inittab/su-started:starting_before system/inittab/su-start-single-user
-system/inittab/su-started:starting_before system/rc
-Warning: system/inittab/su-started(starting: after): system/rc: not defined
-Warning: system/inittab/su-started(stopping: before): system/rc: not defined
+system/inittab/su-started-single-user:start=oneshot:stop=target
+system/inittab/su-started-single-user:description=su: started rc.d scripts
+system/inittab/su-started-single-user:required-by system/single-user
+system/inittab/su-started-single-user:starting_after system/inittab/su
+system/inittab/su-started-single-user:starting_after system/rc
+system/inittab/su-started-single-user:starting_before system/inittab/su
+system/inittab/su-started-single-user:starting_before system/rc
+Warning: system/inittab/su-started-single-user(starting: after): system/rc: not defined
+Warning: system/inittab/su-started-single-user(stopping: before): system/rc: not defined
 # system/inittab/x1
 Loading: testinittab.dir/vera/system/inittab/x1
 Loading installed units

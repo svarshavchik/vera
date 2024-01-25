@@ -24,6 +24,19 @@ namespace {
 }
 #endif
 
+/*! The previous identifier for each runlevel
+
+  As each line in /etc/inittab gets converted, we keep track of the
+  previous processed identifier for each runlevel.
+*/
+
+typedef std::unordered_map<std::string, std::string> prev_commands_t;
+
+/*! All runlevels for the current command being processd
+ */
+
+typedef std::set<std::string> all_runlevels_t;
+
 /*!
   A new inittab entry being imported.
 */
@@ -31,9 +44,15 @@ namespace {
 struct inittab_entry {
 
 	/*!
-	  Previous inittab command
+	  Previous inittab commands
 	*/
-	std::string &prev_command;
+	prev_commands_t &prev_commands;
+
+	/*!
+	  This entry's run levels.
+
+	*/
+	all_runlevels_t all_runlevels;
 
 	/*! First field in the inittab line
 	 */
@@ -71,10 +90,12 @@ struct inittab_entry {
 
 	//! New entry read from /etc/inittab
 
-	inittab_entry(std::string &prev_command,
+	inittab_entry(prev_commands_t &prev_commands,
+		      all_runlevels_t &all_runlevels,
 		      std::string identifier,
 		      std::string starting_command)
-		: prev_command{prev_command},
+		: prev_commands{prev_commands},
+		  all_runlevels{all_runlevels},
 		  identifier{std::move(identifier)},
 		  starting_command{std::move(starting_command)},
 		  description{this->identifier + ": "
@@ -83,8 +104,13 @@ struct inittab_entry {
 		// If there's a previous command this one will start after it
 		// and stop before it.
 
-		if (!prev_command.empty())
+		for (auto &rl:all_runlevels)
 		{
+			auto &prev_command=prev_commands[rl];
+
+			if (prev_command.empty())
+				continue;
+
 			starts_after.push_back(prev_command);
 			stops_before.push_back(prev_command);
 		}
@@ -96,7 +122,8 @@ struct inittab_entry {
 		      std::string identifier,
 		      std::string starting_command)
 		: inittab_entry{
-				prev_entry.prev_command,
+				prev_entry.prev_commands,
+				prev_entry.all_runlevels,
 				std::move(identifier),
 				std::move(starting_command)
 			}
@@ -195,7 +222,8 @@ yaml_write_map inittab_entry::create() const
 		)
 	);
 
-	prev_command=identifier;
+	for (auto &rl:all_runlevels)
+		prev_commands[rl]=identifier;
 
 	unit.emplace_back(
 		std::make_shared<yaml_write_scalar>("Version"),
@@ -234,7 +262,7 @@ struct convert_inittab {
 	// Sanity check: unique identifiers
 	std::unordered_set<std::string> ids_seen;
 
-	std::string prev_command;
+	std::unordered_map<std::string, std::string> prev_commands;
 
 	// Keep track of runlevels that run rc.? scripts
 	std::set<std::string> all_single_multi_runlevels;
@@ -259,10 +287,12 @@ struct convert_inittab {
 		}
 	}
 
+	//! Generate targets for starting converted /etc/rc.d units
+
 	void start_rc(const std::string &identifier,
 		      size_t linenum,
 		      const std::string &comment,
-		      std::set<std::string> &all_runlevels);
+		      all_runlevels_t &all_runlevels);
 
 	//! Add an entry from the inittab file.
 	void add_inittab(const inittab_entry &entry,
@@ -272,7 +302,11 @@ struct convert_inittab {
 		    + entry.identifier, comment);
 	}
 
-	//! Add a unit for starting converted RC entries.
+	/*! Add a unit for starting converted RC entries.
+
+	** A unit for each runlevel that converted /etc/rc.d units, for that
+	** run levels, are required-by.
+	*/
 
 	void add_rc(const inittab_entry &entry)
 	{
@@ -393,7 +427,7 @@ void convert_inittab::cleanup()
 void convert_inittab::start_rc(const std::string &identifier,
 			       size_t linenum,
 			       const std::string &comment,
-			       std::set<std::string> &all_runlevels)
+			       all_runlevels_t &all_runlevels)
 {
 	// Generate a "start" unit after this one, for
 	// every runlevel that rc.K and rc.M is in, one
@@ -405,25 +439,21 @@ void convert_inittab::start_rc(const std::string &identifier,
 	// The dependencies of these units are that they
 	// start after rc.K and stop before it.
 
-	std::string saved_command=prev_command;
-	std::vector<std::string> all_start_identifiers;
-
 	for (auto &required_by : all_runlevels)
 	{
-		prev_command=saved_command;
+		all_runlevels_t just_one;
+
+		just_one.insert(required_by);
 
 		inittab_entry run_rc_start{
-			prev_command,
-			identifier + "-start-"
-			+ required_by,
+			prev_commands,
+			just_one,
+			identifier + "-start-" + required_by,
 			""};
 
 		run_rc_start.start_type="forking";
 		run_rc_start.stop_type="target";
 
-		all_start_identifiers.push_back(
-			run_rc_start.identifier
-		);
 		run_rc_start.required_by_runlevel(required_by);
 
 		run_rc_start.starting_command=
@@ -449,44 +479,36 @@ void convert_inittab::start_rc(const std::string &identifier,
 				  << std::endl;
 			error=true;
 		}
-	}
 
-	// Generate a "started" unit, which starts after all
-	// of the start units, and stops before them.
-	//
-	// In this manner, the RC units start/stop gets
-	// book-ended after the corresponding rc.[MK] command.
+		// Generate a "started" unit, which starts after all
+		// of the start units, and stops before them.
+		//
+		// In this manner, the RC units start/stop gets
+		// book-ended after the corresponding rc.[MK] command.
 
-	prev_command=saved_command;
+		inittab_entry run_rc_started{
+			prev_commands,
+			just_one,
+			identifier + "-started-" + required_by,
+			""};
 
-	inittab_entry run_rc_started{
-		prev_command,
-		identifier + "-started",
-		""};
+		run_rc_started.stop_type="target";
 
-	run_rc_started.stop_type="target";
-	for (auto &required_by : all_runlevels)
-	{
 		run_rc_started.required_by_runlevel(
 			required_by
 		);
-	}
 
-	// The "started" unit starts after all system/rc
-	// scripts and all the start scripts for this inittab
-	// unit.
-	run_rc_started.starts_after.push_back("/system/rc");
-	run_rc_started.stops_before.push_back("/system/rc");
+		// The "started" unit starts after all system/rc
+		// scripts and all the start scripts for this inittab
+		// unit.
+		run_rc_started.starts_after.push_back("/system/rc");
+		run_rc_started.stops_before.push_back("/system/rc");
 
-	for (auto &id : all_start_identifiers)
-	{
-		run_rc_started.starts_after.push_back(id);
-		run_rc_started.stops_before.push_back(id);
+		run_rc_started.description=identifier +
+			": started rc.d scripts";
+		add_inittab(run_rc_started,
+			    comment + " (rc started)");
 	}
-	run_rc_started.description=identifier +
-		": started rc.d scripts";
-	add_inittab(run_rc_started,
-			      comment + " (rc started)");
 
 	all_single_multi_runlevels.insert(
 		all_runlevels.begin(),
@@ -629,7 +651,7 @@ struct inittab_converter {
 		** runlevel_lookup mapping.
 		*/
 
-		std::set<std::string> all_runlevels;
+		all_runlevels_t all_runlevels;
 
 		/*
 		** Map certain actions to specific runlevels. The new unit
@@ -764,7 +786,8 @@ struct inittab_converter {
 					   all_runlevels);
 		}
 		inittab_entry new_entry{
-			generator.prev_command,
+			generator.prev_commands,
+			all_runlevels,
 			std::move(new_entry_identifier),
 			starting_command
 		};
@@ -828,10 +851,11 @@ bool inittab_converter::finish()
 
 	for (auto &rc_runlevel : generator.all_single_multi_runlevels)
 	{
-		generator.prev_command = "";
+		all_runlevels_t none;
 
 		inittab_entry run_rc{
-			generator.prev_command,
+			generator.prev_commands,
+			none,
 			"rc." + rc_runlevel,
 			""};
 		run_rc.description="initscripts in system/rc that are required-by: /system/rc." + rc_runlevel;

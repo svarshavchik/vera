@@ -1162,6 +1162,13 @@ void test_circular()
 		}
 	}
 
+	for (auto &l:logged_state_changes)
+		if (l.substr(11, 42) ==
+		    "detected a circular dependency requirement")
+			l=l.substr(0, 53);
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
 	if (logged_state_changes != std::vector<std::string>{
 			"circulara: detected a circular dependency requirement",
 			"circulara: start pending",
@@ -1201,6 +1208,10 @@ void test_circular()
 	if (!err.empty())
 		throw "proc_container_stop failed";
 
+	for (auto &l:logged_state_changes)
+		if (l.substr(11, 42) ==
+		    "detected a circular dependency requirement")
+			l=l.substr(0, 53);
 	std::sort(logged_state_changes.begin(),
 		  logged_state_changes.end());
 

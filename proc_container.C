@@ -2812,7 +2812,39 @@ bool current_containers_infoObj::do_dependencies(
 				log_container_error(
 					pc,
 					_("detected a circular dependency"
-					  " requirement"));
+					  " requirement: ")+
+					({
+						std::ostringstream o;
+
+						std::vector<std::string> n;
+
+						for (auto &c:containers)
+						{
+							auto &[pc, run_info]=
+								*c.second;
+							if (isqualified(
+								    run_info)
+							    ==
+							    blocking_dependency
+							    ::no
+							)
+								n.push_back(
+									c.first
+									->name
+								);
+						}
+						std::sort(n.begin(), n.end());
+
+						const char *sep="";
+
+						for (auto &s:n)
+						{
+							o << sep << s;
+							sep="; ";
+						}
+
+						o.str();
+					}));
 				circular_dependency=false;
 
 				DEP_DEBUG(

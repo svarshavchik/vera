@@ -705,10 +705,36 @@ void vera_pub()
 		do_poll();
 }
 
+#define DEFAULT_PATH \
+	"/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin";
+
+constexpr std::string_view default_path()
+{
+	return DEFAULT_PATH;
+};
+
+constexpr std::string_view adjusted_default_path()
+{
+	constexpr std::string_view s{default_path()};
+
+	for (auto b=s.begin(), e=s.end(); b != e;)
+	{
+		auto s=b;
+
+		b=std::find(b, e, ':');
+
+		if (std::string_view{s, b} == SBINDIR)
+			return default_path();
+
+		if (b != e) ++b;
+	}
+	return SBINDIR ":" DEFAULT_PATH;
+}
+
 void vera()
 {
 	setenv("PATH",
-	       "/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin",
+	       adjusted_default_path().data(),
 	       1);
 
 	vera_init(start_vera_pub());
@@ -1318,7 +1344,10 @@ int main(int argc, char **argv)
 	try {
 		if (exename.substr(slash) == "vlad" || argc > 1)
 		{
-			while (getopt_long(argc, argv, "", options, NULL) >= 0)
+			// Ignore -t option
+
+			while (getopt_long(argc, argv, "t:", options, NULL)
+			       >= 0)
 				;
 
 			umask(022);
