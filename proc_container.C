@@ -54,7 +54,9 @@ state_starting::operator std::string() const
 
 state_started::operator std::string() const
 {
-	return dependency ? "started" : "started (manual)";
+	return respawn_prepare_timer
+		? dependency ? "respawning":"respawning (manual)"
+		: dependency ? "started" : "started (manual)";
 }
 
 state_stopping::operator std::string() const
@@ -3001,6 +3003,14 @@ void current_containers_infoObj::do_start_runner(
 
 		if (!runner)
 		{
+			if (pc->start_type == start_type_t::respawn)
+			{
+				respawn(cc,
+					run_info.state.emplace<state_started>(
+						starting.dependency
+					));
+				return;
+			}
 			stop_with_all_requirements(cc, {});
 			return;
 		}

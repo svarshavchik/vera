@@ -19,6 +19,7 @@ time_t fake_time;
 static std::vector<std::string> logged_runners;
 
 static pid_t next_pid=1;
+static bool all_forks_fail=false;
 
 void populated(const proc_container &container, bool isit);
 
@@ -33,6 +34,9 @@ static pid_t get_next_pid(const proc_container &container,
 
 	if (next_pid == 0)
 		++next_pid;
+
+	if (all_forks_fail)
+		pid= -1;
 
 	std::ostringstream o;
 
@@ -74,6 +78,7 @@ void test_reset(bool keep_cgroupfs=false)
 	logged_state_changes.clear();
 	logged_runners.clear();
 	next_pid=1;
+	all_forks_fail=false;
 	fake_time=1;
 
 	if (!keep_cgroupfs)

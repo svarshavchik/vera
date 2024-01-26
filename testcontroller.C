@@ -2545,6 +2545,41 @@ void testrespawn2()
 	}
 }
 
+void testrespawn3()
+{
+	auto a=std::make_shared<proc_new_containerObj>("respawn");
+
+	a->new_container->starting_command="start";
+	a->new_container->start_type=start_type_t::respawn;
+	a->new_container->respawn_attempts=2;
+	a->new_container->respawn_limit=60;
+
+	proc_containers_install({
+			a
+		}, container_install::update);
+
+	all_forks_fail=true;
+	proc_container_start("respawn");
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: start pending (manual)",
+			"respawn: cgroup created",
+			"respawn: fork() failed",
+			"respawn: restarting",
+			"respawn: fork() failed",
+			"respawn: restart failed, delaying before trying again"
+		})
+		throw "unexpected respawn state changes.";
+
+	all_forks_fail=false;
+	logged_state_changes.clear();
+	test_advance(a->new_container->respawn_limit);
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: restarting after a failure",
+			"respawn: restarting"
+		})
+		throw "unexpected respawn state changes after delay.";
+}
+
 void testtarget1()
 {
 	auto a=std::make_shared<proc_new_containerObj>("target1a");
@@ -3232,6 +3267,10 @@ int main()
 		test_reset();
 		test="respawn2";
 		testrespawn2();
+
+		test_reset();
+		test="respawn3";
+		testrespawn3();
 
 		test_reset();
 		test="target1";

@@ -295,6 +295,10 @@
 		  <entry>This unit is starting, but it's not finished starting</entry>
 		</row>
 		<row>
+		  <entry><quote>respawning</quote> or <quote>respawning (manual)</quote></entry>
+		  <entry>This unit is waiting to be restarted after it failed to start too many times</entry>
+		</row>
+		<row>
 		  <entry><quote>started</quote> or <quote>started (manual)</quote></entry>
 		  <entry>This unit is started and is running</entry>
 		</row>

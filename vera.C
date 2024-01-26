@@ -185,7 +185,11 @@ bool proc_container_group_data::cgroups_register()
 
 	if (fd >= 0)
 	{
-		write(fd, "0\n", 2);
+		if (write(fd, "0\n", 2) != 2)
+		{
+			close(fd);
+			return false;
+		}
 		close(fd);
 		return true;
 	}
