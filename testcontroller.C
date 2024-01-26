@@ -2337,7 +2337,7 @@ void testmultiplestart()
 		throw "unexpected starting failure";
 }
 
-void testrespawn()
+proc_new_container commonrespawn()
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn");
 
@@ -2370,6 +2370,12 @@ void testrespawn()
 	logged_runners.clear();
 	do_poll(0);
 
+	return a;
+}
+
+void testrespawn()
+{
+	auto a=commonrespawn();
 	runner_finished(1, 1);
 
 	if (logged_state_changes != std::vector<std::string>{
@@ -2492,6 +2498,10 @@ void testrespawn()
 			"respawn: stopped",
 		})
 		throw "unexpected state changes after stop (2)";
+}
+
+void testrespawn2()
+{
 }
 
 void testtarget1()
@@ -3177,6 +3187,10 @@ int main()
 		test_reset();
 		test="respawn";
 		testrespawn();
+
+		test_reset();
+		test="respawn2";
+		testrespawn2();
 
 		test_reset();
 		test="target1";
