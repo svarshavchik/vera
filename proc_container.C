@@ -3299,6 +3299,9 @@ void current_containers_infoObj::respawn(
 			me->starting_command_finished(cc, status);
 		}
 	);
+
+	if (!state.respawn_runner)
+		respawn(cc, state);
 }
 
 //! Move a container into a stopping state

@@ -2502,6 +2502,47 @@ void testrespawn()
 
 void testrespawn2()
 {
+	auto a=commonrespawn();
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: sending SIGTERM",
+		})
+		throw "unexpected state changes after first respawn.";
+
+	next_pid= -1;
+	logged_state_changes.clear();
+	proc_container_stopped("respawn");
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: cgroup removed",
+			"respawn: restarting",
+			"respawn: cgroup created",
+			"respawn: fork() failed",
+			"respawn: restarting too fast, delaying",
+		})
+		throw "unexpected state changes after failed fork.";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	next_pid= -1;
+	test_advance(a->new_container->respawn_limit);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"respawn: restarting",
+			"respawn: fork() failed",
+			"respawn: restarting"
+		})
+	{
+		throw "unexpected state changes after 2nd failed fork.";
+	}
+
+	if (logged_runners != std::vector<std::string>{
+			"respawn: /bin/sh|-c|start (pid -1)",
+			"respawn: /bin/sh|-c|start (pid 1)"
+		})
+	{
+		throw "unexpected runners after failed fork.";
+	}
 }
 
 void testtarget1()
