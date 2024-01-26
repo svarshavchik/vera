@@ -1123,6 +1123,13 @@ bool proc_validate(const std::string &unitfile,
 				us.end()
 			};
 
+			if (sorted.find(s->new_container->name) != sorted.end())
+			{
+				log_message(
+					_("Circular dependency found: ")
+					+ s->new_container->name
+					+ ": " + dep_name);
+			}
 			for (auto &name:sorted)
 			{
 				auto iter=new_configs.find(name);

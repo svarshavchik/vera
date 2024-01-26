@@ -15,13 +15,14 @@
 #include <sys/stat.h>
 #include <set>
 #include <string>
+#include <sys/time.h>
 
 int sim_error=0;
 
 #define HOOK_DEBUG() do {						\
 		if (sim_error)						\
 		{							\
-			std::filesystem::remove(sbininittmp, ec);	\
+			std::filesystem::remove(h.filenametmp, ec);	\
 			ec=std::error_code{EXDEV, std::system_category()}; \
 		}							\
 	} while(0)
@@ -90,6 +91,15 @@ void testhook()
 		  true
 	    ))
 		throw std::runtime_error{"Hook failed"};
+
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       "init", "vera")} != "init")
+	{
+		throw std::runtime_error{
+			"hook was not ignored with unchanged timestamp"};
+	}
+
+	utimensat(AT_FDCWD, FAKEHOOKFILE, 0, 0);
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
 				       "init", "vera")} != "vera" ||
@@ -166,6 +176,8 @@ void testhook()
 		  "../testhook.pkgdata",
 		  FAKEHOOKFILE, false))
 		throw std::runtime_error{"Hook failed unexpectedly"};
+
+	utimensat(AT_FDCWD, FAKEHOOKFILE, 0, 0);
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
 				       "init", "vera")} != "vera" ||

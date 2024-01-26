@@ -29,6 +29,7 @@ const struct option options[]={
 int main(int argc, char **argv)
 {
 	int opt;
+	bool error=false;
 
 	while ((opt=getopt_long(argc, argv, "c:i:l:o:", options, NULL)) >= 0)
 		switch (opt) {
@@ -87,12 +88,13 @@ int main(int argc, char **argv)
 					   configdir,
 					   localdir,
 					   overridedir,
-					   []
+					   [&error]
 					   (const std::string &s)
 					   {
 						   std::cerr << s << std::endl;
+						   error=true;
 					   }
-			    ))
+			    ) || error)
 			{
 				exit(1);
 			}

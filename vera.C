@@ -754,6 +754,19 @@ void vera()
 	       adjusted_default_path().data(),
 	       1);
 
+	// Make sure the process has stdin/stdout, so at least the first
+	// three file descriptors won't be rudely used by other stuff.
+
+	int fd;
+
+	do
+	{
+		fd=open("/dev/null", O_RDWR|O_CLOEXEC, 0644);
+	} while (fd >= 0 && fd < 3);
+
+	if (fd > 0)
+		close(fd);
+
 	vera_init(start_vera_pub());
 }
 

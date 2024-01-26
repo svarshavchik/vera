@@ -181,7 +181,8 @@ vera.8: vera.8.in Makefile
 	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~;   # \
 	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~;                # \
 	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~;          # \
-	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~'                  \
+	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~;               # \
+	     s~@''CONFIGDIR@''~$(CONFIGDIR)~'    	                 \
 					<$(srcdir)/vera.8.in >vera.8.tmp
 	mv -f vera.8.tmp vera.8
 

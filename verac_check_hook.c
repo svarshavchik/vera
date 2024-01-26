@@ -3,6 +3,7 @@
 #include "verac.h"
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -10,6 +11,7 @@
 static int hooked(const char *hookfile)
 {
 	char buf[256];
+	struct stat pid1_stat, hookfile_stat;
 
 	FILE *fp=fopen(hookfile, "r");
 
@@ -20,6 +22,11 @@ static int hooked(const char *hookfile)
 		buf[0]=0;
 	fclose(fp);
 	strtok(buf, "\n");
+
+	if (stat("/proc/1", &pid1_stat) == 0 &&
+	    stat(hookfile, &hookfile_stat) == 0 &&
+	    pid1_stat.st_mtime == hookfile_stat.st_mtime)
+		return 0;
 
 	if (strcmp(buf, HOOKED_ON) == 0)
 		return 1;

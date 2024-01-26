@@ -143,6 +143,9 @@
 	  <group choice='req'>
 	    <arg choice='plain'>reexec</arg>
 	    <arg choice='plain'>vera-up</arg>
+	    <arg choice='plain'>hook</arg>
+	    <arg choice='plain'>hookonce</arg>
+	    <arg choice='plain'>unhook</arg>
 	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
@@ -1695,6 +1698,7 @@ version: 1
 	  A connection failure is reported by terminating with a non-0
 	  exit code (no error message is shown).
 	</para>
+
 	<para>
 	  Installing <command>vera</command> (from a package or by
 	  <command>make install</command>) does not touch or replace the
@@ -1709,6 +1713,78 @@ version: 1
 	  <command>init</command> runlevel, an ondemand action, or an
 	  inittab update, and triggers the equivalent <command>vera</command>
 	  command.
+	</para>
+
+	<para>
+	  The <command>hooK</command> and <command>hookonce</command> commands
+	  make the following changes:
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      The original <filename>/sbin/init</filename> gets moved to
+	      <filename>/sbin/init.init</filename>.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The original <filename>/etc/rc.d/rc.sysvinit</filename>
+	      script gets moved to
+	      <filename>/etc/rc.d/rc.sysvinit.init</filename>.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      <filename>/sbin/init</filename> and
+	      <filename>/etc/rc.d/rc.sysvinit</filename> are replaced
+	      with links to <command>vera</command>'s replacements.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      <filename>@CONFIGDIR@/hook</filename> gets created.
+	    </para>
+	  </listitem>
+	</itemizedlist>
+
+	<para>
+	  The installed replacement check if <command>vera-up</command>,
+	  otherwise they execute the replaced program or script, with no
+	  change in behavior.
+	</para>
+
+	<para>
+	  The replacement <command>/sbin/init</command> checks that
+	  <filename>@CONFIGDIR@/hook</filename> exists on the next reboot, and
+	  starts <command>vera</command> instead of the replaced
+	  <command>init</command>.
+	</para>
+
+	<para>
+	  <command>hookonce</command> results in the removal of
+	  <filename>@CONFIGDIR@/hook</filename> on the next reboot as early
+	  as possible. Its absence on a subsequent reboot results in the
+	  original <command>init</command> (now
+	  <filename>/sbin/init.init</filename>) starting normally.
+	</para>
+
+	<para>
+	  The <command>unhook</command> command manually removes
+	  <filename>@CONFIGDIR@/hook</filename> and if the system was booted
+	  with <command>vera</command> no further action is taken.
+	  A reboot is required to start the system with the original
+	  <command>init</command> then the <command>unhook</command> command
+	  completes the process.
+	</para>
+
+	<para>
+	  When <command>unhook</command> determines that
+	  <command>vera-up</command> is not the case, <command>unhook</command>
+	  removes the originally <command>hook</command>ed links.
 	</para>
       </refsect1>
 
