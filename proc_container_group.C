@@ -78,7 +78,7 @@ proc_container_group &proc_container_group::operator=(
 
 // parse "populated" in cgroup.events, using a scratch buffer.
 
-static bool is_populated(int fd, std::string &buffer)
+bool proc_container_group_data::is_populated(int fd, std::string &buffer)
 {
 	// cgroups.events has changed, read it.
 
@@ -241,9 +241,7 @@ bool proc_container_group::forked()
 	    dup2(devnull(), 0) != 0)
 		return false;
 
-	cgroups_register();
-
-	return true;
+	return cgroups_register();
 }
 
 void proc_container_group::save_transfer_info(std::ostream &o)
@@ -304,7 +302,8 @@ void proc_container_group::all_restored(const group_create_info &create_info)
 
 	create_info.all_containers->populated(
 		create_info.cc->first->name,
-		populated);
+		populated,
+		true);
 
 	if (populated)
 	{

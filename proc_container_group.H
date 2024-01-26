@@ -64,9 +64,13 @@ struct proc_container_group_data {
 
 	inotify_watch_handler cgroup_eventsfdhandler;
 
+	//! Whether, as of the last report, this container had processes
+
+	bool populated=false;
+
 	//! Register the forked process in the cgroup.
 
-	void cgroups_register();
+	bool cgroups_register();
 
 	//! Install the poller and the event handler.
 
@@ -75,6 +79,16 @@ struct proc_container_group_data {
 	bool install(
 		const std::string &cgroup_events_path,
 		const group_create_info &create_info
+	);
+
+	//! Internal function that parses cgroups.events
+
+	static bool is_populated(
+		//! cgroup.events file descriptor
+		int fd,
+
+		//! Scratch buffer used for reading.
+		std::string &scratch_buffer
 	);
 };
 
@@ -133,6 +147,12 @@ public:
 	{
 		container=pc;
 	}
+
+	using proc_container_group_data::populated;
+
+	//! Manually set populated flag after fork() when we know we registered
+
+	void refresh_populated_after_fork();
 
 	///////////////////////////////////////////////////////////////////
 	//

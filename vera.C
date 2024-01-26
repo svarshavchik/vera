@@ -164,9 +164,20 @@ proc_container_group_data::cgroups_events_open(int fd)
 	return {fd, path};
 }
 
+void proc_container_group::refresh_populated_after_fork()
+{
+	if (cgroup_eventsfd < 0)
+		return;
+
+	std::string s;
+
+	populated=is_populated(cgroup_eventsfd, s);
+}
+
+
 // Put this forked process into the cgroup
 
-void proc_container_group_data::cgroups_register()
+bool proc_container_group_data::cgroups_register()
 {
 	auto path=cgroups_dir() + "/cgroup.procs";
 
@@ -176,7 +187,9 @@ void proc_container_group_data::cgroups_register()
 	{
 		write(fd, "0\n", 2);
 		close(fd);
+		return true;
 	}
+	return false;
 }
 
 // Create a new cgroup

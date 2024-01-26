@@ -4,7 +4,9 @@
 */
 #include "config.h"
 #include "external_filedesc.H"
+#define UNIT_TEST
 #include "current_containers_info.H"
+#undef UNIT_TEST
 #include "proc_loader.H"
 #include "proc_container_group.H"
 #include "privrequest.H"
@@ -65,16 +67,17 @@ proc_container_group_data::cgroups_events_open(int fd)
 
 // The registration process consists of manually writing "populated 1"
 
-void proc_container_group_data::cgroups_register()
+bool proc_container_group_data::cgroups_register()
 {
 	if (cgroup_eventsfd < 0)
 	{
 		log_message("Internal error: cgroup_eventsfd not set");
-		return;
+		return false;
 	}
 
 	lseek(cgroup_eventsfd, 0, SEEK_SET);
 	write(cgroup_eventsfd, "populated 1\n", 12);
+	return true;
 }
 
 bool proc_container_group::cgroups_try_rmdir()
@@ -106,6 +109,20 @@ void populated(const proc_container &container, bool isit)
 
 	write(fd, (isit ? "populated 1\n":"populated 0\n"), 12);
 	close(fd);
+}
+//
+// proc_container_stopped() is called by unit tests. The cgroups.events
+// handler calls populated() directly.
+
+void proc_container_stopped(const std::string &s)
+{
+	auto ci=get_containers_info(nullptr);
+
+	auto iter=ci->containers.find(s);
+
+	if (iter != ci->containers.end())
+		populated(iter->first, false);
+	ci->populated(s, false);
 }
 
 void proc_container_group::cgroups_sendsig(int sig)
@@ -207,6 +224,11 @@ std::string current_runlevel()
 		pfix=":";
 	}
 	return s;
+}
+
+void proc_container_group::refresh_populated_after_fork()
+{
+	populated=true;
 }
 
 std::string populated_sh(const proc_container &container, bool isit)

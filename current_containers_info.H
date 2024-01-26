@@ -28,9 +28,15 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 
 	//! Runlevel configuration
 	runlevels runlevel_configuration;
+#ifdef UNIT_TEST
+public:
+#endif
 
 	//! The containers themselves
 	current_containers containers;
+#ifdef UNIT_TEST
+private:
+#endif
 
 	//! The description field of the former runlevel
 
@@ -377,7 +383,18 @@ private:
 public:
 	void stopped(const std::string &s);
 
-	void populated(const std::string &s, bool);
+	//! Report when the container is empty
+
+	void populated(
+		//! Reporting container
+		const std::string &s,
+
+		//! If false, the container is now empty.
+		bool is_populated,
+
+		//! True if being called after restoring from a reexec
+		bool restored=false
+	);
 
 	//! Log a message on behalf of a container
 
@@ -450,5 +467,10 @@ struct group_create_info {
 	const current_container &cc;
 };
 
+// Return/set current_containers_info singleton.
+
+const current_containers_info &get_containers_info(
+	current_containers_info *replacement
+);
 
 #endif

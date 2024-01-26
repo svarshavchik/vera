@@ -50,7 +50,8 @@ static pid_t get_next_pid(const proc_container &container,
 
 	logged_runners.push_back(o.str());
 
-	populated(container, true);
+	if (pid != -1)
+		populated(container, true);
 	return pid;
 }
 

@@ -182,8 +182,11 @@ proc_container_runner create_runner(
 	{
 		close(exec_pipe[0]);
 
+		int n[2]={0, 1};
 		if (group.forked())
 		{
+			n[1]=0;
+
 			if (argv.empty())
 				_exit(0); // Nothing to do.
 
@@ -211,7 +214,7 @@ proc_container_runner create_runner(
 			execvp(charvec[0], charvec.data());
 		}
 
-		int n=errno;
+		n[0]=errno;
 
 		write(exec_pipe[1], &n, sizeof(n));
 		_exit(1);
@@ -219,20 +222,31 @@ proc_container_runner create_runner(
 
 	close(exec_pipe[1]);
 
-	int n;
+	int n[2];
 
 	if (read(exec_pipe[0], reinterpret_cast<char *>(&n), sizeof(n))
 	    == sizeof(n))
 	{
+		if (n[1] == 0) // Child process did register in the cgroup.
+			group.refresh_populated_after_fork();
+
 		close(exec_pipe[0]);
 		// child process exits upon an empty command.
 		log_container_error( container,
 				     std::string{argv[0].data()} + ": "
-				     + strerror(n));
+				     + strerror(n[0]));
 		return {};
 	}
 	close(exec_pipe[0]);
+	group.refresh_populated_after_fork();
 
+	// A rare race condition: above we forked and exec the child
+	// process but it finished before we refresh_populated_after_fork(),
+	// which saw the container not populated. We want to force
+	// populated to true here, because we'll get an inotify event
+	// on cgroup_eventsfd, which we'll want to process, and we'll see
+	// "populated 0" at that time.
+	group.populated=true;
 	return reinstall_runner(p, all_containers, container, done);
 }
 

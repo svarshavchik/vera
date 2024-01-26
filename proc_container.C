@@ -3061,6 +3061,8 @@ void current_containers_infoObj::starting_command_finished(
 	const current_container &cc,
 	int status)
 {
+	auto &[pc, run_info] = *cc;
+
 	bool for_dependency=true; // Unless told otherwise
 
 	bool succeeded=
@@ -3134,6 +3136,13 @@ void current_containers_infoObj::starting_command_finished(
 	}
 	else
 	{
+		// We didn't really start. The command failed. However,
+		// temporarily set the state to started, so that
+		// stop_with_all_terminate will then place this container
+		// into the stopping state and run the stopping command,
+		// if needed.
+		run_info.state.emplace<state_started>(for_dependency);
+
 		stop_with_all_requirements(cc, {});
 	}
 }
@@ -3559,7 +3568,14 @@ void current_containers_infoObj::do_remove(const current_container &cc,
 	// However if the container group does not exist already, we're
 	// fully stopped.
 
-	if (!run_info.group)
+	if (!run_info.group
+
+	    // Or if there's nothing in the container we're also fully stopped
+	    // If there's something in the container populated() will call
+	    // stopped, so it's our responsibility now to call stopped().
+	    // This can happen if the fork() to run the starting process
+	    // fails.
+	    || !run_info.group->populated)
 	{
 		stopped(cc->first->name);
 		return;
@@ -3614,25 +3630,77 @@ static state_started &started(const current_container &cc, bool for_dependency)
 /////////////////////////////////////////////////////////////////////////
 //
 // The container completely stopped, it has no more processes.
-//
-// proc_container_stopped() is called by unit tests. The cgroups.events
-// handler calls populated() directly.
-
-void proc_container_stopped(const std::string &s)
-{
-	get_containers_info(nullptr)->populated(s, false);
-}
 
 void current_containers_infoObj::populated(const std::string &s,
-					   bool is_populated)
+					   bool is_populated,
+					   bool is_restored)
 {
-	if (is_populated)
-		return;
-
 	auto cc=containers.find(s);
 
 	if (cc == containers.end() ||
 	    cc->first->type != proc_container_type::loaded)
+		return;
+
+	// We expect the container to exist here.
+	if (cc->second.group)
+	{
+		// Unless we're called after a reexec, we want to check
+		// if the reported is_populated really changed. This is
+		// to handle race condition. After a fork(), the
+		// cotainer does refresh_populated_after_fork() which will
+		// correctly reflect
+
+		if (!is_restored)
+		{
+			if (cc->second.group->populated == is_populated)
+				return;
+		}
+		cc->second.group->populated=is_populated;
+	}
+
+	if (is_populated)
+		return;
+
+	// It's possible that the starting or the stopping process finished
+	// but we get the populated notification first, from cgroups.events.
+	//
+	// If we have a known runner, here, let's ignore this.
+
+	struct is_populated_helper {
+
+		bool runner=false;
+
+		void operator()(const state_started &)
+		{
+		}
+
+		void operator()(const state_stopped &)
+		{
+		}
+
+		void operator()(const state_starting &state)
+		{
+			if (state.starting_runner)
+				runner=true;
+		}
+
+		void operator()(const state_stopping &state)
+		{
+			std::visit(*this, state.phase);
+		}
+
+		void operator()(const stop_pending &){}
+		void operator()(const stop_running &)
+		{
+			runner=true;
+		}
+		void operator()(const stop_removing &){}
+	};
+
+	is_populated_helper helper;
+	std::visit(helper, cc->second.state);
+
+	if (helper.runner)
 		return;
 
 	stopped(cc->first->name);
