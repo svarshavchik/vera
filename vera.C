@@ -43,6 +43,7 @@
 #include <set>
 #include <algorithm>
 
+#define PUB_PROCESS_SIGNATURE "[public process]"
 
 int stopped_flag;
 int dependencies_flag;
@@ -356,19 +357,32 @@ int create_vera_socket(const char *tmpname, const char *finalname)
 	return fd;
 }
 
+// Poll on the private socket.
+//
+// Create a filesystem socket without group-world privileges and
+// listen on it.
+//
+// Call proc_do_request after accepting a connection on the socket.
+
 static int start_vera_pub();
 
-struct priv_poller {
-	std::shared_ptr<external_filedescObj> cmd_socket;
+struct priv_poller_t {
+	external_filedesc cmd_socket;
 	polledfd poll_cmd;
+
+	external_filedesc pub_socket_pipe;
 };
 
-priv_poller create_priv_poller()
+priv_poller_t priv_poller;
+
+void create_priv_poller()
 {
 	umask(077);
 	int fd=create_vera_socket(PRIVCMDSOCKET ".tmp",
 				  PRIVCMDSOCKET);
 	umask(022);
+
+	int pub_socket_pipe=start_vera_pub();
 
 	auto cmd_socket=std::make_shared<external_filedescObj>(fd);
 
@@ -399,47 +413,35 @@ priv_poller create_priv_poller()
 			proc_do_request(privcmdsocket);
 		}};
 
-	return {cmd_socket, std::move(poll_cmd)};
+	priv_poller=priv_poller_t{
+		cmd_socket,
+		std::move(poll_cmd),
+		std::make_shared<external_filedescObj>(
+			pub_socket_pipe
+		)
+	};
 }
-
-//
-
-static int *pubsocket_ptr;
-static priv_poller *poller_ptr;
 
 void sigusr2()
 {
 	log_message("closing sockets");
 
-	if (*pubsocket_ptr > 0)
-	{
-		close(*pubsocket_ptr);
-	}
-
-	*poller_ptr={};
+	priv_poller=priv_poller_t{};
 }
 
 void sigusr1()
 {
-	sigusr2();
-
-	if (!pubsocket_ptr || !poller_ptr)
-		return;
+	priv_poller=priv_poller_t{};
 
 	log_message("reopening sockets");
-	*pubsocket_ptr=start_vera_pub();
-	*poller_ptr=create_priv_poller();
+	create_priv_poller();
 }
 
 // The vera init daemon
 
-void vera_init(int pubsocket)
+void vera_init()
 {
-	umask(022);
-	auto priv_poller=create_priv_poller();
-
-	pubsocket_ptr=&pubsocket;
-	poller_ptr=&priv_poller;
+	create_priv_poller();
 
 	// Create our cgroup
 
@@ -634,8 +636,6 @@ void do_pub_request(external_filedesc pubfd)
 //
 // Returns the write end of the pipe to the parent process.
 
-static void vera_pub();
-
 int start_vera_pub()
 {
 	int pipefd[2];
@@ -658,14 +658,23 @@ int start_vera_pub()
 	{
 		close(pipefd[1]);
 
-		polledfd poll_for_exit{pipefd[0],
-			[]
-			(int fd)
-			{
-				_exit(0);
-			}};
+		fcntl(pipefd[0], F_SETFD, 0);
 
-		vera_pub();
+		std::ostringstream o;
+
+		o.imbue(std::locale{"C"});
+
+		o << pipefd[0];
+
+		execl(exename.c_str(),
+		      exename.c_str(),
+		      PUB_PROCESS_SIGNATURE,
+		      o.str().c_str(),
+		      nullptr);
+
+		perror(exename.c_str());
+
+		_exit(1);
 	}
 
 	close(pipefd[0]);
@@ -684,13 +693,57 @@ int start_vera_pub()
 // It closes the write end of the pipe, and exits when the read end of the
 // pipe gets closed.
 
-void vera_pub()
+void vera_pub(char *parentfd)
 {
 	umask(000);
 	int fd=create_vera_socket(PUBCMDSOCKET ".tmp",
 				  PUBCMDSOCKET);
 	umask(077);
 
+	int parent_fd_pipe=-1;
+
+	{
+		sigset_t ss;
+
+		sigemptyset(&ss);
+		sigaddset(&ss, SIGHUP);
+		sigaddset(&ss, SIGTERM);
+		sigaddset(&ss, SIGINT);
+		sigaddset(&ss, SIGQUIT);
+
+		sigprocmask(SIG_BLOCK, &ss, NULL);
+
+		std::istringstream i;
+
+		i.imbue(std::locale{"C"});
+
+		i.str(parentfd);
+		i >> parent_fd_pipe;
+
+		while (*parentfd)
+			*parentfd++=' ';
+	}
+
+	if (parent_fd_pipe < 0)
+	{
+		throw std::runtime_error{
+			"public process cannot read pipe file descriptor"
+				" from parent process."};
+	}
+
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	{
+		throw std::runtime_error{
+			"public process cannot set FD_CLOEXEC on the"
+				" pipe file descriptor from parent process."};
+	}
+
+	polledfd poll_for_exit{parent_fd_pipe,
+		[]
+		(int fd)
+		{
+			_exit(0);
+		}};
 
 	// Poll the public command socket for connections. Call do_pub_request()
 	// for each accepted connection.
@@ -792,7 +845,7 @@ void vera()
 
 	// halt.c in syvinit wants to see INIT_VERSION
 	setenv("INIT_VERSION", "vera-" PACKAGE_VERSION, 1);
-	vera_init(start_vera_pub());
+	vera_init();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1399,6 +1452,13 @@ int main(int argc, char **argv)
 		++slash;
 
 	try {
+
+		if (argc >= 3 &&
+		    std::string_view{argv[1]} == PUB_PROCESS_SIGNATURE)
+		{
+			vera_pub(argv[2]);
+		}
+
 		if (exename.substr(slash) == "vlad" || argc > 1)
 		{
 			// Ignore -t option

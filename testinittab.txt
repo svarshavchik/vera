@@ -452,14 +452,12 @@ Loading: testinittab.dir/vera/system/reboot
 Loading installed units
 system/reboot:start=forking:stop=target
 system/reboot:description=processes for runlevel reboot
-system/reboot:requires system/boot
 system/reboot:required-by system/runlevel reboot
 # system/shutdown
 Loading: testinittab.dir/vera/system/shutdown
 Loading installed units
 system/shutdown:start=forking:stop=target
 system/shutdown:description=processes for runlevel shutdown
-system/shutdown:requires system/boot
 system/shutdown:required-by system/runlevel shutdown
 # system/sighup
 Loading: testinittab.dir/vera/system/sighup

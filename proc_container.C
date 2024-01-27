@@ -520,9 +520,11 @@ struct signal_poller {
 			{
 				int wstatus=0;
 
-				wait4(ssi.ssi_pid, &wstatus, 0, 0);
-
-				runner_finished(ssi.ssi_pid, wstatus);
+				if (wait4(ssi.ssi_pid, &wstatus, 0, 0) ==
+				    (pid_t)ssi.ssi_pid)
+				{
+					runner_finished(ssi.ssi_pid, wstatus);
+				}
 			}
 			return;
 		case SIGHUP:
@@ -1605,6 +1607,20 @@ void current_containers_infoObj::install(
 		}
 	}
 	find_start_or_stop_to_do();
+
+	// Race condition. When re-execing, pick up any child processes that
+	// managed to zombify themselves while we were re-execing.
+
+	if (mode == container_install::initial)
+	{
+		int wstatus;
+		pid_t p;
+
+		while ((p=waitpid(-1, &wstatus, WNOHANG)) > 0)
+		{
+			runner_finished(p, wstatus);
+		}
+	}
 }
 
 void current_containers_infoObj::getrunlevel(const external_filedesc &efd)

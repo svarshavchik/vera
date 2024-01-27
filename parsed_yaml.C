@@ -170,7 +170,6 @@ runlevels default_runlevels()
 					"0"
 				},
 				{
-					"boot"
 				},
 			},
 		},
@@ -212,7 +211,6 @@ runlevels default_runlevels()
 			"reboot", {
 				{ "6" },
 				{
-					"boot"
 				},
 			}
 		},

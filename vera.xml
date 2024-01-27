@@ -1889,6 +1889,16 @@ version: 1
 	  <command>vera</command> does not implement
 	  <filename>/dev/initctl</filename>.
 	</para>
+
+	<para>
+	  Using <command>killall</command> to send a
+	  <errorcode>SIGKILL</errorcode> ends up terminating
+	  <command>vera</command>'s
+	  secondary process that handles non-privileged commands, like
+	  <command>status</command>. Use
+	  <quote><command>kill -usr1 1</command></quote>
+	  to restart it.
+	</para>
       </refsect1>
     </refentry>
   </sect1>
