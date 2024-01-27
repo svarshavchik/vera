@@ -9,4 +9,4 @@
 
 RCK="$1"
 
-sed 's/^killall/#/;s/sleep 1/true/' <$RCK
+sed 's/^killall/#/;s/sleep 1/true/' <$RCK | exec /bin/bash

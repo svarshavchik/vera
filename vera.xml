@@ -146,6 +146,7 @@
 	    <arg choice='plain'>hook</arg>
 	    <arg choice='plain'>hookonce</arg>
 	    <arg choice='plain'>unhook</arg>
+	    <arg choice='plain'>inittab</arg>
 	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
@@ -408,6 +409,12 @@
 		  <entry>kbrequest</entry>
 		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGWINCH</quote> signal</entry>
 		</row>
+
+		<row>
+		  <entry>system/a, system/b, and system/c</entry>
+		  <entry>a, b, and c</entry>
+		  <entry><quote>On-demand</quote> targets, start by <command>vlad start system/<replaceable>LETTER</replaceable></command></entry>
+		</row>
 	      </tbody>
 	    </tgroup>
 	  </informaltable>
@@ -628,7 +635,7 @@ enabled:
 
 	      <listitem>
 		<para>
-		  Similarly, <quote>system/sysinit</quote>-required units
+		  Similarly, <quote>system/boot</quote>-required units
 		  get started in all runlevels, and before the runlevel-
 		  specific units.
 		</para>
@@ -1763,7 +1770,7 @@ version: 1
 	</itemizedlist>
 
 	<para>
-	  The installed replacement check if <command>vera-up</command>,
+	  The installed replacements check if <command>vera-up</command>,
 	  otherwise they execute the replaced program or script, with no
 	  change in behavior.
 	</para>
@@ -1797,6 +1804,54 @@ version: 1
 	  <command>vera-up</command> is not the case, <command>unhook</command>
 	  removes the originally <command>hook</command>ed links.
 	</para>
+
+	<para>
+	  The <command>inittab</command> command
+	  rereads <filename>/etc/inittab</filename>
+	  and updates the unit specification files in
+	  <filename>@INSTALLCONFIGDIR@</filename>. A brief summary
+	  of the conversion process:
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      All <quote><replaceable>keyword</replaceable>wait</quote>
+	      entries get create as <quote>forking</quote> start types;
+	      <quote>respawn</quote> as <quote>respawn</quote>; and
+	      all others as <quote>oneshot</quote>.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <quote>power<replaceable>state</replaceable></quote>,
+	      <quote>ctrlaltdel</quote>, and
+	      <quote>boot</quote> are added to the corresponding
+	      target.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      Each entry's one-character runlevels get converted to the
+	      corresponding <command>vera</command> runlevel targets.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      Entries that match the names of selected
+	      <filename>/etc/rc.d/rc.<replaceable>X</replaceable></filename>
+	      are singled out for special processing.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <quote>Before</quote> and <quote>After</quote>
+	      get specified for each converted inittab, that starts them
+	      (and stops them in reverse order) in order of appearance
+	      in <filename>/etc/inittab</filename>.
+	    </para>
+	  </listitem>
+	</itemizedlist>
       </refsect1>
 
       <refsect1 id="internal">
@@ -1808,9 +1863,9 @@ version: 1
 	</para>
 
 	<para>
-	  <quote>sysdown</quote> direct's <command>vera</command>'s PID 1
+	  <quote>sysdown</quote> directs <command>vera</command> on PID 1
 	  to set the <envar>RUNLEVEL</envar>
-	  environment variable and execute a specified script that replaces
+	  environment variable and execute a specified script, replacing
 	  PID 1.
 	  This is used as a final action for executing a shutdown or a reboot.
 	</para>
@@ -1823,6 +1878,16 @@ version: 1
 	  The <command>vera</command> and
 	  <command>vlad</command> commands are not named after any
 	  well-known public figures.
+	</para>
+
+	<para>
+	  <command>vera</command> does not implement
+	  <filename>/var/run/runlevel</filename>.
+	</para>
+
+	<para>
+	  <command>vera</command> does not implement
+	  <filename>/dev/initctl</filename>.
 	</para>
       </refsect1>
     </refentry>

@@ -767,6 +767,31 @@ void vera()
 	if (fd > 0)
 		close(fd);
 
+	// init compatibility: set CONSOLE
+
+	if (!getenv("CONSOLE"))
+	{
+		fd=open("/dev/console", O_RDONLY|O_NONBLOCK);
+
+		if (fd >= 0)
+		{
+			close(fd);
+			setenv("CONSOLE", "/dev/console", 1);
+		}
+		else
+		{
+			fd=open("/dev/tty0", O_RDONLY|O_NONBLOCK);
+
+			if (fd >= 0)
+			{
+				close(fd);
+				setenv("CONSOLE", "/dev/tty0", 1);
+			}
+		}
+	}
+
+	// halt.c in syvinit wants to see INIT_VERSION
+	setenv("INIT_VERSION", "vera-" PACKAGE_VERSION, 1);
 	vera_init(start_vera_pub());
 }
 
