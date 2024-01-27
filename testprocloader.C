@@ -133,6 +133,8 @@ int main(int argc, char **argv)
 				})
 		);
 
+		std::sort(messages.begin(), messages.end());
+
 		for (auto &m:messages)
 			std::cout << m << std::endl;
 
