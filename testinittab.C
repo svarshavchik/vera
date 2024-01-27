@@ -14,6 +14,7 @@
 #include <getopt.h>
 
 const char *inittabfile    = "/etc/inittab";
+const char *pkgdatadir     = PKGDATADIR;
 const char *configdir      = INSTALLCONFIGDIR;
 const char *localdir       = LOCALCONFIGDIR;
 const char *overridedir    = OVERRIDECONFIGDIR;
@@ -23,6 +24,7 @@ const struct option options[]={
 	{"inittab", 0, NULL, 'i'},
 	{"local", 0, NULL, 'l'},
 	{"override", 0, NULL, 'o'},
+	{"pkgdata", 0, NULL, 'p'},
 	{nullptr},
 };
 
@@ -31,7 +33,7 @@ int main(int argc, char **argv)
 	int opt;
 	bool error=false;
 
-	while ((opt=getopt_long(argc, argv, "c:i:l:o:", options, NULL)) >= 0)
+	while ((opt=getopt_long(argc, argv, "c:i:l:o:p:", options, NULL)) >= 0)
 		switch (opt) {
 		case 'c':
 			configdir=optarg;
@@ -45,6 +47,9 @@ int main(int argc, char **argv)
 		case 'o':
 			overridedir=optarg;
 			break;
+		case 'p':
+			pkgdatadir=optarg;
+			break;
 		case '?':
 			std::cerr << "Usage: " << argv[0] << " [options]\n"
 				"   [-c | --config="
@@ -53,6 +58,8 @@ int main(int argc, char **argv)
 				LOCALCONFIGDIR "]\n"
 				"   [-o | --override="
 				OVERRIDECONFIGDIR "]\n"
+				"   [-p | --pkgdata="
+				PKGDATADIR "]\n"
 				"   [-i | --inittab=/etc/inittab]\n";
 			exit(1);
 		}
@@ -61,6 +68,7 @@ int main(int argc, char **argv)
 		auto rl=default_runlevels();
 		if (!inittab(std::move(inittabfile),
 			     configdir,
+			     pkgdatadir,
 			     rl))
 			exit(1);
 

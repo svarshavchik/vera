@@ -149,6 +149,17 @@
 	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
+	<blockquote>
+	  <para>
+	    Internal commands
+	  </para>
+	  <cmdsynopsis>
+	    <command>vlad</command>
+	    <arg choice='plain'>sysdown</arg>
+	    <arg choice='req'>runlevel</arg>
+	    <arg choice='req'>script</arg>
+	  </cmdsynopsis>
+	</blockquote>
       </refsynopsisdiv>
 
       <refsect1 id="description">
@@ -1785,6 +1796,23 @@ version: 1
 	  When <command>unhook</command> determines that
 	  <command>vera-up</command> is not the case, <command>unhook</command>
 	  removes the originally <command>hook</command>ed links.
+	</para>
+      </refsect1>
+
+      <refsect1 id="internal">
+	<title>Internal commands</title>
+
+	<para>
+	  These commands are for internal use only, and are only documented
+	  here for completeness.
+	</para>
+
+	<para>
+	  <quote>sysdown</quote> direct's <command>vera</command>'s PID 1
+	  to set the <envar>RUNLEVEL</envar>
+	  environment variable and execute a specified script that replaces
+	  PID 1.
+	  This is used as a final action for executing a shutdown or a reboot.
 	</para>
       </refsect1>
 

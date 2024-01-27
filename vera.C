@@ -1275,6 +1275,7 @@ void vlad(std::vector<std::string> args)
 	{
 		if (!inittab("/etc/inittab",
 			     INSTALLCONFIGDIR,
+			     PKGDATADIR,
 			     load_runlevelconfig()))
 		{
 			exit(1);
@@ -1321,6 +1322,7 @@ void vlad(std::vector<std::string> args)
 		case 'Q':
 			if (!inittab("/etc/inittab",
 				     INSTALLCONFIGDIR,
+				     PKGDATADIR,
 				     load_runlevelconfig()))
 			{
 				exit(1);

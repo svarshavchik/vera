@@ -8,6 +8,7 @@ mkdir -p testinittab.dir/vera/system
 mkdir -p testinittab.dir/local
 mkdir -p testinittab.dir/override
 mkdir -p testinittab.dir/etc
+mkdir -p testinittab.dir/share
 $VALGRIND ./testprocloader genrunlevels testinittab.dir/runlevels testinittab.dir/vera/system
 
 cat >testinittab.dir/inittab <<EOF
@@ -34,6 +35,7 @@ EOF
 $VALGRIND ./testinittab -i testinittab.dir/inittab \
 	      -l testinittab.dir/local \
 	      -o testinittab.dir/override \
+	      -p testinittab.dir/share \
 	      -c testinittab.dir/vera >testinittab.out
 diff -U 3 testinittab.out ${srcdir}/testinittab.txt
 rm -rf testinittab.dir testinittab.tst testinittab.out

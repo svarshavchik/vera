@@ -336,7 +336,7 @@ Loading: testinittab.dir/vera/system/inittab/su
 Loading installed units
 system/inittab/su:start=forking:stop=manual
 system/inittab/su:description=su: /etc/rc.d/rc.K
-system/inittab/su:starting:/etc/rc.d/rc.K
+system/inittab/su:starting:testinittab.dir/share/vera-rck /etc/rc.d/rc.K
 system/inittab/su:required-by system/single-user
 # system/inittab/su-start-single-user
 Loading: testinittab.dir/vera/system/inittab/su-start-single-user

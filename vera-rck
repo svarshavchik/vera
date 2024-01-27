@@ -1,0 +1,12 @@
+#! /bin/bash
+#
+# Modify /etc/rc.d/rc.K on the fly.
+#
+# Comment out "killall". The containers already took care of it, and it'll
+# kill vera's public process.
+#
+# Also comment out "sleep 1"s, that serve no prupose any more
+
+RCK="$1"
+
+sed 's/^killall/#/;s/sleep 1/true/' <$RCK

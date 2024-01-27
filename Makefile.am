@@ -8,7 +8,7 @@ export LC_ALL=C
 sbin_PROGRAMS=vera vera-init
 noinst_SCRIPTS=vlad
 
-pkgdata_SCRIPTS=rc.sysvinit.vera
+pkgdata_SCRIPTS=rc.sysvinit.vera vera-rck
 
 noinst_PROGRAMS=\
 	testcontroller						\
@@ -24,7 +24,8 @@ noinst_PROGRAMS=\
 EXTRA_DIST= 							\
 	testinittab.sh						\
 	testinittab.txt						\
-	testprocloader.sh
+	testprocloader.sh					\
+	vera-rck
 
 BUILT_SOURCES=configdirs.h
 CLEANFILES=configdirs.h
@@ -145,6 +146,7 @@ install-data-local:
 	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG) $(DESTDIR)$(INSTALLCONFIGDIR)/system && \
 		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
+			-p $(DESTDIR)${pkgdatadir} \
 			-o $(DESTDIR)$(OVERRIDECONFIGDIR) >/dev/null
 
 uninstall-hook:

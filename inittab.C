@@ -600,6 +600,7 @@ namespace {
 struct inittab_converter {
 
 	const std::string &system_dir;
+	const std::string &pkgdata_dir;
 	const runlevels &runlevels_config;
 
 	convert_inittab generator{system_dir, runlevels_config};
@@ -610,8 +611,10 @@ struct inittab_converter {
 	std::unordered_set<std::string> ondemand;
 
 	inittab_converter(const std::string &system_dir,
+			  const std::string &pkgdata_dir,
 			  const runlevels &runlevels_config)
 		: system_dir{system_dir},
+		  pkgdata_dir{pkgdata_dir},
 		  runlevels_config{runlevels_config},
 		  generator{system_dir, runlevels_config}
 	{
@@ -804,13 +807,17 @@ struct inittab_converter {
 			new_entry.starting_command == "/etc/rc.d/rc.K"
 			|| new_entry.starting_command == "/etc/rc.d/rc.M";
 
-		// Intercept rc.0 and rc.6
+		// Intercept rc.0, rc.6, and rc.K
 
 		if (new_entry.starting_command == "/etc/rc.d/rc.0")
 			new_entry.starting_command = "vlad sysdown 0 "
 				+ new_entry.starting_command;
 		else if (new_entry.starting_command == "/etc/rc.d/rc.6")
 			new_entry.starting_command = "vlad sysdown 6 "
+				+ new_entry.starting_command;
+		else if (new_entry.starting_command == "/etc/rc.d/rc.K")
+			new_entry.starting_command =
+				pkgdata_dir + "/vera-rck "
 				+ new_entry.starting_command;
 
 		generator.add_inittab(new_entry, s);
@@ -879,11 +886,12 @@ bool inittab_converter::finish()
 
 bool inittab(std::string filename,
 	     const std::string &system_dir,
+	     const std::string &pkgdata_dir,
 	     const runlevels &runlevels)
 {
 	bool error=false;
 
-	inittab_converter converter{system_dir, runlevels};
+	inittab_converter converter{system_dir, pkgdata_dir, runlevels};
 
 	return parse_inittab(
 		filename.c_str(),
