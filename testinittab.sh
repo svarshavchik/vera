@@ -8,7 +8,7 @@ mkdir -p testinittab.dir/vera/system
 mkdir -p testinittab.dir/local
 mkdir -p testinittab.dir/override
 mkdir -p testinittab.dir/etc
-./testprocloader genrunlevels testinittab.dir/runlevels testinittab.dir/vera/system
+$VALGRIND ./testprocloader genrunlevels testinittab.dir/runlevels testinittab.dir/vera/system
 
 cat >testinittab.dir/inittab <<EOF
 id:3:initdefault:
@@ -31,7 +31,7 @@ c1:12345:respawn:/sbin/agetty 38400 tty1 linux
 c2:12345:respawn:/sbin/agetty 38400 tty2 linux
 x1:4:respawn:/etc/rc.d/rc.4
 EOF
-./testinittab -i testinittab.dir/inittab \
+$VALGRIND ./testinittab -i testinittab.dir/inittab \
 	      -l testinittab.dir/local \
 	      -o testinittab.dir/override \
 	      -c testinittab.dir/vera >testinittab.out

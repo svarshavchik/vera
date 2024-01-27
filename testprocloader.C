@@ -116,20 +116,25 @@ int main(int argc, char **argv)
 	}
 	if (args.size() == 5 && args[1] == "loadalltest")
 	{
+		std::vector<std::string> messages;
+
 		proc_load_dump(
 			proc_load_all(
 				args[2], args[3], args[4],
-				[]
+				[&]
 				(const auto &message)
 				{
-					std::cout << "W: " << message << "\n";
+					messages.push_back("W: " + message);
 				},
-				[]
+				[&]
 				(const auto &message)
 				{
-					std::cout << "E: " << message << "\n";
+					messages.push_back("E: " + message);
 				})
 		);
+
+		for (auto &m:messages)
+			std::cout << m << std::endl;
 
 		return 0;
 	}

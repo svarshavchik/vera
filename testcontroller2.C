@@ -140,10 +140,12 @@ std::tuple<int, std::string> restart_or_reload(
 // If the status function returns a non-empty string, then 256 and the string
 // gets returned.
 
+typedef std::tuple<external_filedesc,
+		   std::string (*)(const external_filedesc &),
+		   int (*)(const external_filedesc &)> do_test_or_restart_t;
+
 std::tuple<int, std::string> do_test_or_restart(
-	const std::function<std::tuple<external_filedesc,
-	std::string (*)(const external_filedesc &),
-	int (*)(const external_filedesc &)>()> &callback)
+	const std::function<do_test_or_restart_t()> &callback)
 {
 	auto [filedesc, statusfunc, waitfunc]=callback();
 
@@ -183,7 +185,7 @@ void test_restart()
 			send_restart(socketa, "nonexistent");
 			proc_do_request(socketb);
 
-			return std::tuple{
+			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
 		});
 
@@ -201,7 +203,7 @@ void test_restart()
 			send_restart(socketa, "restart");
 			proc_do_request(socketb);
 
-			return std::tuple{
+			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
 		});
 
@@ -219,7 +221,7 @@ void test_restart()
 			send_restart(socketa, "restart");
 			proc_do_request(socketb);
 
-			return std::tuple{
+			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
 		});
 
@@ -243,7 +245,7 @@ void test_restart()
 					send_restart(socketa, "restart");
 					proc_do_request(socketb);
 
-					return std::tuple{
+					return do_test_or_restart_t{
 						socketa, get_restart_status,
 						wait_restart};
 				});
@@ -258,7 +260,7 @@ void test_restart()
 					" error";
 			}
 
-			return std::tuple{
+			return do_test_or_restart_t{
 				socketa, get_reload_status, wait_reload};
 		});
 
@@ -307,7 +309,7 @@ void test_envvars()
 			request_runlevel(socketa, "networking");
 			proc_do_request(socketb);
 
-			return std::tuple{
+			return do_test_or_restart_t{
 				socketa, get_runlevel_status, wait_runlevel
 			};
 		});
@@ -336,7 +338,7 @@ void test_envvars()
 			request_runlevel(socketa, "boot");
 			proc_do_request(socketb);
 
-			return std::tuple{
+			return do_test_or_restart_t{
 				socketa, get_runlevel_status, wait_runlevel
 			};
 		});
@@ -512,9 +514,7 @@ void test_reexec_before()
 	close(fd);
 }
 
-std::string test;
-
-static void regular_tests()
+static void regular_tests(std::string &test)
 {
 	std::vector<int> opened_fds;
 
@@ -668,6 +668,8 @@ void server(const std::string &filedesc)
 
 int main(int argc, char **argv)
 {
+	std::string test;
+
 	std::vector<std::string> args{argv, argv+argc};
 
 	alarm(60);
@@ -697,7 +699,7 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			regular_tests();
+			regular_tests(test);
 		}
 
 		test_reset();

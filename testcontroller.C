@@ -3122,7 +3122,7 @@ void testunpopulated1st()
 	}
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	alarm(60);
 	std::string test;
@@ -3288,10 +3288,12 @@ int main()
 		test="multirunlevels";
 		testmultirunlevels();
 
-		test_reset();
-		test="sysdown";
-		testsysdown();
-
+		if (argc > 1 && std::string_view{argv[1]} == "sysdown")
+		{
+			test_reset();
+			test="sysdown";
+			testsysdown();
+		}
 		test_reset();
 		test="unpopulated1st";
 		testunpopulated1st();

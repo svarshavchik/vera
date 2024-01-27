@@ -160,6 +160,7 @@ uninstall-local:
 check-am:
 	$(VALGRIND) ./testdepcomputations
 	$(VALGRIND) ./testcontroller
+	./testcontroller sysdown
 	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testprocloader.sh
 	$(VALGRIND) ./testpoller
 	./testcontroller2

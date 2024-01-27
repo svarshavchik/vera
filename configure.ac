@@ -15,7 +15,7 @@ AC_PATH_PROGS(VALGRIND, valgrind)
 
 if test "$VALGRIND" != ""
 then
-	VALGRIND="valgrind --tool=memcheck --leak-check=yes --error-exitcode=1"
+	VALGRIND="valgrind --tool=memcheck --leak-check=yes --show-leak-kinds=all --error-exitcode=1"
 fi
 AC_SUBST(VALGRIND)
 

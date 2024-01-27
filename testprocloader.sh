@@ -453,8 +453,6 @@ $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir >loadtest.
 
 cat loadtest.out
 cat >loadtest.txt <<EOF
-W: globaldir/.temporary: ignoring non-compliant filename
-E: "unit1": does not match its filename
 unit2-runlevel1:start=forking:stop=manual
 unit2-runlevel1:required-by runlevel1
 
@@ -462,6 +460,8 @@ unit3-runlevel2:start=forking:stop=manual
 unit3-runlevel2:required-by runlevel2
 
 unit4-disabled:start=forking:stop=manual
+E: "unit1": does not match its filename
+W: globaldir/.temporary: ignoring non-compliant filename
 EOF
 
 diff -U 3 loadtest.txt loadtest.out
