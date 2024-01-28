@@ -109,7 +109,7 @@ struct hooked_file {
 	bool hardlink;
 };
 
-typedef std::array<hooked_file, 2> hooks_t;
+typedef std::array<hooked_file, 4> hooks_t;
 
 hooks_t define_hooks(std::string etc_sysinit_dir,
 		     std::string sbindir,
@@ -123,6 +123,20 @@ hooks_t define_hooks(std::string etc_sysinit_dir,
 				etc_sysinit_dir + "/rc.sysvinit.tmp",
 				etc_sysinit_dir + "/rc.sysvinit.init",
 				pkgdatadir + "/rc.sysvinit.vera",
+				false,
+			},
+			{
+				etc_sysinit_dir + "/rc.local",
+				etc_sysinit_dir + "/rc.local.tmp",
+				etc_sysinit_dir + "/rc.local.init",
+				pkgdatadir + "/rc.local.vera",
+				false,
+			},
+			{
+				etc_sysinit_dir + "/rc.local_shutdown",
+				etc_sysinit_dir + "/rc.local_shutdown.tmp",
+				etc_sysinit_dir + "/rc.local_shutdown.init",
+				pkgdatadir + "/rc.local_shutdown.vera",
 				false,
 			},
 			{
@@ -172,10 +186,17 @@ bool hook(std::string etc_sysinit_dir,
 
 	for (auto b=hooks.begin(), p=b, e=hooks.end(); p != e; ++p)
 	{
+		if (!std::filesystem::exists(p->filename, ec))
+		{
+			// Mark it, so we skip over it below.
+
+			p->filename.clear();
+			continue;
+		}
+
 		std::filesystem::create_hard_link(p->filename,
 						  p->backup,
 						  ec);
-
 
 		if (ec)
 		{
@@ -197,6 +218,9 @@ bool hook(std::string etc_sysinit_dir,
 
 	for (auto &h:hooks)
 	{
+		if (h.filename.empty())
+			continue;
+
 		std::filesystem::remove(h.filenametmp, ec);
 
 		if (h.hardlink)
@@ -222,8 +246,8 @@ bool hook(std::string etc_sysinit_dir,
 
 			for (auto &h:hooks)
 			{
-				std::filesystem::remove(h.filenametmp);
-				std::filesystem::remove(h.backup);
+				std::filesystem::remove(h.filenametmp, ec);
+				std::filesystem::remove(h.backup, ec);
 			}
 			return false;
 		}
@@ -231,6 +255,9 @@ bool hook(std::string etc_sysinit_dir,
 
 	for (auto &h:hooks)
 	{
+		if (h.filename.empty())
+			continue;
+
 		std::filesystem::rename(h.filenametmp, h.filename, ec);
 
 		if (ec)
@@ -281,6 +308,11 @@ void unhook(std::string etc_sysinit_dir,
 
 	for (auto &h:hooks)
 	{
+		if (!std::filesystem::exists(h.backup, ec))
+		{
+			continue;
+		}
+
 		if (std::filesystem::equivalent(
 			    h.backup,
 			    h.filename))

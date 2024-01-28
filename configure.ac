@@ -80,5 +80,7 @@ AC_CONFIG_FILES([
 	Makefile
 	po/Makefile.in
 	rc.sysvinit.vera
+	rc.local.vera
+	rc.local_shutdown.vera
 ])
 AC_OUTPUT

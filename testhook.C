@@ -56,7 +56,12 @@ void testhook()
 		o4 << "#! /bin/sh\nexit 4\n";
 		o4.close();
 
-		if (o1.fail() || o2.fail())
+		std::ofstream o5{"testhook.pkgdata/rc.local.vera"};
+		o5 << "#! /bin/sh\nexit 7\n";
+		o5.close();
+
+		if (o1.fail() || o2.fail() || o3.fail() || o4.fail()
+		    || o5.fail())
 			throw std::runtime_error{"Cannot create dummy scripts"};
 
 		std::filesystem::permissions(
@@ -91,6 +96,11 @@ void testhook()
 		  true
 	    ))
 		throw std::runtime_error{"Hook failed"};
+
+	if (std::filesystem::exists("testhook.etcrc/rc.local"))
+		throw std::runtime_error{
+			"non-existent rc.local was hooked"
+				};
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
 				       "init", "vera")} != "init")

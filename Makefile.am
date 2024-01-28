@@ -8,7 +8,7 @@ export LC_ALL=C
 sbin_PROGRAMS=vera vera-init
 noinst_SCRIPTS=vlad
 
-pkgdata_SCRIPTS=rc.sysvinit.vera vera-rck
+pkgdata_SCRIPTS=rc.sysvinit.vera rc.local.vera rc.local_shutdown.vera vera-rck
 
 noinst_PROGRAMS=\
 	testcontroller						\

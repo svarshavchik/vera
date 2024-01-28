@@ -1748,16 +1748,21 @@ version: 1
 
 	  <listitem>
 	    <para>
-	      The original <filename>/etc/rc.d/rc.sysvinit</filename>
-	      script gets moved to
-	      <filename>/etc/rc.d/rc.sysvinit.init</filename>.
+	      The original
+	      <filename>/etc/rc.d/rc.sysvinit</filename>,
+	      <filename>/etc/rc.d/rc.local</filename> and
+	      <filename>/etc/rc.d/rc.local_shutdown</filename>,
+	      scripts get moved to
+	      <filename>/etc/rc.d/rc.sysvinit.init</filename>,
+	      <filename>/etc/rc.d/rc.local.init</filename> and
+	      <filename>/etc/rc.d/rc.local_shutdown.init</filename>,
+	      if they exist.
 	    </para>
 	  </listitem>
 
 	  <listitem>
 	    <para>
-	      <filename>/sbin/init</filename> and
-	      <filename>/etc/rc.d/rc.sysvinit</filename> are replaced
+	      The moved scripts get replaced
 	      with links to <command>vera</command>'s replacements.
 	    </para>
 	  </listitem>
@@ -1802,7 +1807,7 @@ version: 1
 	<para>
 	  When <command>unhook</command> determines that
 	  <command>vera-up</command> is not the case, <command>unhook</command>
-	  removes the originally <command>hook</command>ed links.
+	  restores the scripts that <command>hook</command> originally moved.
 	</para>
 
 	<para>
@@ -1891,10 +1896,22 @@ version: 1
 	</para>
 
 	<para>
+	  Updating <command>init</command> after hooking into and starting
+	  <command>vera</command> results in a mostly bricked system that
+	  will not shutdown properly, but will probably reboot into the
+	  original <command>init</command> if all filesystems are fully
+	  synced before forcing the reboot. Do not update
+	  <command>init</command> before fully
+	  Unhook <command>vera</command> (twice) and rebooting back into
+	  <command>init</command>
+	  (see <xref linkend="management" /> for more information).
+	</para>
+
+	<para>
 	  Using <command>killall</command> to send a
 	  <errorcode>SIGKILL</errorcode> ends up terminating
 	  <command>vera</command>'s
-	  secondary process that handles non-privileged commands, like
+	  secondary process that handles commands like
 	  <command>status</command>. Use
 	  <quote><command>kill -usr1 1</command></quote>
 	  to restart it.
