@@ -24,7 +24,9 @@
 #include <iostream>
 
 current_containers_infoObj::current_containers_infoObj()
-	: runlevel_configuration{default_runlevels()}
+	: current_containers_infoObj{
+			std::tuple{default_runlevels(), false}
+		}
 {
 }
 

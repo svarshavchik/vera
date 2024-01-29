@@ -82,9 +82,10 @@ std::string runlevelconfig()
 	return RUNLEVELCONFIG;
 }
 
-// Load the runlevelconfig file at startup.
+// Load the runlevelconfig file at startup. Returns the runlevels and an
+// indication if the default runlevel was overridden.
 
-runlevels load_runlevelconfig()
+std::tuple<runlevels, bool> load_runlevelconfig()
 {
 	auto rl=proc_get_runlevel_config(
 		runlevelconfig(),
@@ -97,32 +98,13 @@ runlevels load_runlevelconfig()
 				  "using built-in default"));
 		});
 
-	// If there's an "override" alias, it overrides the "default" one.
+	bool overridden=proc_apply_runlevel_override(rl);
 
-	for (auto &[name, runlevel] : rl)
-	{
-		auto iter=runlevel.aliases.find("override");
-
-		if (iter == runlevel.aliases.end())
-			continue;
-
-		// We remove the existing "default" alias and put it where
-		// "override" is. This way, the rest of the startup code
-		// just looks for a "default".
-		runlevel.aliases.erase(iter);
-
-		for (auto &[name, runlevel] : rl)
-			runlevel.aliases.erase("default");
-
-		runlevel.aliases.insert("default");
-		break;
-	}
-
-	return rl;
+	return std::tuple{std::move(rl), overridden};
 }
 
 current_containers_infoObj::current_containers_infoObj()
-	: runlevel_configuration{load_runlevelconfig()}
+	: current_containers_infoObj{load_runlevelconfig()}
 {
 }
 
@@ -557,6 +539,11 @@ void vera_init()
 		request_runlevel(socketa, "default");
 
 		proc_do_request(socketb);
+
+		if (get_containers_info(nullptr)->default_runlevel_override)
+		{
+			proc_remove_runlevel_override(runlevelconfig());
+		}
 	}
 
 	// Enter the event loop
@@ -1330,7 +1317,7 @@ void vlad(std::vector<std::string> args)
 				      }) ? 0:1);
 		}
 
-		auto rl=load_runlevelconfig();
+		const auto &[rl, flag]=load_runlevelconfig();
 
 		for (auto &[name, runlevel] : rl)
 		{
@@ -1354,7 +1341,7 @@ void vlad(std::vector<std::string> args)
 		if (!inittab("/etc/inittab",
 			     INSTALLCONFIGDIR,
 			     PKGDATADIR,
-			     load_runlevelconfig()))
+			     std::get<0>(load_runlevelconfig())))
 		{
 			exit(1);
 		}
@@ -1401,7 +1388,7 @@ void vlad(std::vector<std::string> args)
 			if (!inittab("/etc/inittab",
 				     INSTALLCONFIGDIR,
 				     PKGDATADIR,
-				     load_runlevelconfig()))
+				     std::get<0>(load_runlevelconfig())))
 			{
 				exit(1);
 			}

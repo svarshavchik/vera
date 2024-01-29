@@ -426,6 +426,13 @@ void current_containers_infoObj::define_dependency(
 	}
 }
 
+current_containers_infoObj::current_containers_infoObj(
+	std::tuple<runlevels, bool> config_and_override
+) : runlevel_configuration{std::move(std::get<0>(config_and_override))},
+    default_runlevel_override{std::get<1>(config_and_override)}
+{
+}
+
 //! Information about a container's running state.
 
 //! Return a singleton for all current process containers.

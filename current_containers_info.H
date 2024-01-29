@@ -28,6 +28,12 @@ class current_containers_infoObj : public std::enable_shared_from_this<
 
 	//! Runlevel configuration
 	runlevels runlevel_configuration;
+
+public:
+	//! Whether the default runlevel was overriden in the config file
+	const bool default_runlevel_override;
+private:
+
 #ifdef UNIT_TEST
 public:
 #endif
@@ -62,6 +68,11 @@ public:
 
 	current_containers_infoObj();
 
+public:
+	current_containers_infoObj(
+		std::tuple<runlevels, bool> config_and_override
+	);
+public:
 	friend time_t run_timers();
 	friend class proc_container_runnerObj;
 

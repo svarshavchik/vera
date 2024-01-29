@@ -188,3 +188,59 @@ bool proc_set_runlevel_default_override(
 
 	return proc_set_runlevel_config(configfile, current_runlevels);
 }
+
+bool proc_apply_runlevel_override(runlevels &rl)
+{
+	bool overridden=false;
+
+	// If there's an "override" alias, it overrides the "default" one.
+
+	for (auto &[name, runlevel] : rl)
+	{
+		auto iter=runlevel.aliases.find("override");
+
+		if (iter == runlevel.aliases.end())
+			continue;
+
+		// We remove the existing "default" alias and put it where
+		// "override" is. This way, the rest of the startup code
+		// just looks for a "default".
+		runlevel.aliases.erase(iter);
+
+		for (auto &[name, runlevel] : rl)
+			runlevel.aliases.erase("default");
+
+		runlevel.aliases.insert("default");
+		overridden=true;
+		break;
+	}
+	return overridden;
+}
+
+void proc_remove_runlevel_override(const std::string &configfile)
+{
+	bool invalid=false;
+
+	auto rl=proc_get_runlevel_config(
+		configfile,
+		[&]
+		(const std::string &error)
+		{
+			// We already reported the error,
+			// probably, in load_runlevelconfig()
+			invalid=true;
+		});
+
+	for (auto &[name, runlevel] : rl)
+	{
+		auto iter=runlevel.aliases.find("override");
+
+		if (iter != runlevel.aliases.end() && !invalid)
+		{
+			runlevel.aliases.erase(iter);
+
+			proc_set_runlevel_config(configfile, rl);
+			break;
+		}
+	}
+}

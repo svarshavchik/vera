@@ -28,6 +28,34 @@ void loadtest(const std::string &name, bool enabled)
 	);
 }
 
+std::vector<std::string> search_default_runlevel(const runlevels &rl)
+{
+	std::vector<std::string> default_runlevel;
+
+	for (auto &[runlevel_name, runlevel] : rl)
+	{
+		if (runlevel.aliases.find("default") !=
+		    runlevel.aliases.end())
+			default_runlevel.push_back(runlevel_name);
+	}
+
+	return default_runlevel;
+}
+
+std::vector<std::string> find_default_runlevel(const std::string &configfile)
+{
+
+	return search_default_runlevel(
+		proc_get_runlevel_config(
+			configfile,
+			[&]
+			(auto &msg)
+			{
+				std::cerr << msg << "\n";
+			})
+	);
+}
+
 int main(int argc, char **argv)
 {
 	std::vector<std::string> args{argv, argv+argc};
@@ -166,26 +194,20 @@ int main(int argc, char **argv)
 				     std::cerr << msg << "\n";
 			     }))
 		{
-			std::cout << "Could not set \"4\"\n";
+			std::cout << "Could not set \"5\"\n";
 			exit(1);
 		}
 
-		std::vector<std::string> default_runlevel;
+		auto rl=proc_get_runlevel_config(
+			args[2],
+			[&]
+			(auto &msg)
+			{
+				std::cerr << msg << "\n";
+			});
 
-		for (auto &[runlevel_name, runlevel] : proc_get_runlevel_config(
-			     args[2],
-			     [&]
-			     (auto &msg)
-			     {
-				     std::cerr << msg << "\n";
-			     }))
-		{
-			if (runlevel.aliases.find("default") !=
-			    runlevel.aliases.end())
-				default_runlevel.push_back(runlevel_name);
-		}
-
-		if (default_runlevel != std::vector<std::string>{"custom"})
+		if (search_default_runlevel(rl)
+		    != std::vector<std::string>{"custom"})
 		{
 			std::cerr << "Unexpected default runlevel update."
 				  << std::endl;
@@ -199,6 +221,75 @@ int main(int argc, char **argv)
 					      }))
 		{
 			std::cerr << "Unknown runlevel was accepted.\n";
+			exit(1);
+		}
+
+		if (!proc_set_runlevel_default_override(
+			    args[2],
+			    "graphical",
+			    []
+			    (const auto &msg)
+			    {
+				    std::cout << msg << "\n";
+			    }))
+		{
+			std::cerr << "cannot override to graphical"
+				  << std::endl;
+			exit(1);
+		}
+
+		rl=proc_get_runlevel_config(
+			args[2],
+			[&]
+			(auto &msg)
+			{
+				std::cerr << msg << "\n";
+			});
+
+		if (!proc_apply_runlevel_override(rl))
+		{
+			std::cerr << "did not find the expected override"
+				  << std::endl;
+			exit(1);
+		}
+
+		if (proc_apply_runlevel_override(rl))
+		{
+			std::cerr << "found the override again, unexpectedly"
+				  << std::endl;
+			exit(1);
+		}
+
+		if (search_default_runlevel(rl)
+		    != std::vector<std::string>{"graphical"})
+		{
+			std::cerr << "runlevel override was not found?"
+				  << std::endl;
+			exit(1);
+		}
+
+		proc_remove_runlevel_override(args[2]);
+
+		rl=proc_get_runlevel_config(
+			args[2],
+			[&]
+			(auto &msg)
+			{
+				std::cerr << msg << "\n";
+			});
+
+		if (proc_apply_runlevel_override(rl))
+		{
+			std::cerr << "found the override unexpectedly (2)"
+				  << std::endl;
+			exit(1);
+		}
+
+		if (find_default_runlevel(args[2])
+		    != std::vector<std::string>{"custom"})
+		{
+			std::cerr << "runlevel was not reset?"
+				  << std::endl;
 			exit(1);
 		}
 

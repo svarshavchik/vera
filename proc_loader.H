@@ -191,6 +191,18 @@ bool proc_set_runlevel_default_override(
 	const std::string &override_runlevel,
 	const std::function<void (const std::string &)> &error);
 
+/*! Apply the default runlevel override
+
+After loading the runlevel configuration search it for an "override" alias.
+If found change it to "default" and remove any existing "default" alias.
+*/
+
+bool proc_apply_runlevel_override(runlevels &rl);
+
+//! Remove the default runlevel override
+
+void proc_remove_runlevel_override(const std::string &configfile);
+
 /*! Validate the unit file
 
 Takes the unit file, and the pathnames to the install, local, and override
