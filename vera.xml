@@ -364,10 +364,10 @@
 		  <entry>single-user</entry><entry>1, S, s</entry><entry>Root login only</entry>
 		</row>
 		<row>
-		  <entry>multi-user</entry><entry>2</entry><entry>All logins</entry>
+		  <entry>networking</entry><entry>2</entry><entry>Custom (same as multi-user), network enabled in some systems</entry>
 		</row>
 		<row>
-		  <entry>networking</entry><entry>3</entry><entry>Network logins enabled</entry>
+		  <entry>multi-user</entry><entry>3</entry><entry>All logins</entry>
 		</row>
 		<row>
 		  <entry>graphical</entry><entry>4</entry><entry>Networking and X</entry>
@@ -425,7 +425,8 @@
 	    runlevels (see <xref linkend="runlevelconfig" /> for more
 	    information).
 	    The <quote>switch</quote> command takes an argument and changes
-	    the system runlevel, for example: <command>vlad switch reboot</command>
+	    the system runlevel, for example:
+	    <command>vlad switch reboot</command>
 	    reboots the system. <command>vera</command> recognizes legacy
 	    runlevel aliases, <command>vlad switch 6</command> has the same
 	    result.
@@ -1295,7 +1296,7 @@ Respawn:
 		This key is equivalent to
 		a <quote>required-by</quote>, but takes effect only when the
 		unit is enabled.
-		It typically refers to runlevels, as described
+		It typically refers to runlevels or targets, as described
 		above. The only result from a
 		<command>vlad enable <replaceable>unit</replaceable></command>
 		is that the unit's <quote>enabled</quote> keys get logically
@@ -1539,7 +1540,7 @@ Before: networking
 		that it <quote>Requires: interfaces</quote> refers to
 		<filename>networking/interfaces</filename>. Its
 		<quote>Enabled: ../system/networking</quote> defines that
-		it's enabled in the <quote>system/neworking</quote> runlevel
+		it's enabled in the <quote>system/networking</quote> runlevel
 		(which can also be defined as
 		<quote>Enabled: /system/networking</quote>).
 	      </para>
@@ -1845,7 +1846,7 @@ version: 1
 	    <para>
 	      Entries that match the names of selected
 	      <filename>/etc/rc.d/rc.<replaceable>X</replaceable></filename>
-	      are singled out for special processing.
+	      scripts get singled out for special processing.
 	    </para>
 	  </listitem>
 	  <listitem>
@@ -1857,6 +1858,15 @@ version: 1
 	    </para>
 	  </listitem>
 	</itemizedlist>
+
+	<note>
+	  <para>
+	    Changes to the <quote>initdefault</quote> entry are ignored.
+	    Use the
+	    <command>default</command> command to change the default
+	    runlevel.
+	  </para>
+	</note>
       </refsect1>
 
       <refsect1 id="internal">

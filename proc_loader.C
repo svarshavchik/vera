@@ -891,7 +891,7 @@ void proc_load_dump(const proc_new_container_set &set)
 				     {&proc_new_containerObj::starting_after,
 				      "starting_after"},
 				     {&proc_new_containerObj::stopping_before,
-				      "starting_before"},
+				      "stopping_before"},
 				     {&proc_new_containerObj::stopping_after,
 				      "stopping_after"}
 			     }})

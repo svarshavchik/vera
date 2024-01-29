@@ -346,8 +346,8 @@ built-in:starting_before dep1
 built-in:starting_before dep2
 built-in:starting_after dep3
 built-in:starting_after dep4
-built-in:starting_before dep5
-built-in:starting_before dep6
+built-in:stopping_before dep5
+built-in:stopping_before dep6
 built-in:stopping_after dep7
 built-in:stopping_after dep8
 EOF

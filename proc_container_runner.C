@@ -88,7 +88,7 @@ proc_container_runner create_runner(
 {
 	std::vector<std::vector<char>> argv;
 
-	if (command.find_first_of("\"'*?~$&|#;\n\r()") ==
+	if (command.find_first_of("\"'`[]{}*?~$&|#;\n\r()") ==
 	    command.npos)
 	{
 		auto b=command.begin(), e=command.end();

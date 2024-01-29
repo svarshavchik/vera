@@ -65,6 +65,9 @@ struct inittab_entry {
 
 	std::string starting_command;
 
+	/*! Stopping command, if we know it */
+	std::string stopping_command;
+
 	/*! The descrption that goes into the generated unit file */
 	std::string description;
 
@@ -104,11 +107,16 @@ struct inittab_entry {
 		// If there's a previous command this one will start after it
 		// and stop before it.
 
+		std::unordered_set<std::string> all_prev_commands;
+
 		for (auto &rl:all_runlevels)
 		{
 			auto &prev_command=prev_commands[rl];
 
 			if (prev_command.empty())
+				continue;
+
+			if (!all_prev_commands.insert(prev_command).second)
 				continue;
 
 			starts_after.push_back(prev_command);
@@ -179,6 +187,12 @@ yaml_write_map inittab_entry::create() const
 			std::make_shared<yaml_write_scalar>(starting_command)
 		);
 	}
+
+	if (!stopping_command.empty())
+		stopping.emplace_back(
+			std::make_shared<yaml_write_scalar>("command"),
+			std::make_shared<yaml_write_scalar>(stopping_command)
+		);
 
 	if (!starts_after.empty())
 		starting.emplace_back(
@@ -293,6 +307,13 @@ struct convert_inittab {
 		      size_t linenum,
 		      const std::string &comment,
 		      all_runlevels_t &all_runlevels);
+
+	//! Generate target for running /etc/rc.d/rc.local
+
+	void start_local(const std::string &identifier,
+			 size_t linenum,
+			 const std::string &comment,
+			 all_runlevels_t &all_runlevels);
 
 	//! Add an entry from the inittab file.
 	void add_inittab(const inittab_entry &entry,
@@ -514,6 +535,35 @@ void convert_inittab::start_rc(const std::string &identifier,
 		all_runlevels.begin(),
 		all_runlevels.end()
 	);
+}
+
+void convert_inittab::start_local(const std::string &identifier,
+				  size_t linenum,
+				  const std::string &comment,
+				  all_runlevels_t &all_runlevels)
+{
+	inittab_entry run_rc_local{
+		prev_commands,
+		all_runlevels,
+		identifier + "-run-local",
+		"test ! -x /etc/rc.d/rc.local.init ||"
+		" /etc/rc.d/rc.local.init start"
+	};
+
+	run_rc_local.stopping_command=
+		"test ! -x /etc/rc.d/rc.local_shutdown.init ||"
+		" /etc/rc.d/rc.local_shutdown.init stop";
+
+	run_rc_local.start_type="forking";
+	run_rc_local.stop_type="manual";
+
+	for (auto &required_by:all_runlevels)
+		run_rc_local.required_by_runlevel(required_by);
+
+	run_rc_local.description=identifier +
+		": started rc.local";
+	add_inittab(run_rc_local,
+		    comment + " (rc.local started)");
 }
 
 /*
@@ -806,12 +856,13 @@ struct inittab_converter {
 		for (auto &rl : required_by_runlevel)
 			new_entry.required_by_runlevel(rl);
 
+		bool is_local_after=
+			new_entry.starting_command == "/etc/rc.d/rc.M";;
 		// rc.K and rc.M run initscripts after it finished its
 		// business.
 
-		bool is_sysvinit_after =
-			new_entry.starting_command == "/etc/rc.d/rc.K"
-			|| new_entry.starting_command == "/etc/rc.d/rc.M";
+		bool is_sysvinit_after=is_local_after ||
+			new_entry.starting_command == "/etc/rc.d/rc.K";
 
 		// Intercept rc.0, rc.6, and rc.K
 
@@ -834,6 +885,14 @@ struct inittab_converter {
 					   linenum,
 					   s,
 					   all_runlevels);
+		}
+
+		if (is_local_after)
+		{
+			generator.start_local(new_entry.identifier,
+					      linenum,
+					      s,
+					      all_runlevels);
 		}
 	}
 
