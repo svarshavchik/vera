@@ -147,7 +147,8 @@ install-data-local:
 		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
 			-p $(DESTDIR)${pkgdatadir} \
-			-o $(DESTDIR)$(OVERRIDECONFIGDIR) >/dev/null
+			-o $(DESTDIR)$(OVERRIDECONFIGDIR) \
+			-r $(DESTDIR)$(RUNLEVELCONFIG) >/dev/null
 
 uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system

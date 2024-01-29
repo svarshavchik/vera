@@ -1049,7 +1049,9 @@ void vlad(std::vector<std::string> args)
 		return;
 	}
 
-	if (args.size() == 1 && args[0] == "reexec")
+	if (args.size() == 1 && (args[0] == "reexec" ||
+				 args[0] == "u" ||
+				 args[0] == "U"))
 	{
 		request_reexec(connect_vera_priv());
 		return;
@@ -1336,12 +1338,16 @@ void vlad(std::vector<std::string> args)
 		exit(1);
 	}
 
-	if (args.size() >= 1 && args[0] == "inittab")
+	if (args.size() == 1 && (args[0] == "inittab" ||
+				 args[0] == "q" || args[0] == "Q"))
 	{
+		std::string initdefault;
+
 		if (!inittab("/etc/inittab",
 			     INSTALLCONFIGDIR,
 			     PKGDATADIR,
-			     std::get<0>(load_runlevelconfig())))
+			     std::get<0>(load_runlevelconfig()),
+			     initdefault))
 		{
 			exit(1);
 		}
@@ -1382,23 +1388,6 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 1 && args[0].size() == 1)
 	{
-		switch (args[0][0]) {
-		case 'q':
-		case 'Q':
-			if (!inittab("/etc/inittab",
-				     INSTALLCONFIGDIR,
-				     PKGDATADIR,
-				     std::get<0>(load_runlevelconfig())))
-			{
-				exit(1);
-			}
-			return;
-		case 'u':
-		case 'U':
-			request_reexec(connect_vera_priv());
-			return;
-		}
-
 		// "a", "b", or "c"
 
 		std::string ondemand{INSTALLCONFIGDIR "/" SYSTEM_PREFIX};

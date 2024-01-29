@@ -602,6 +602,7 @@ struct inittab_converter {
 	const std::string &system_dir;
 	const std::string &pkgdata_dir;
 	const runlevels &runlevels_config;
+	std::string &initdefault;
 
 	convert_inittab generator{system_dir, runlevels_config};
 
@@ -612,10 +613,12 @@ struct inittab_converter {
 
 	inittab_converter(const std::string &system_dir,
 			  const std::string &pkgdata_dir,
-			  const runlevels &runlevels_config)
+			  const runlevels &runlevels_config,
+			  std::string &initdefault)
 		: system_dir{system_dir},
 		  pkgdata_dir{pkgdata_dir},
 		  runlevels_config{runlevels_config},
+		  initdefault{initdefault},
 		  generator{system_dir, runlevels_config}
 	{
 	}
@@ -640,7 +643,10 @@ struct inittab_converter {
 			return;
 
 		if (actions == "initdefault")
+		{
+			initdefault=runlevels;
 			return;
+		}
 
 		if (actions == "sysinit")
 			return;
@@ -887,11 +893,13 @@ bool inittab_converter::finish()
 bool inittab(std::string filename,
 	     const std::string &system_dir,
 	     const std::string &pkgdata_dir,
-	     const runlevels &runlevels)
+	     const runlevels &runlevels,
+	     std::string &initdefault)
 {
 	bool error=false;
 
-	inittab_converter converter{system_dir, pkgdata_dir, runlevels};
+	inittab_converter converter{system_dir, pkgdata_dir, runlevels,
+		initdefault};
 
 	return parse_inittab(
 		filename.c_str(),

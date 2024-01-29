@@ -2819,7 +2819,7 @@ void testmultirunlevels()
 	proc_check_reexec();
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel multi-user:2")
+	if (runlevel != "system/runlevel multi-user:3")
 		throw "unexpected runlevel (2): " + runlevel;
 
 	logged_state_changes.clear();
@@ -2831,7 +2831,7 @@ void testmultirunlevels()
 	proc_check_reexec();
 
 	runlevel=current_runlevel();
-	if (runlevel != "system/runlevel multi-user:2")
+	if (runlevel != "system/runlevel multi-user:3")
 		throw "unexpected runlevel (2): " + runlevel;
 
 	if (logged_state_changes != std::vector<std::string>{

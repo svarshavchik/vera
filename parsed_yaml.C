@@ -184,13 +184,13 @@ runlevels default_runlevels()
 			},
 		},
 		{
-			"multi-user", {
+			"networking", {
 				{ "2" },
 				{ "boot" },
 			},
 		},
 		{
-			"networking", {
+			"multi-user", {
 				{ "3" },
 				{ "boot" },
 			},

@@ -322,8 +322,8 @@ void test_envvars()
 	std::string log{std::istreambuf_iterator{std::ifstream{"log"}.rdbuf()},
 		std::istreambuf_iterator<char>{}};
 
-	if (log != "first|start||3\n"
-	    "second|start||3\n")
+	if (log != "first|start||2\n"
+	    "second|start||2\n")
 	{
 		throw "Unexpected log when switching to networking";
 	}
@@ -350,8 +350,8 @@ void test_envvars()
 	log=std::string{std::istreambuf_iterator{std::ifstream{"log"}.rdbuf()},
 		std::istreambuf_iterator<char>{}};
 
-	if (log != "second|stop|3|boot\n"
-	    "first|stop|3|boot\n")
+	if (log != "second|stop|2|boot\n"
+	    "first|stop|2|boot\n")
 	{
 		throw "Unexpected log when switching to boot";
 	}
