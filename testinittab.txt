@@ -105,13 +105,7 @@ Loading: testinittab.dir/vera/system/inittab/l0-start-shutdown
 Loading installed units
 system/inittab/l0-start-shutdown:start=forking:stop=target
 system/inittab/l0-start-shutdown:description=l0: start rc.d scripts
-system/inittab/l0-start-shutdown:starting:vlad start system/rc.shutdown &&\
-    vlad stop system/rc.custom &&\
-    vlad stop system/rc.graphical &&\
-    vlad stop system/rc.multi-user &&\
-    vlad stop system/rc.networking &&\
-    vlad stop system/rc.reboot &&\
-    vlad stop system/rc.single-user
+system/inittab/l0-start-shutdown:starting:vlad --nowait start system/rc.shutdown
 system/inittab/l0-start-shutdown:required-by system/shutdown
 system/inittab/l0-start-shutdown:starting_before system/rc
 system/inittab/l0-start-shutdown:stopping_after system/rc
@@ -141,13 +135,7 @@ Loading: testinittab.dir/vera/system/inittab/l6-start-reboot
 Loading installed units
 system/inittab/l6-start-reboot:start=forking:stop=target
 system/inittab/l6-start-reboot:description=l6: start rc.d scripts
-system/inittab/l6-start-reboot:starting:vlad start system/rc.reboot &&\
-    vlad stop system/rc.custom &&\
-    vlad stop system/rc.graphical &&\
-    vlad stop system/rc.multi-user &&\
-    vlad stop system/rc.networking &&\
-    vlad stop system/rc.shutdown &&\
-    vlad stop system/rc.single-user
+system/inittab/l6-start-reboot:starting:vlad --nowait start system/rc.reboot
 system/inittab/l6-start-reboot:required-by system/reboot
 system/inittab/l6-start-reboot:starting_before system/rc
 system/inittab/l6-start-reboot:stopping_after system/rc
@@ -225,13 +213,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-start-custom
 Loading installed units
 system/inittab/rc-start-custom:start=forking:stop=target
 system/inittab/rc-start-custom:description=rc: start rc.d scripts
-system/inittab/rc-start-custom:starting:vlad start system/rc.custom &&\
-    vlad stop system/rc.graphical &&\
-    vlad stop system/rc.multi-user &&\
-    vlad stop system/rc.networking &&\
-    vlad stop system/rc.reboot &&\
-    vlad stop system/rc.shutdown &&\
-    vlad stop system/rc.single-user
+system/inittab/rc-start-custom:starting:vlad --nowait start system/rc.custom
 system/inittab/rc-start-custom:required-by system/custom
 system/inittab/rc-start-custom:starting_before system/rc
 system/inittab/rc-start-custom:starting_after system/inittab/rc
@@ -244,13 +226,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-start-graphical
 Loading installed units
 system/inittab/rc-start-graphical:start=forking:stop=target
 system/inittab/rc-start-graphical:description=rc: start rc.d scripts
-system/inittab/rc-start-graphical:starting:vlad start system/rc.graphical &&\
-    vlad stop system/rc.custom &&\
-    vlad stop system/rc.multi-user &&\
-    vlad stop system/rc.networking &&\
-    vlad stop system/rc.reboot &&\
-    vlad stop system/rc.shutdown &&\
-    vlad stop system/rc.single-user
+system/inittab/rc-start-graphical:starting:vlad --nowait start system/rc.graphical
 system/inittab/rc-start-graphical:required-by system/graphical
 system/inittab/rc-start-graphical:starting_before system/rc
 system/inittab/rc-start-graphical:starting_after system/inittab/rc
@@ -263,13 +239,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-start-multi-user
 Loading installed units
 system/inittab/rc-start-multi-user:start=forking:stop=target
 system/inittab/rc-start-multi-user:description=rc: start rc.d scripts
-system/inittab/rc-start-multi-user:starting:vlad start system/rc.multi-user &&\
-    vlad stop system/rc.custom &&\
-    vlad stop system/rc.graphical &&\
-    vlad stop system/rc.networking &&\
-    vlad stop system/rc.reboot &&\
-    vlad stop system/rc.shutdown &&\
-    vlad stop system/rc.single-user
+system/inittab/rc-start-multi-user:starting:vlad --nowait start system/rc.multi-user
 system/inittab/rc-start-multi-user:required-by system/multi-user
 system/inittab/rc-start-multi-user:starting_before system/rc
 system/inittab/rc-start-multi-user:starting_after system/inittab/rc
@@ -282,13 +252,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-start-networking
 Loading installed units
 system/inittab/rc-start-networking:start=forking:stop=target
 system/inittab/rc-start-networking:description=rc: start rc.d scripts
-system/inittab/rc-start-networking:starting:vlad start system/rc.networking &&\
-    vlad stop system/rc.custom &&\
-    vlad stop system/rc.graphical &&\
-    vlad stop system/rc.multi-user &&\
-    vlad stop system/rc.reboot &&\
-    vlad stop system/rc.shutdown &&\
-    vlad stop system/rc.single-user
+system/inittab/rc-start-networking:starting:vlad --nowait start system/rc.networking
 system/inittab/rc-start-networking:required-by system/networking
 system/inittab/rc-start-networking:starting_before system/rc
 system/inittab/rc-start-networking:starting_after system/inittab/rc
@@ -356,13 +320,7 @@ Loading: testinittab.dir/vera/system/inittab/su-start-single-user
 Loading installed units
 system/inittab/su-start-single-user:start=forking:stop=target
 system/inittab/su-start-single-user:description=su: start rc.d scripts
-system/inittab/su-start-single-user:starting:vlad start system/rc.single-user &&\
-    vlad stop system/rc.custom &&\
-    vlad stop system/rc.graphical &&\
-    vlad stop system/rc.multi-user &&\
-    vlad stop system/rc.networking &&\
-    vlad stop system/rc.reboot &&\
-    vlad stop system/rc.shutdown
+system/inittab/su-start-single-user:starting:vlad --nowait start system/rc.single-user
 system/inittab/su-start-single-user:required-by system/single-user
 system/inittab/su-start-single-user:starting_before system/rc
 system/inittab/su-start-single-user:starting_after system/inittab/su
@@ -424,42 +382,69 @@ system/powerok:description=SIGPWR, /etc/powerstatus=O
 Loading: testinittab.dir/vera/system/rc.a
 Loading installed units
 system/rc.a:start=oneshot:stop=target
+system/rc.a:alternative-group=system/rc
 system/rc.a:description=initscripts in system/rc that are required-by: /system/rc.a
 # system/rc.custom
 Loading: testinittab.dir/vera/system/rc.custom
 Loading installed units
 system/rc.custom:start=oneshot:stop=target
+system/rc.custom:alternative-group=system/rc
 system/rc.custom:description=initscripts in system/rc that are required-by: /system/rc.custom
 # system/rc.graphical
 Loading: testinittab.dir/vera/system/rc.graphical
 Loading installed units
 system/rc.graphical:start=oneshot:stop=target
+system/rc.graphical:alternative-group=system/rc
 system/rc.graphical:description=initscripts in system/rc that are required-by: /system/rc.graphical
 # system/rc.multi-user
 Loading: testinittab.dir/vera/system/rc.multi-user
 Loading installed units
 system/rc.multi-user:start=oneshot:stop=target
+system/rc.multi-user:alternative-group=system/rc
 system/rc.multi-user:description=initscripts in system/rc that are required-by: /system/rc.multi-user
 # system/rc.networking
 Loading: testinittab.dir/vera/system/rc.networking
 Loading installed units
 system/rc.networking:start=oneshot:stop=target
+system/rc.networking:alternative-group=system/rc
 system/rc.networking:description=initscripts in system/rc that are required-by: /system/rc.networking
 # system/rc.reboot
 Loading: testinittab.dir/vera/system/rc.reboot
 Loading installed units
 system/rc.reboot:start=oneshot:stop=target
+system/rc.reboot:alternative-group=system/rc
 system/rc.reboot:description=initscripts in system/rc that are required-by: /system/rc.reboot
 # system/rc.shutdown
 Loading: testinittab.dir/vera/system/rc.shutdown
 Loading installed units
 system/rc.shutdown:start=oneshot:stop=target
+system/rc.shutdown:alternative-group=system/rc
 system/rc.shutdown:description=initscripts in system/rc that are required-by: /system/rc.shutdown
 # system/rc.single-user
 Loading: testinittab.dir/vera/system/rc.single-user
 Loading installed units
 system/rc.single-user:start=oneshot:stop=target
+system/rc.single-user:alternative-group=system/rc
 system/rc.single-user:description=initscripts in system/rc that are required-by: /system/rc.single-user
+# system/rc/S80network.sh
+Loading: testinittab.dir/vera/system/rc/S80network.sh
+Loading installed units
+system/rc/S80network.sh:start=forking:stop=manual
+system/rc/S80network.sh:description=S80network.sh: testinittab.dir/etc/rc.d/network
+system/rc/S80network.sh:starting:test ! -x testinittab.dir/etc/rc.d/network || sh testinittab.dir/etc/rc.d/network start
+system/rc/S80network.sh:stopping:test ! -x testinittab.dir/etc/rc.d/network || sh testinittab.dir/etc/rc.d/network stop
+system/rc/S80network.sh:required-by system/rc.multi-user
+# system/rc/S90http
+Loading: testinittab.dir/vera/system/rc/S90http
+Loading installed units
+system/rc/S90http:start=forking:stop=manual
+system/rc/S90http:description=S90http: testinittab.dir/etc/rc.d/rc4.d/S90http
+system/rc/S90http:starting:test ! -x testinittab.dir/etc/rc.d/rc4.d/S90http || testinittab.dir/etc/rc.d/rc4.d/S90http start
+system/rc/S90http:stopping:test ! -x testinittab.dir/etc/rc.d/rc6.d/K90http || testinittab.dir/etc/rc.d/rc6.d/K90http stop
+system/rc/S90http:required-by system/rc.graphical
+system/rc/S90http:required-by system/rc.multi-user
+system/rc/S90http:starting_after system/rc/S80network.sh
+system/rc/S90http:stopping_before system/rc/S80network.sh
 # system/reboot
 Loading: testinittab.dir/vera/system/reboot
 Loading installed units

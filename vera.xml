@@ -80,11 +80,19 @@
 
 	<cmdsynopsis>
 	  <command>vlad</command>
+	  <arg choice='opt'>--nowait</arg>
 	  <group choice='req'>
 	    <arg choice='plain'>start</arg>
 	    <arg choice='plain'>stop</arg>
 	    <arg choice='plain'>restart</arg>
 	    <arg choice='plain'>reload</arg>
+	  </group>
+	  <arg choice='plain'><replaceable>unit</replaceable></arg>
+	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <group choice='req'>
 	    <arg choice='plain'>mask</arg>
 	    <arg choice='plain'>disable</arg>
 	    <arg choice='plain'>enable</arg>
@@ -240,6 +248,13 @@
 	  generally a restart involves a brief interruption in functionality,
 	  but a reload typically maintains functionality while the unit updates
 	  itself.
+	</para>
+
+	<para>
+	  These commands wait until the unit starts, stops, restarts,
+	  or reloads. An optional <quote>--nowait</quote> results in
+	  the command completing immediately, without waiting for the
+	  operation to finish.
 	</para>
 
 	<para>
@@ -1843,7 +1858,13 @@ version: 1
 
 	<para>
 	  The installed replacements check if <command>vera-up</command>,
-	  otherwise they execute the replaced program or script, with no
+	  if so they do nothing because the <command>inittab</command>
+	  command (see <xref linkend="management" />) installs units that
+	  run these scripts.
+	  Otherwise, if not <command>vera-up</command> and
+	  <command>init</command>
+	  is still running (prior/after a reboot) the
+	  replacements execute the replaced program or script, with no
 	  change in behavior.
 	</para>
 
@@ -1859,7 +1880,7 @@ version: 1
 	  <filename>@CONFIGDIR@/hook</filename> on the next reboot as early
 	  as possible. Its absence on a subsequent reboot results in the
 	  original <command>init</command> (now
-	  <filename>/sbin/init.init</filename>) starting normally.
+	  <filename>/sbin/init.init</filename>) starting normally as PID 1.
 	</para>
 
 	<para>
@@ -1877,19 +1898,33 @@ version: 1
 	  restores the scripts that <command>hook</command> originally moved.
 	</para>
 
+	<note>
+	  <para>
+	    Do not run <command>make uninstall</command> to completely
+	    uninstall <command>vera</command> unless it's fully unhooked.
+	  </para>
+
+	  <para>
+	    Do not update the <command>init</command> package unless
+	    <command>vera</command> is fully unhooked.
+	  </para>
+	</note>
+
 	<para>
 	  The <command>inittab</command> command
 	  rereads <filename>/etc/inittab</filename>
-	  and updates the unit specification files in
-	  <filename>@INSTALLCONFIGDIR@</filename>. A brief summary
-	  of the conversion process:
+	  and <filename>/etc/rc.d/rc?.d</filename> directories,
+	  the translates them to unit specification files in
+	  <filename>@INSTALLCONFIGDIR@</filename>. A brief overview
+	  of the translation process for entries in the
+	  <filename>/etc/inittab</filename> file:
 	</para>
 
 	<itemizedlist>
 	  <listitem>
 	    <para>
 	      All <quote><replaceable>keyword</replaceable>wait</quote>
-	      entries get create as <quote>forking</quote> start types;
+	      entries get created as <quote>forking</quote> start types;
 	      <quote>respawn</quote> as <quote>respawn</quote>; and
 	      all others as <quote>oneshot</quote>.
 	    </para>
@@ -1904,8 +1939,19 @@ version: 1
 	  </listitem>
 	  <listitem>
 	    <para>
+	      <quote>boot</quote> and
+	      <quote>bootwait</quote>
+	      entries get added as dependencies of
+	      <filename>system/boot</filename> which is a dependency of
+	      all runlevels, in this manner these entries get executed
+	      before all runlevels' entries.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
 	      Each entry's one-character runlevels get converted to the
-	      corresponding <command>vera</command> runlevel targets.
+	      corresponding <command>vera</command> runlevel targets,
+	      and the entry becomes a dependency of the runlevel target.
 	    </para>
 	  </listitem>
 	  <listitem>
@@ -1923,6 +1969,15 @@ version: 1
 	      in <filename>/etc/inittab</filename>.
 	    </para>
 	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The
+	      <filename>@INSTALLCONFIGDIR@/system/inittab</filename>
+	      directory gets created or updated with units that run each
+	      <filename>/etc/inittab</filename> entry.
+	    </para>
+	  </listitem>
 	</itemizedlist>
 
 	<note>
@@ -1933,6 +1988,73 @@ version: 1
 	    runlevel.
 	  </para>
 	</note>
+
+	<para>
+	  Additionally, entries in <filename>/etc/rc.d/rc?.d</filename>
+	  get translated to unit files as follows:
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      All files with names that don't start with
+	      <quote>S</quote> and <quote>K</quote> get ignored.
+	      Files containing whitespace, a <quote>~</quote>, or a
+	      <quote>#</quote> get ignored;
+	      Otherwise:
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      Every file's (device and) inode gets looked up. All
+	      <quote>S</quote> files named the same, but in different
+	      <filename>/etc/rc.d/rc?.d</filename> directories must have the
+	      same (device and) inode.
+	    </para>
+
+	    <para>
+	      This verifies that the same <quote>S</quote> file in every
+	      <filename>/etc/rc.d/rc?.d</filename> directory is the same
+	      script.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The
+	      <filename>@INSTALLCONFIGDIR@/system/rc</filename>
+	      directory gets created or updated with units that run each
+	      script from the <filename>/etc/rc.d/rc?.d</filename>, and
+	      the converted units are dependencies of the corresponding
+	      <command>vera</command> runlevel target.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      Each unit's starting command runs the <filename>S</filename>
+	      script with the <quote>start</quote> parameter.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The existence of a <quote>K</quote> file with the same
+	      (device and) inode results in the unit's stopping command
+	      getting set, which runs the script with the
+	      <quote>stop</quote> parameter. Otherwise there is no explicit
+	      stopping command.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      If the <filename>S</filename> or <filename>K</filename> scripts
+	      are symbolic links the commands are updated to reflect the
+	      symlink target name, as syntactic sugar.
+	    </para>
+	  </listitem>
+	</itemizedlist>
       </refsect1>
 
       <refsect1 id="internal">
@@ -1948,7 +2070,9 @@ version: 1
 	  to set the <envar>RUNLEVEL</envar>
 	  environment variable and execute a specified script, replacing
 	  PID 1.
-	  This is used as a final action for executing a shutdown or a reboot.
+	  This is used as a final action for executing a shutdown or a reboot
+	  (the <filename>rc.0</filename> and <filename>rc.6</filename>
+	  scripts).
 	</para>
       </refsect1>
 

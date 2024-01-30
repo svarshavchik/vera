@@ -18,6 +18,7 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include <sys/stat.h>
 
 namespace {
 #if 0
@@ -52,7 +53,7 @@ struct inittab_entry {
 	  This entry's run levels.
 
 	*/
-	all_runlevels_t all_runlevels;
+	const all_runlevels_t all_runlevels;
 
 	/*! First field in the inittab line
 	 */
@@ -68,8 +69,12 @@ struct inittab_entry {
 	/*! Stopping command, if we know it */
 	std::string stopping_command;
 
-	/*! The descrption that goes into the generated unit file */
+	/*! The description that goes into the generated unit file */
 	std::string description;
+
+	/*! The unit's alternative-group */
+
+	std::string alternative_group;
 
 	/* Unit's starting type */
 	const char *start_type="oneshot";
@@ -94,7 +99,7 @@ struct inittab_entry {
 	//! New entry read from /etc/inittab
 
 	inittab_entry(prev_commands_t &prev_commands,
-		      all_runlevels_t &all_runlevels,
+		      const all_runlevels_t &all_runlevels,
 		      std::string identifier,
 		      std::string starting_command)
 		: prev_commands{prev_commands},
@@ -158,6 +163,15 @@ yaml_write_map inittab_entry::create() const
 		std::make_shared<yaml_write_scalar>(description)
 	);
 
+	if (!alternative_group.empty())
+		unit.emplace_back(
+			std::make_shared<yaml_write_scalar>(
+				"alternative-group"
+			),
+			std::make_shared<yaml_write_scalar>(
+				alternative_group
+			)
+		);
 	if (!required_by.empty())
 	{
 		unit.emplace_back(
@@ -335,6 +349,13 @@ struct convert_inittab {
 		    "");
 	}
 
+	/*! Add a unit for starting /etc/rc.d/rc?.d entries */
+
+	void add_rcd(const inittab_entry &entry)
+	{
+		add(entry, unit_directory + "/system/rc/" + entry.identifier,
+		    "start " + entry.identifier);
+	}
 private:
 
 	//! Keep track of all created unit files.
@@ -443,6 +464,18 @@ void convert_inittab::cleanup()
 
 		std::filesystem::remove(s);
 	}
+
+	for (auto b=std::filesystem::directory_iterator{
+			unit_directory + "/system/rc/"
+		}; b != std::filesystem::directory_iterator{}; ++b)
+	{
+		std::string s=b->path();
+
+		if (all_units.count(s))
+			continue;
+
+		std::filesystem::remove(s);
+	}
 }
 
 void convert_inittab::start_rc(const std::string &identifier,
@@ -478,7 +511,7 @@ void convert_inittab::start_rc(const std::string &identifier,
 		run_rc_start.required_by_runlevel(required_by);
 
 		run_rc_start.starting_command=
-			"vlad start system/rc." + required_by;
+			"vlad --nowait start system/rc." + required_by;
 		run_rc_start.stop_type="target";
 
 		run_rc_start.description=identifier +
@@ -652,6 +685,7 @@ struct inittab_converter {
 	const std::string &system_dir;
 	const std::string &pkgdata_dir;
 	const runlevels &runlevels_config;
+	std::string rcdir;
 	std::string &initdefault;
 
 	convert_inittab generator{system_dir, runlevels_config};
@@ -664,10 +698,12 @@ struct inittab_converter {
 	inittab_converter(const std::string &system_dir,
 			  const std::string &pkgdata_dir,
 			  const runlevels &runlevels_config,
+			  std::string rcdir,
 			  std::string &initdefault)
 		: system_dir{system_dir},
 		  pkgdata_dir{pkgdata_dir},
 		  runlevels_config{runlevels_config},
+		  rcdir{std::move(rcdir)},
 		  initdefault{initdefault},
 		  generator{system_dir, runlevels_config}
 	{
@@ -901,21 +937,10 @@ struct inittab_converter {
 
 bool inittab_converter::finish()
 {
-	// Now, take each <inittab>-start script that includes the
-	// "vlad start" command for its init runlevel, and add a "vlad stop"
-	// command for all others.
+	// Add all start scripts
 
 	for (auto &[runlevel, unit]:generator.all_start_scripts)
 	{
-		for (auto &[other_runlevel, other_unit]:generator.all_start_scripts)
-		{
-			if (runlevel == other_runlevel)
-				continue;
-
-			unit.starting_command += " &&\\\n    vlad stop system/rc." +
-				other_runlevel;
-		}
-
 		generator.add_inittab(unit, "");
 	}
 
@@ -930,12 +955,258 @@ bool inittab_converter::finish()
 			none,
 			"rc." + rc_runlevel,
 			""};
+		run_rc.alternative_group="rc";
 		run_rc.description="initscripts in system/rc that are required-by: /system/rc." + rc_runlevel;
 		run_rc.stop_type="target";
 
 		generator.add_rc(run_rc);
 	}
 
+	/////////////////////////////////////////////////////////////////////
+	//
+	// Attempt to parse /etc/rc.d/rc?.d directories
+
+	std::set<std::string> sorted_runlevels; // Deterministic order
+
+	for (const auto &[name, rl] : runlevels_config)
+		sorted_runlevels.insert(name);
+
+	// First, we track each S script by its device and inode, and
+	// we store the following information about each one:
+
+	struct rc_script_info {
+
+		// Full path to the first "S" instance of the script
+		std::filesystem::path path;
+
+		// All runlevels it's found in.
+		all_runlevels_t runlevels;
+
+		// Full path to the first "K" instance of the script
+		std::filesystem::path shutdown_path;
+
+		bool operator<(const rc_script_info &o) const
+		{
+			return path < o.path;
+		}
+	};
+
+	// Look up a script by its inode.
+	std::map<std::tuple<dev_t,ino_t>, rc_script_info> file_lookup;
+
+	// Map a filename to its inode, detects same scripts in different
+	// rc directories which are different.
+
+	std::map<std::string, std::tuple<dev_t, ino_t>> ino_lookup;
+
+	// While we're scanning the rc?.d directory we also keep track of which
+	// K files were found.
+
+	std::map<std::tuple<dev_t, ino_t>, std::filesystem::path> klookup;
+
+	for (const auto &name:sorted_runlevels)
+	{
+		auto &rl=runlevels_config.find(name)->second;
+
+		std::set<std::string> sorted_aliases{
+			rl.aliases.begin(), rl.aliases.end()
+		};
+
+		for (auto &alias:sorted_aliases)
+		{
+			if (alias.size() != 1)
+				continue;
+
+			std::string rcdir_name=rcdir + "/rc"+alias+".d";
+
+			std::error_code ec;
+
+			std::filesystem::directory_entry de{rcdir_name, ec};
+
+			if (ec)
+				continue;
+
+			for (auto b=std::filesystem::directory_iterator{
+					rcdir_name
+				}; b != std::filesystem::directory_iterator{};
+			     ++b)
+			{
+				auto path=b->path();
+
+				std::string s=path;
+				std::string f=path.filename();
+
+				if (f.find_first_of(" \r\t\n~#")
+				    != std::string::npos)
+					continue;
+
+				struct stat stat_buf;
+
+				if (stat(s.c_str(), &stat_buf))
+					continue;
+
+				std::tuple dev_ino{
+					stat_buf.st_dev,
+					stat_buf.st_ino
+				};
+
+				if (*f.c_str() == 'S')
+				{
+					auto ino_lookup_iter=
+						ino_lookup.emplace(
+							f,
+							dev_ino
+						);
+
+					if (ino_lookup_iter.first->second !=
+					    dev_ino)
+					{
+						throw std::runtime_error{
+							"Inconsistent names: "
+								+ s
+								+ " does not "
+								"match another "
+								+ f
+								};
+					}
+
+					auto file_lookup_iter=
+						file_lookup.emplace(
+							dev_ino,
+							rc_script_info{
+								path
+							});
+
+					auto &existing_path=
+						file_lookup_iter.first->second
+						.path;
+
+					// This'll also pick up the same
+					// file in the same directory...
+
+					if (existing_path.filename() !=
+					    path.filename())
+						throw std::runtime_error{
+							"Inconsistent names: "
+								+ s
+								+ " and "
+								+ static_cast<
+								std::string
+								>(existing_path
+								)};
+					file_lookup_iter.first->second.runlevels
+						.insert(name);
+				}
+				if (*f.c_str() == 'K')
+				{
+					klookup.emplace(dev_ino, path);
+				}
+			}
+		}
+	}
+
+	// We can now compile a sorted map of rc files' start links, to their
+	// stop links, if there are any.
+
+	std::set<rc_script_info> rc_files;
+
+	for (auto &[devino, info] : file_lookup)
+	{
+		auto kiter=klookup.find(devino);
+
+		if (kiter != klookup.end())
+			info.shutdown_path=kiter->second;
+
+		rc_files.insert(std::move(info));
+	}
+
+
+	generator.prev_commands.clear();
+
+	for (auto f:rc_files)
+	{
+		std::string extension=f.path.extension();
+
+		std::string filename=f.path.filename();
+
+		// If the script is a symlink replace it with the symlink
+		// target.
+		{
+			std::error_code ec;
+
+			std::filesystem::directory_entry de{f.path, ec};
+
+			if (!ec && de.is_symlink(ec))
+			{
+				auto link=std::filesystem::read_symlink(
+					f.path, ec);
+
+				if (!ec)
+				{
+					if (link.is_absolute())
+						f.path=link;
+					else
+						f.path.replace_filename(link);
+				}
+			}
+
+			f.path=f.path.lexically_normal();
+		}
+
+		inittab_entry new_entry{
+			generator.prev_commands,
+			f.runlevels,
+			filename,
+			static_cast<std::string>(f.path)
+		};
+
+		new_entry.starting_command=
+			"test ! -x " + static_cast<std::string>(f.path) + " || "
+			+ (extension == ".sh" ? "sh ":"")
+			+ static_cast<std::string>(f.path) + " start";
+
+		if (!f.shutdown_path.empty())
+		{
+			std::error_code ec;
+
+			extension=f.shutdown_path.extension();
+
+			std::filesystem::directory_entry
+				de{f.shutdown_path, ec};
+
+			if (!ec && de.is_symlink(ec))
+			{
+				auto link=std::filesystem::read_symlink(
+					f.shutdown_path, ec);
+
+				if (!ec)
+				{
+					if (link.is_absolute())
+						f.shutdown_path=link;
+					else
+						f.shutdown_path
+							.replace_filename(link);
+				}
+			}
+
+			f.shutdown_path=f.shutdown_path.lexically_normal();
+
+			new_entry.stopping_command=
+				"test ! -x " + static_cast<std::string>(
+					f.shutdown_path
+				) + " || "
+				+ (extension == ".sh" ? "sh ":"")
+				+ static_cast<std::string>(f.shutdown_path)
+				+ " stop";
+		}
+		new_entry.start_type="forking";
+		new_entry.stop_type="manual";
+
+		for (auto &l:f.runlevels)
+			new_entry.required_by.push_back("/system/rc."+l);
+
+		generator.add_rcd(new_entry);
+	}
 	if (!generator.error)
 		generator.cleanup();
 
@@ -950,6 +1221,7 @@ bool inittab_converter::finish()
 }
 
 bool inittab(std::string filename,
+	     std::string rcdir,
 	     const std::string &system_dir,
 	     const std::string &pkgdata_dir,
 	     const runlevels &runlevels,
@@ -958,6 +1230,7 @@ bool inittab(std::string filename,
 	bool error=false;
 
 	inittab_converter converter{system_dir, pkgdata_dir, runlevels,
+		std::move(rcdir),
 		initdefault};
 
 	return parse_inittab(

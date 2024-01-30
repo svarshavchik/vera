@@ -48,12 +48,14 @@
 int stopped_flag;
 int dependencies_flag;
 int waitrunlevel_flag;
+int nowait_flag;
 int override_flag;
 
 const struct option options[]={
 	{"stopped", 0, &stopped_flag, 1},
 	{"dependencies", 0, &dependencies_flag, 1},
 	{"wait", 0, &waitrunlevel_flag, 1},
+	{"nowait", 0, &nowait_flag, 1},
 	{"override", 0, &override_flag, 1},
 	{nullptr},
 };
@@ -891,6 +893,9 @@ static void vlad_start(const std::string &unit)
 		exit(1);
 	}
 
+	if (nowait_flag)
+		return;
+
 	if (!get_start_result(fd))
 	{
 		std::cerr << unit
@@ -971,6 +976,9 @@ void vlad(std::vector<std::string> args)
 			exit(1);
 		}
 
+		if (nowait_flag)
+			return;
+
 		wait_stop(fd);
 		return;
 	}
@@ -988,6 +996,9 @@ void vlad(std::vector<std::string> args)
 			std::cerr << ret << std::endl;
 			exit(1);
 		}
+
+		if (nowait_flag)
+			return;
 
 		int rc=wait_restart(fd);
 
@@ -1025,6 +1036,9 @@ void vlad(std::vector<std::string> args)
 			std::cerr << ret << std::endl;
 			exit(1);
 		}
+
+		if (nowait_flag)
+			return;
 
 		int rc=wait_reload(fd);
 
@@ -1264,6 +1278,7 @@ void vlad(std::vector<std::string> args)
 			  HOOKFILE,
 			  false))
 			exit(1);
+		std::cout << "Switched to vera for future boots." << std::endl;
 		exit(0);
 	}
 
@@ -1276,6 +1291,8 @@ void vlad(std::vector<std::string> args)
 			  HOOKFILE,
 			  true))
 			exit(1);
+		std::cout << "Switched to vera for the next reboot."
+			  << std::endl;
 		exit(0);
 	}
 
@@ -1285,6 +1302,7 @@ void vlad(std::vector<std::string> args)
 		       "/sbin",
 		       PUBCMDSOCKET,
 		       HOOKFILE);
+		std::cout << "Reinstalled init." << std::endl;
 		exit(0);
 	}
 
@@ -1344,6 +1362,7 @@ void vlad(std::vector<std::string> args)
 		std::string initdefault;
 
 		if (!inittab("/etc/inittab",
+			     "/etc/rc.d",
 			     INSTALLCONFIGDIR,
 			     PKGDATADIR,
 			     std::get<0>(load_runlevelconfig()),

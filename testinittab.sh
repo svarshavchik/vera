@@ -5,9 +5,15 @@ srcdir="${srcdir-.}"
 
 rm -rf testinittab.dir
 mkdir -p testinittab.dir/vera/system
+mkdir -p testinittab.dir/vera/rc
 mkdir -p testinittab.dir/local
 mkdir -p testinittab.dir/override
-mkdir -p testinittab.dir/etc
+mkdir -p testinittab.dir/etc/rc.d/rc1.d
+mkdir -p testinittab.dir/etc/rc.d/rc3.d
+mkdir -p testinittab.dir/etc/rc.d/rc4.d
+mkdir -p testinittab.dir/etc/rc.d/rc0.d
+mkdir -p testinittab.dir/etc/rc.d/rc6.d
+
 mkdir -p testinittab.dir/share
 $VALGRIND ./testprocloader genrunlevels testinittab.dir/runlevels testinittab.dir/vera/system
 
@@ -32,10 +38,56 @@ c1:12345:respawn:/sbin/agetty 38400 tty1 linux
 c2:12345:respawn:/sbin/agetty 38400 tty2 linux
 x1:4:respawn:/etc/rc.d/rc.4
 EOF
+
+>testinittab.dir/etc/rc.d/rc3.d/S90http
+>testinittab.dir/etc/rc.d/rc3.d/S30xxx~
+>testinittab.dir/etc/rc.d/rc3.d/.S30xxx
+
+ln testinittab.dir/etc/rc.d/rc3.d/S90http testinittab.dir/etc/rc.d/rc4.d/S90http
+ln testinittab.dir/etc/rc.d/rc3.d/S90http testinittab.dir/etc/rc.d/rc0.d/K90http
+ln testinittab.dir/etc/rc.d/rc3.d/S90http testinittab.dir/etc/rc.d/rc6.d/K90http
+
+chmod 700 testinittab.dir/etc/rc.d/rc3.d/S90http
+
+ln testinittab.dir/etc/rc.d/rc3.d/S90http testinittab.dir/etc/rc.d/rc3.d/S80http
+
+if ./testinittab -i testinittab.dir/inittab \
+	      -l testinittab.dir/local \
+	      -o testinittab.dir/override \
+	      -p testinittab.dir/share \
+	      -R testinittab.dir/etc/rc.d \
+	      -c testinittab.dir/vera >/dev/null
+then
+    echo "Did not detect inconsistent link"
+fi
+
+rm testinittab.dir/etc/rc.d/rc3.d/S80http
+
+>testinittab.dir/etc/rc.d/rc1.d/S90http
+chmod 700 testinittab.dir/etc/rc.d/rc1.d/S90http
+
+if ./testinittab -i testinittab.dir/inittab \
+	      -l testinittab.dir/local \
+	      -o testinittab.dir/override \
+	      -p testinittab.dir/share \
+	      -R testinittab.dir/etc/rc.d \
+	      -c testinittab.dir/vera >/dev/null
+then
+    echo "Did not detect inconsistent link"
+fi
+
+rm testinittab.dir/etc/rc.d/rc1.d/S90http
+
+>testinittab.dir/etc/rc.d/network
+chmod 700 testinittab.dir/etc/rc.d/network
+ln -s ../network testinittab.dir/etc/rc.d/rc3.d/S80network.sh
+ln -s ../network testinittab.dir/etc/rc.d/rc4.d/K80network.sh
+
 $VALGRIND ./testinittab -i testinittab.dir/inittab \
 	      -l testinittab.dir/local \
 	      -o testinittab.dir/override \
 	      -p testinittab.dir/share \
+	      -R testinittab.dir/etc/rc.d \
 	      -c testinittab.dir/vera >testinittab.out
 diff -U 3 testinittab.out ${srcdir}/testinittab.txt
 rm -rf testinittab.dir testinittab.tst testinittab.out

@@ -23,6 +23,7 @@ bool parse_inittab(const std::string &filename,
  */
 
 bool inittab(std::string filename,		//!< /etc/inittab file
+	     std::string rcdir,			//!< /etc/rc.d directory
 	     const std::string &system_dir,	//!< Unit files
 	     const std::string &pkgdata_dir,	//!< Installation directory.
 	     const runlevels &runlevels,   //!< /etc/vera/runlevels file
