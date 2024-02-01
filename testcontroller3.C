@@ -92,14 +92,12 @@ void respawn1_reexec()
 		}, container_install::initial);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"reexec: default",
 			"re-exec: respawn",
 			"respawn: container was started",
 			"respawn: reinstalling runner for pid 2",
 			"respawn: restored preserved state: started",
 			"respawn: restored after re-exec",
 			"respawn: reactivated after re-exec",
-			"Removed current run level!",
 		})
 	{
 		throw "Unexpected results after reexec";
@@ -195,14 +193,12 @@ void respawn3_reexec()
 		}, container_install::initial);
 
 	if (logged_state_changes != std::vector<std::string>{
-			"reexec: default",
 			"re-exec: respawn3",
 			"respawn3: container was started",
 			"respawn3: reinstalling runner for pid 3",
 			"respawn3: restored preserved state: started",
 			"respawn3: restored after re-exec",
 			"respawn3: reactivated after re-exec",
-			"Removed current run level!",
 		})
 	{
 		throw "Unexpected results after reexec";

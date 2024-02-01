@@ -343,7 +343,6 @@ void test_envvars()
 			};
 		});
 
-	std::cout << exitcode << " " << message << std::endl;
 	if (WEXITSTATUS(exitcode) != 0 || message != "")
 		throw "Unexpected result of switch to boot";
 
@@ -353,6 +352,7 @@ void test_envvars()
 	if (log != "second|stop|2|boot\n"
 	    "first|stop|2|boot\n")
 	{
+		std::cout << "===\n" << log << std::endl;
 		throw "Unexpected log when switching to boot";
 	}
 	unlink("log");

@@ -54,16 +54,8 @@ public:
 	bool reexec_requested=false;
 
 	//! Return the previous and current rulevels
-	std::tuple<std::string, std::string> prev_current_runlevel() const
-	{
-		auto current_or_next_runlevel=
-			global_runlevels.upcoming ?
-			global_runlevels.upcoming : global_runlevels.active;
+	std::tuple<std::string, std::string> prev_current_runlevel() const;
 
-		return std::tuple{previous_runlevel_description,
-			current_or_next_runlevel ?
-			current_or_next_runlevel->description : std::string{}};
-	}
 	//! The constructor only loads the runlevel configuration.
 
 	current_containers_infoObj();
@@ -167,14 +159,11 @@ public:
 private:
 	//! Alternate runmodes, or runlevels
 
-	struct alternate_runmodes {
+	struct alternate_runmodes_t {
 
 		//! Which containers are alternatives of each other.
 
 		proc_container_set containers;
-
-		//! The currently active runmode, or runlevel;
-		proc_container active;
 
 		//! Whoever requested the current_runlevel;
 		external_filedesc requester;
@@ -193,15 +182,23 @@ private:
 
 		//! alternate_runmode_check_switch() gets called to process it.
 
-		bool request_switch(const proc_container &pc,
+		void request_switch(const proc_container &pc,
 				    const external_filedesc &requester);
+
+		//! After a container reload/reexec
+
+		//! The containers were reloaded, after an update or a reinstall
+		//! so refresh the active and custom.
+		void reloaded(const alternate_runmodes_t &existing);
 	};
 
 	struct stop_current_runlevel;
 
 	//! See if an alternate runlevel can be started now.
 
-	bool alternate_runmode_process_switch(alternate_runmodes &alt);
+	proc_container alternate_runmode_process_switch(
+		alternate_runmodes_t &alt
+	);
 
 	//! Runlevel aliases
 
@@ -210,8 +207,13 @@ private:
 
 	//! Global runlevels
 
-	alternate_runmodes global_runlevels;
+	std::unordered_map<std::string,
+			   alternate_runmodes_t> alternate_runmodes;
 
+	//! The currently active system/runlevel
+	proc_container active_runlevel;
+
+	//! Final dependency calculations, computed it install()
 	all_dependency_info_t all_dependency_info;
 
 	//! Report changes in dependencies
@@ -383,7 +385,7 @@ public:
 	void install(proc_new_container_set &new_containers,
 		     container_install mode);
 
-	std::string runlevel(const std::string &new_runlevel,
+	std::string runlevel(std::string new_runlevel,
 			     const external_filedesc &requester);
 
 	void getrunlevel(const external_filedesc &efd);
@@ -449,12 +451,14 @@ private:
 
 	//! Check if we've just been re-executed
 
-	//! This gets called by initial_install to check to see if this
-	//! has been re-execed. Returns a vector of placeholder containers
-	//! with a recovered run_info. An empty vector gets returned if this
+	//! This gets called from install to check to see if this
+	//! has been re-execed. Populates a vector of placeholder containers
+	//! with a recovered run_info. The vector is left empty if this
 	//! is not a re-execution.
-	std::vector<proc_container> restore_reexec();
-
+	void restore_reexec(
+		std::vector<proc_container> &restored_containers,
+		std::string &active
+	);
 };
 
 //! Information used by callback from timers and processes

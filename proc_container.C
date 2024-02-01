@@ -30,6 +30,8 @@
 
 const char reexec_envar[]="VERA_REEXEC_FD";
 
+const char system_runlevel[]="system/runlevel";
+
 #define DEP_DEBUG(x) (std::cout << x << "\n")
 
 #undef DEP_DEBUG
@@ -691,8 +693,11 @@ void current_containers_infoObj::check_reexec()
 	if (!poller_is_transferrable())
 		return;
 
-	if (global_runlevels.upcoming)
-		return; // Stopping/starting runlevels
+	for (auto &[name, global_runlevel]:alternate_runmodes)
+	{
+		if (global_runlevel.upcoming)
+			return; // Stopping/starting runlevels
+	}
 
 	// Chances are everything is transferrable, so we'll go through all
 	// the containers, if something is not is_transferrable we bail out,
@@ -733,8 +738,8 @@ void current_containers_infoObj::check_reexec()
 
 		// REEXEC FILE: runlevel
 
-		fprintf(fp, "1\n%s\n", global_runlevels.active ?
-			global_runlevels.active->name.c_str():"default");
+		fprintf(fp, "1\n%s\n",
+			active_runlevel ? active_runlevel->name.c_str():"");
 
 		if ((s.size() > 0 && fwrite(s.data(), s.size(), 1, fp) != 1) ||
 		    fflush(fp) < 0 ||
@@ -788,15 +793,18 @@ void current_containers_infoObj::check_reexec()
 	reexec();
 }
 
-std::vector<proc_container> current_containers_infoObj::restore_reexec()
+void current_containers_infoObj::restore_reexec(
+	std::vector<proc_container> &restored_containers,
+	std::string &active)
 {
+	restored_containers.clear();
+
 	// Read the file descriptor for the temporary file from the
 	// environment.
-	std::vector<proc_container> restored_containers;
 
 	const char *p=getenv(reexec_envar);
 
-	if (!p || !*p) return restored_containers;
+	if (!p || !*p) return;
 
 	int fd;
 
@@ -806,7 +814,7 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 		i.imbue(std::locale{"C"});
 
 		if (!(i >>fd))
-			return restored_containers;
+			return;
 	}
 
 	// Just read the entire temp file into a string.
@@ -830,24 +838,20 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 
 	// REEXEC FILE: version
 	if (!std::getline(i, s))
-		return restored_containers;
+		return;
 
 	int version;
 
 	if (!(std::istringstream{s} >> version) || version != 1)
-		return restored_containers;
+		return;
 
 	// REEXEC FILE: runlevel
-	if (!std::getline(i, s))
-		return restored_containers;
 
-	auto runlevel=std::make_shared<proc_containerObj>(s);
+	if (!std::getline(i, active))
+		return;
 
-	runlevel->type=proc_container_type::runlevel;
-
-	global_runlevels.active=runlevel;
-
-	log_message(_("reexec: ") + s);
+	if (!active.empty())
+		log_message(_("reexec: ") + active);
 
 	// Now, restore the containers.
 
@@ -891,8 +895,6 @@ std::vector<proc_container> current_containers_infoObj::restore_reexec()
 					});
 			});
 	}
-
-	return restored_containers;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1218,9 +1220,10 @@ void current_containers_infoObj::install(
 	// If this is the initial installation check if we were just re-execed.
 
 	std::vector<proc_container> restored_containers;
+	std::string active;
 
 	if (mode == container_install::initial)
-		restored_containers=restore_reexec();
+		restore_reexec(restored_containers, active);
 
 	// Generate stubs for runlevels.
 	//
@@ -1236,7 +1239,12 @@ void current_containers_infoObj::install(
 	// "graphical runlevel" entry.
 
 	std::unordered_map<std::string, proc_container> new_runlevel_aliases;
-	proc_container_set new_runlevel_containers;
+
+	std::unordered_map<std::string,
+			   alternate_runmodes_t> new_alternate_runmodes;
+
+	alternate_runmodes_t &new_system_runlevels=
+		new_alternate_runmodes[system_runlevel];
 
 	for (auto &[name, runlevel] : runlevel_configuration)
 	{
@@ -1280,7 +1288,7 @@ void current_containers_infoObj::install(
 				runlevel_container->new_container
 			);
 
-		new_runlevel_containers.insert(
+		new_system_runlevels.containers.insert(
 			runlevel_container->new_container
 		);
 	}
@@ -1527,7 +1535,30 @@ void current_containers_infoObj::install(
 	// And now we can install the new ones
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
-	global_runlevels.containers=std::move(new_runlevel_containers);
+
+	// Update the currently active runlevel.
+
+	active_runlevel={};
+
+	if (!active.empty())
+	{
+		auto iter=containers.find(active);
+
+		if (iter != containers.end())
+			active_runlevel=iter->first;
+	}
+
+	for (auto &[name, existing] : alternate_runmodes)
+	{
+		auto iter=new_alternate_runmodes.find(name);
+
+		if (iter == new_alternate_runmodes.end())
+			continue;
+
+		iter->second.reloaded(existing);
+	}
+
+	alternate_runmodes=std::move(new_alternate_runmodes);
 	runlevel_aliases=std::move(new_runlevel_aliases);
 
 	// Figure out what to do with the ones that are no longer defined.
@@ -1565,60 +1596,6 @@ void current_containers_infoObj::install(
 		iter->second.all_restored(gci);
 	}
 
-	/////////////////////////////////////////////////////////////
-	//
-	// Update the global_runlevels.active and new_runlevel objects to
-	// reference the reloaded container objects.
-	//
-	// The runlevel_configuration is loaded just once, at startup,
-	// and never touched again. What can happen, though, is the
-	// runlevel_configuration getting updated followed by reexec.
-	//
-	// This is completely out of scope. The only thing we can do is
-	// just enough to keep things from crashing.
-
-	if (global_runlevels.active)
-	{
-		auto iter=containers.find(global_runlevels.active->name);
-
-		if (iter == containers.end() ||
-		    iter->first->type != proc_container_type::runlevel)
-		{
-			// Don't panic. This happens in unit tests.
-
-			log_message(_("Removed current run level!"));
-			global_runlevels.active=nullptr;
-		}
-		else
-		{
-			global_runlevels.active=iter->first;
-		}
-	}
-
-	if (!global_runlevels.active)
-	{
-		if (global_runlevels.upcoming)
-		{
-			log_message(_("No longer switching run levels!"));
-			global_runlevels.upcoming=nullptr;
-		}
-	}
-
-	if (global_runlevels.upcoming)
-	{
-		auto iter=containers.find(global_runlevels.upcoming->name);
-
-		if (iter == containers.end() ||
-		    iter->first->type != proc_container_type::runlevel)
-		{
-			log_message(_("Removed new run level!"));
-			global_runlevels.upcoming=nullptr;
-		}
-		else
-		{
-			global_runlevels.upcoming=iter->first;
-		}
-	}
 	find_start_or_stop_to_do();
 
 	// Race condition. When re-execing, pick up any child processes that
@@ -1636,20 +1613,25 @@ void current_containers_infoObj::install(
 	}
 }
 
+std::tuple<std::string, std::string>
+current_containers_infoObj::prev_current_runlevel() const
+{
+	return std::tuple{previous_runlevel_description,
+		active_runlevel ? active_runlevel->description:std::string{}};
+}
+
 void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 {
 	std::string s{"default"};
 
-	auto r=global_runlevels.active;
-
-	if (r)
-		s=r->name;
+	if (active_runlevel)
+		s=active_runlevel->name;
 
 	efd->write_all(s + "\n");
 
 	for (auto &[alias,c] : runlevel_aliases)
 	{
-		if (r && r == c)
+		if (active_runlevel && active_runlevel == c)
 			efd->write_all(alias + "\n");
 	}
 }
@@ -1737,36 +1719,56 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 }
 
 std::string current_containers_infoObj::runlevel(
-	const std::string &runlevel,
+	std::string new_runlevel,
 	const external_filedesc &requester)
 {
-	bool result;
+	auto system_runlevel_iter=alternate_runmodes.find(system_runlevel);
+
+	if (system_runlevel_iter == alternate_runmodes.end())
+		return "";
+
+	auto &global_runlevels=system_runlevel_iter->second;
 
 	// Check for aliases, first
 
-	auto iter=runlevel_aliases.find(runlevel);
+	auto iter=runlevel_aliases.find(new_runlevel);
 
 	if (iter != runlevel_aliases.end())
 	{
-		result=global_runlevels.request_switch(iter->second, requester);
+		new_runlevel=iter->second->name;
 	}
 	else
 	{
-		// Maybe they specified the "real" name.
+		auto iter=containers.find(RUNLEVEL_PREFIX + new_runlevel);
 
-		auto iter=containers.find(RUNLEVEL_PREFIX + runlevel);
-
-		if (iter == containers.end() ||
-		    iter->first->type != proc_container_type::runlevel)
+		if (iter != containers.end() &&
+		    iter->first->type == proc_container_type::runlevel)
 		{
-			return _("No such run level: ") + runlevel;
+			new_runlevel=iter->first->name;
 		}
-
-		result=global_runlevels.request_switch(iter->first, requester);
 	}
 
-	if (!result)
-		return _("Already switching to another runlevel");
+	auto container_iter=global_runlevels.containers.find(new_runlevel);
+
+	if (container_iter == global_runlevels.containers.end())
+	{
+		return _("No such run level: ") + new_runlevel;
+	}
+
+	for (auto &[name, alternatives] : alternate_runmodes)
+		if (alternatives.in_progress())
+			return _("Already switching to another runlevel");
+
+	if (active_runlevel)
+	{
+		if (active_runlevel == *container_iter)
+			return _("Already on runlevel ")
+				+ active_runlevel->name;
+
+		log_message(_("Stopping ") + active_runlevel->name);
+	}
+
+	global_runlevels.request_switch(*container_iter, requester);
 
 	find_start_or_stop_to_do();
 
@@ -2493,10 +2495,28 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			continue;
 		}
 
-		if (!alternate_runmode_process_switch(global_runlevels))
-			continue;
+		for (auto &[name, alternative] : alternate_runmodes)
+		{
+			auto new_alt=
+				alternate_runmode_process_switch(alternative);
 
-		did_something=true;
+			if (new_alt && name == system_runlevel)
+			{
+				if (active_runlevel)
+					previous_runlevel_description=
+						active_runlevel->description;
+				else
+					previous_runlevel_description="";
+
+				active_runlevel=new_alt;
+			}
+
+			if (new_alt)
+			{
+				did_something=true;
+				break;
+			}
+		}
 	}
 }
 
@@ -3870,20 +3890,13 @@ void current_containers_infoObj::compare_and_log(
 //
 // Alternate runmodes/runlevels
 
-bool current_containers_infoObj::alternate_runmodes::request_switch(
+void current_containers_infoObj::alternate_runmodes_t::request_switch(
 	const proc_container &pc,
 	const external_filedesc &requester_arg
 )
 {
-	if (in_progress())
-		return false;
-
-	if (pc == active)
-		return true;
-
 	upcoming=pc;
 	requester=requester_arg;
-	return true;
 }
 
 // Check if we can now switch runlevels, returns true if switch was
@@ -3896,7 +3909,7 @@ struct current_containers_infoObj::stop_current_runlevel {
 	proc_container_set containers_to_stop;
 
 	stop_current_runlevel(current_containers_infoObj &me,
-			      alternate_runmodes &alt)
+			      alternate_runmodes_t &alt)
 	{
 		// Retrieve the containers required by the new run
 		// level.
@@ -3991,8 +4004,8 @@ struct current_containers_infoObj::stop_current_runlevel {
 	}
 };
 
-bool current_containers_infoObj::alternate_runmode_process_switch(
-	alternate_runmodes &alt
+proc_container current_containers_infoObj::alternate_runmode_process_switch(
+	alternate_runmodes_t &alt
 )
 {
 	if (!alt.upcoming)
@@ -4001,40 +4014,30 @@ bool current_containers_infoObj::alternate_runmode_process_switch(
 		// clear the requester.
 
 		alt.requester={};
-		return false;
+		return {};
 	}
 
 	// Is there a current run level to stop?
 
-	if (alt.active)
+	// Compare everything that the new run level
+	// requires that the current run level does
+	// not require.
+
+	stop_current_runlevel should_stop{*this, alt};
+
+	for (auto b=containers.begin(),
+		     e=containers.end(); b != e; ++b)
 	{
-		// Compare everything that the new run level
-		// requires that the current run level does
-		// not require.
-
-		stop_current_runlevel should_stop{*this, alt};
-
-		log_message(_("Stopping ")
-			    + alt.active->name);
-		for (auto b=containers.begin(),
-			     e=containers.end(); b != e; ++b)
+		if (std::visit(
+			    [&]
+			    (auto &s)
+			    {
+				    return should_stop(b->first, s);
+			    },
+			    b->second.state))
 		{
-			if (std::visit(
-				    [&]
-				    (auto &s)
-				    {
-					    return should_stop(
-						    b->first,
-						    s);
-				    },
-				    b->second.state))
-			{
-				do_stop_or_terminate(b);
-			}
+			do_stop_or_terminate(b);
 		}
-
-		previous_runlevel_description=
-			alt.active->description;
 	}
 
 	log_message(_("Starting ") + alt.upcoming->name);
@@ -4061,7 +4064,41 @@ bool current_containers_infoObj::alternate_runmode_process_switch(
 	// The current run level has stopped, time to start the new
 	// run level.
 
-	alt.active=alt.upcoming;
+	auto active=alt.upcoming;
 	alt.upcoming=nullptr;
-	return true;
+	return active;
+}
+
+void current_containers_infoObj::alternate_runmodes_t::reloaded(
+	const alternate_runmodes_t &existing
+)
+{
+	/////////////////////////////////////////////////////////////
+	//
+	// Update the new_runlevel objects to
+	// reference the reloaded container objects.
+	//
+	// The runlevel_configuration is loaded just once, at startup,
+	// and never touched again. What can happen, though, is the
+	// runlevel_configuration getting updated followed by reexec.
+	//
+	// This is completely out of scope. The only thing we can do is
+	// just enough to keep things from crashing.
+
+	upcoming=existing.upcoming;
+
+	if (upcoming)
+	{
+		auto iter=containers.find(upcoming->name);
+
+		if (iter == containers.end())
+		{
+			log_message(_("Removed new alternative!"));
+			upcoming=nullptr;
+		}
+		else
+		{
+			upcoming=*iter;
+		}
+	}
 }
