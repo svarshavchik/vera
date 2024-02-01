@@ -1235,7 +1235,8 @@ void current_containers_infoObj::install(
 	// Create an alias entry so that starting "5" finds the
 	// "graphical runlevel" entry.
 
-	std::unordered_map<std::string, proc_container> new_runlevel_containers;
+	std::unordered_map<std::string, proc_container> new_runlevel_aliases;
+	proc_container_set new_runlevel_containers;
 
 	for (auto &[name, runlevel] : runlevel_configuration)
 	{
@@ -1274,10 +1275,14 @@ void current_containers_infoObj::install(
 			proc_container_type::runlevel;
 
 		for (auto &alias:runlevel.aliases)
-			new_runlevel_containers.emplace(
+			new_runlevel_aliases.emplace(
 				alias,
 				runlevel_container->new_container
 			);
+
+		new_runlevel_containers.insert(
+			runlevel_container->new_container
+		);
 	}
 
 	new_containers_lookup_t new_containers_lookup;
@@ -1523,6 +1528,7 @@ void current_containers_infoObj::install(
 	containers=std::move(new_current_containers);
 	all_dependency_info=std::move(prepared_dependency_info);
 	global_runlevels.containers=std::move(new_runlevel_containers);
+	runlevel_aliases=std::move(new_runlevel_aliases);
 
 	// Figure out what to do with the ones that are no longer defined.
 
@@ -1641,7 +1647,7 @@ void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 
 	efd->write_all(s + "\n");
 
-	for (auto &[alias,c] : global_runlevels.containers)
+	for (auto &[alias,c] : runlevel_aliases)
 	{
 		if (r && r == c)
 			efd->write_all(alias + "\n");
@@ -1734,19 +1740,15 @@ std::string current_containers_infoObj::runlevel(
 	const std::string &runlevel,
 	const external_filedesc &requester)
 {
-	if (global_runlevels.upcoming || global_runlevels.requester)
-		return _("Already switching to another runlevel");
+	bool result;
 
 	// Check for aliases, first
 
-	auto iter=global_runlevels.containers.find(runlevel);
+	auto iter=runlevel_aliases.find(runlevel);
 
-	if (iter != global_runlevels.containers.end())
+	if (iter != runlevel_aliases.end())
 	{
-		// Do not switch to the same runlevel
-		if (iter->second != global_runlevels.active)
-			global_runlevels.upcoming=iter->second;
-
+		result=global_runlevels.request_switch(iter->second, requester);
 	}
 	else
 	{
@@ -1760,12 +1762,12 @@ std::string current_containers_infoObj::runlevel(
 			return _("No such run level: ") + runlevel;
 		}
 
-		// Do not switch to the same runlevel
-		if (iter->first != global_runlevels.active)
-			global_runlevels.upcoming=iter->first;
+		result=global_runlevels.request_switch(iter->first, requester);
 	}
 
-	global_runlevels.requester=requester;
+	if (!result)
+		return _("Already switching to another runlevel");
+
 	find_start_or_stop_to_do();
 
 	return "";
@@ -3868,6 +3870,21 @@ void current_containers_infoObj::compare_and_log(
 //
 // Alternate runmodes/runlevels
 
+bool current_containers_infoObj::alternate_runmodes::request_switch(
+	const proc_container &pc,
+	const external_filedesc &requester_arg
+)
+{
+	if (in_progress())
+		return false;
+
+	if (pc == active)
+		return true;
+
+	upcoming=pc;
+	requester=requester_arg;
+	return true;
+}
 
 // Check if we can now switch runlevels, returns true if switch was
 // initiated.
@@ -3903,7 +3920,7 @@ struct current_containers_infoObj::stop_current_runlevel {
 
 		proc_container_set to_remove;
 
-		for (auto &[name, rm] : alt.containers)
+		for (auto &rm : alt.containers)
 		{
 			// But exclude anything that we are going to start.
 

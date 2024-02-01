@@ -169,9 +169,9 @@ private:
 
 	struct alternate_runmodes {
 
-		//! Lookup map for the mutex containers
+		//! Which containers are alternatives of each other.
 
-		std::unordered_map<std::string, proc_container> containers;
+		proc_container_set containers;
 
 		//! The currently active runmode, or runlevel;
 		proc_container active;
@@ -181,6 +181,20 @@ private:
 
 		//! Next container, when switching alternates
 		proc_container upcoming;
+
+		//! Whether a switch is in progress
+
+		bool in_progress() const
+		{
+			return upcoming || requester;
+		}
+
+		//! Request a switch
+
+		//! alternate_runmode_check_switch() gets called to process it.
+
+		bool request_switch(const proc_container &pc,
+				    const external_filedesc &requester);
 	};
 
 	struct stop_current_runlevel;
@@ -188,6 +202,11 @@ private:
 	//! See if an alternate runlevel can be started now.
 
 	bool alternate_runmode_process_switch(alternate_runmodes &alt);
+
+	//! Runlevel aliases
+
+	//! init aliases, "1", "3", etc..., to full containers.
+	std::unordered_map<std::string, proc_container> runlevel_aliases;
 
 	//! Global runlevels
 
