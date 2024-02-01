@@ -2460,79 +2460,6 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 		}
 	};
 
-	// Compute which containers to stop when switching run levels.
-
-	struct stop_current_runlevel {
-
-		proc_container_set containers_to_stop;
-
-		stop_current_runlevel(current_containers_infoObj &me,
-				      const proc_container &current_runlevel,
-				      const proc_container &new_runlevel)
-		{
-			// Retrieve the containers required by the new run
-			// level.
-
-			proc_container_set new_runlevel_containers;
-
-			me.all_required_dependencies(
-				new_runlevel,
-				[&]
-				(const current_container &dep)
-				{
-					new_runlevel_containers.insert(
-						dep->first
-					);
-				});
-
-			// Now, retrieve the containers required by the
-			// current run level. If they don't exist in the
-			// new run level: they are the containers to stop.
-
-			me.all_required_dependencies(
-				current_runlevel,
-				[&, this]
-				(const current_container &dep)
-				{
-					if (new_runlevel_containers.find(
-						    dep->first
-					    ) != new_runlevel_containers.end())
-						return;
-
-					containers_to_stop.insert(dep->first);
-					new_runlevel_containers.insert(
-						dep->first
-					);
-				});
-		}
-
-		bool operator()(const proc_container &s,
-				state_started &state)
-		{
-			return containers_to_stop.find(s) !=
-				containers_to_stop.end();
-		}
-
-		bool operator()(const proc_container &s,
-				state_starting &state)
-		{
-			return false;
-		}
-
-		bool operator()(const proc_container &s,
-				state_stopped &)
-		{
-			return false;
-		}
-
-		bool operator()(const proc_container &s,
-				state_stopping &)
-		{
-			return false;
-		}
-
-	};
-
 	while (did_something)
 	{
 		did_something=false;
@@ -2564,77 +2491,8 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			continue;
 		}
 
-		if (!global_runlevels.upcoming)
-		{
-			// Not switching runlevels. If we just switched,
-			// clear the requester.
-
-			global_runlevels.requester={};
+		if (!alternate_runmode_process_switch(global_runlevels))
 			continue;
-		}
-
-		// Is there a current run level to stop?
-
-		if (global_runlevels.active)
-		{
-			// Compare everything that the new run level
-			// requires that the current run level does
-			// not require.
-
-			stop_current_runlevel should_stop{
-				*this, global_runlevels.active,
-				global_runlevels.upcoming
-			};
-
-			log_message(_("Stopping ")
-				    + global_runlevels.active->name);
-			for (auto b=containers.begin(),
-				     e=containers.end(); b != e; ++b)
-			{
-				if (std::visit(
-					    [&]
-					    (auto &s)
-					    {
-						    return should_stop(
-							    b->first,
-							    s);
-					    },
-					    b->second.state))
-				{
-					do_stop_or_terminate(b);
-				}
-			}
-
-			previous_runlevel_description=
-				global_runlevels.active->description;
-		}
-
-		log_message(_("Starting ") + global_runlevels.upcoming->name);
-
-		all_required_dependencies(
-			global_runlevels.upcoming,
-			[&, this]
-			(const current_container &dep)
-			{
-				auto &[pc, run_info] = *dep;
-
-				if (!std::holds_alternative<state_stopped>(
-					    run_info.state
-				    ))
-					return;
-
-				run_info.state.emplace<state_starting>(
-					true, nullptr
-				);
-				log_state_change(pc, run_info.state);
-			}
-		);
-
-		// The current run level has stopped, time to start the new
-		// run level.
-
-		global_runlevels.active=global_runlevels.upcoming;
-		global_runlevels.upcoming=nullptr;
 
 		did_something=true;
 	}
@@ -4004,4 +3862,189 @@ void current_containers_infoObj::compare_and_log(
 	}
 
 	log_message(container->name + message);
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+// Alternate runmodes/runlevels
+
+
+// Check if we can now switch runlevels, returns true if switch was
+// initiated.
+
+// Compute which containers to stop when switching run levels.
+
+struct current_containers_infoObj::stop_current_runlevel {
+
+	proc_container_set containers_to_stop;
+
+	stop_current_runlevel(current_containers_infoObj &me,
+			      alternate_runmodes &alt)
+	{
+		// Retrieve the containers required by the new run
+		// level.
+
+		proc_container_set new_runlevel_containers;
+
+		new_runlevel_containers.insert(alt.upcoming);
+
+		me.all_required_dependencies(
+			alt.upcoming,
+			[&]
+			(const current_container &dep)
+			{
+				new_runlevel_containers.insert(
+					dep->first
+				);
+			});
+
+		// Now, go through all the alternate runlevels and compile
+		// a list of them, and any other containers that require them.
+
+		proc_container_set to_remove;
+
+		for (auto &[name, rm] : alt.containers)
+		{
+			// But exclude anything that we are going to start.
+
+			if (new_runlevel_containers.find(rm) !=
+			    new_runlevel_containers.end())
+				continue;
+
+			to_remove.insert(rm);
+			me.all_required_by_dependencies(
+				rm,
+				[&]
+				(const current_container &c)
+				{
+					if (new_runlevel_containers.find(
+						    c->first
+					    ) !=
+					    new_runlevel_containers.end())
+						return;
+
+					to_remove.insert(c->first);
+				}
+			);
+		}
+		// Now, retrieve the containers required by the
+		// current run level. If they don't exist in the
+		// new run level: they are the containers to stop.
+
+		for (auto &rm:to_remove)
+		{
+			me.all_required_dependencies(
+				rm,
+				[&, this]
+				(const current_container &dep)
+				{
+					if (new_runlevel_containers.find(
+						    dep->first
+					    ) != new_runlevel_containers.end())
+						return;
+
+					containers_to_stop.insert(dep->first);
+				});
+		}
+	}
+
+	bool operator()(const proc_container &s,
+			state_started &state)
+	{
+		return containers_to_stop.find(s) !=
+			containers_to_stop.end();
+	}
+
+	bool operator()(const proc_container &s,
+			state_starting &state)
+	{
+		return false;
+	}
+
+	bool operator()(const proc_container &s,
+			state_stopped &)
+	{
+		return false;
+	}
+
+	bool operator()(const proc_container &s,
+			state_stopping &)
+	{
+		return false;
+	}
+};
+
+bool current_containers_infoObj::alternate_runmode_process_switch(
+	alternate_runmodes &alt
+)
+{
+	if (!alt.upcoming)
+	{
+		// Not switching runlevels. If we just switched,
+		// clear the requester.
+
+		alt.requester={};
+		return false;
+	}
+
+	// Is there a current run level to stop?
+
+	if (alt.active)
+	{
+		// Compare everything that the new run level
+		// requires that the current run level does
+		// not require.
+
+		stop_current_runlevel should_stop{*this, alt};
+
+		log_message(_("Stopping ")
+			    + alt.active->name);
+		for (auto b=containers.begin(),
+			     e=containers.end(); b != e; ++b)
+		{
+			if (std::visit(
+				    [&]
+				    (auto &s)
+				    {
+					    return should_stop(
+						    b->first,
+						    s);
+				    },
+				    b->second.state))
+			{
+				do_stop_or_terminate(b);
+			}
+		}
+
+		previous_runlevel_description=
+			alt.active->description;
+	}
+
+	log_message(_("Starting ") + alt.upcoming->name);
+
+	all_required_dependencies(
+		alt.upcoming,
+		[&, this]
+		(const current_container &dep)
+		{
+			auto &[pc, run_info] = *dep;
+
+			if (!std::holds_alternative<state_stopped>(
+				    run_info.state
+			    ))
+				return;
+
+			run_info.state.emplace<state_starting>(
+				true, nullptr
+			);
+			log_state_change(pc, run_info.state);
+		}
+	);
+
+	// The current run level has stopped, time to start the new
+	// run level.
+
+	alt.active=alt.upcoming;
+	alt.upcoming=nullptr;
+	return true;
 }

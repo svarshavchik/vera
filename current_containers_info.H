@@ -183,6 +183,12 @@ private:
 		proc_container upcoming;
 	};
 
+	struct stop_current_runlevel;
+
+	//! See if an alternate runlevel can be started now.
+
+	bool alternate_runmode_process_switch(alternate_runmodes &alt);
+
 	//! Global runlevels
 
 	alternate_runmodes global_runlevels;
