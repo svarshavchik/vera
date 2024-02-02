@@ -478,6 +478,22 @@ static bool proc_load_container(
 		return false;
 	}
 
+	if (key == "alternative-group")
+	{
+
+		if (!parsed.parse_scalar(
+			    n,
+			    name,
+			    error,
+			    nc->new_container->alternative_group)
+		    || !parsed.validate_hier(
+			    nc->new_container->alternative_group,
+			    name,
+			    error
+		    ))
+			return false;
+	}
+
 	// "required-by" loads dep_required_by
 	//
 	// "enabled" is functionally equivalent
@@ -834,6 +850,12 @@ void proc_load_dump(const proc_new_container_set &set)
 			  << ":start=" << n->new_container->get_start_type()
 			  << ":stop=" << n->new_container->get_stop_type()
 			  << "\n";
+
+		if (!n->new_container->alternative_group.empty())
+			std::cout << name << ":alternative-group="
+				  << n->new_container->alternative_group
+				  << "\n";
+
 		if (!n->new_container->description.empty())
 			std::cout << name << ":description="
 				  << n->new_container->description << "\n";
@@ -1115,6 +1137,16 @@ bool proc_validate(const std::string &unitfile,
 			 &proc_new_containerObj::stopping_after},
 		};
 
+		if (!s->new_container->alternative_group.empty())
+		{
+			if (!s->dep_required_by.empty())
+				log_message(
+					_("Alternative-Group container "
+					  "with a required-by dependency: "
+					) + s->new_container->name
+				);
+		}
+
 		for (auto &[dep_name, ptr] : dependencies)
 		{
 			auto &us=(*s).*(ptr);
@@ -1149,6 +1181,24 @@ bool proc_validate(const std::string &unitfile,
 					  << name
 					  << _(": not defined")
 					  << std::endl;
+			}
+		}
+	}
+
+	for (auto &s:new_configs)
+	{
+		for (auto &r:s->dep_requires)
+		{
+			auto iter=set.find(r);
+
+			if (iter == set.end())
+				continue;
+
+			if (!(*iter)->new_container->alternative_group.empty())
+			{
+				log_message(_("Container with a dependency on"
+					      " an Alternative-Group: ")
+					    + s->new_container->name);
 			}
 		}
 	}

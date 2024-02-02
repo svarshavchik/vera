@@ -141,6 +141,22 @@ EOF
 cat loadtest.expected
 diff -U 3 loadtest.expected loadtest.out
 
+cat >loadtest.txt <<EOF
+name: built-in
+description: Alternative 1
+Alternative-Group: alternative
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest system/built-in <loadtest.txt >loadtest.out
+
+cat >loadtest.expected <<EOF
+system/built-in:start=forking:stop=manual
+system/built-in:alternative-group=system/alternative
+system/built-in:description=Alternative 1
+EOF
+diff -U 3 loadtest.expected loadtest.out
+
 >loadtest.txt
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat loadtest.out
@@ -492,6 +508,50 @@ for f in *
 do
     ../testprocloader validatetest $f "system/$f" . ../localdir ../configdir
 done
+
+rm -f *
+
+cat >something <<EOF
+name: something
+description: Something
+version: 1
+EOF
+
+cat >built-in <<EOF
+name: built-in
+description: Alternative 1
+Alternative-Group: alternative
+Required-By:
+   - something
+version: 1
+EOF
+
+$VALGRIND ../testprocloader validatetest \
+	  built-in system/built-in . ../localdir ../configdir \
+	  >/dev/null 2>../loadtest.out
+echo 'Alternative-Group container with a required-by dependency: system/built-in' >../loadtest.txt
+diff -U 3 ../loadtest.txt ../loadtest.out
+
+cat >something <<EOF
+name: something
+description: Something
+requires: built-in
+version: 1
+EOF
+
+cat >built-in <<EOF
+name: built-in
+description: Alternative 1
+Alternative-Group: alternative
+version: 1
+EOF
+
+$VALGRIND ../testprocloader validatetest \
+	  built-in built-in . ../localdir ../configdir \
+	  >/dev/null 2>../loadtest.out
+echo 'Container with a dependency on an Alternative-Group: something' >../loadtest.txt
+diff -U 3 ../loadtest.txt ../loadtest.out
+
 cd ..
 rm -rf globaldir localdir overridedir
 mkdir -p globaldir localdir overridedir

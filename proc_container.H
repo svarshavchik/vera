@@ -136,6 +136,9 @@ public:
 	//! type=runlevel container names are their bare name
 	std::string description;
 
+	//! Container's alternative group
+	std::string alternative_group;
+
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
 
@@ -248,7 +251,6 @@ public:
 
 	//! These process containers stop after this one.
 	std::unordered_set<std::string> stopping_after;
-
 };
 
 typedef std::shared_ptr<proc_new_containerObj> proc_new_container;

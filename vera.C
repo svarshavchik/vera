@@ -1356,6 +1356,8 @@ void vlad(std::vector<std::string> args)
 	}
 	if (args.size() >= 2 && args[0] == "validate")
 	{
+		bool error=false;
+
 		if (!proc_validate(args[1], (
 					   args.size() >= 3
 					   ? args[2]:std::string{}
@@ -1363,7 +1365,13 @@ void vlad(std::vector<std::string> args)
 				   installconfigdir(),
 				   localconfigdir(),
 				   overrideconfigdir(),
-				   log_message))
+				   [&]
+				   (const std::string &msg)
+				   {
+					   std::cerr << "Error: "
+						     << msg << std::endl;
+					   error=true;
+				   }) || error)
 			exit(1);
 		return;
 	}

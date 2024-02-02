@@ -1,0 +1,4 @@
+system/built-in:start=forking:stop=manual
+system/built-in:alternative-group=system/alternative
+system/built-in:description=Alternative 1
+system/built-in:required-by system/something

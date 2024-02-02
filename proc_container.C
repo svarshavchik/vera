@@ -1331,6 +1331,26 @@ void current_containers_infoObj::install(
 	{
 		DEP_DEBUG("Calculating dependencies for "
 			  << c->new_container->name);
+
+		// Create the alternative runmode groups.
+
+		if (!c->new_container->alternative_group.empty())
+		{
+			auto &alternative_group=
+				c->new_container->alternative_group;
+
+			if (alternative_group == system_runlevel)
+			{
+				log_message(c->new_container->name +
+					    _(": reserved alternative-group: ")
+					    + system_runlevel);
+				continue;
+			}
+			new_alternate_runmodes[
+				alternative_group
+			].containers.insert(c->new_container);
+		}
+
 		propagate_dependencies.prepare(c);
 
 		// Make two passes:

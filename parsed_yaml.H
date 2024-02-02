@@ -352,56 +352,67 @@ struct parsed_yaml {
 				if (!s)
 					return false;
 
-				if (*s->c_str() == '/')
-				{
-					auto rel=s->substr(1);
-
-					if (!proc_validpath(rel))
-					{
-						error(*s +
-						      _(": non-compliant name"))
-							;
-						return false;
-					}
-					requirements.insert(rel);
-					return true;
-				}
-
-				std::string new_path;
-
-				try {
-					new_path =
-						(hier_name.parent_path() / *s)
-						.lexically_normal();
-				} catch (...) {
-
-
-				}
-
-				if (new_path.empty())
-				{
-					error(*s +
-					      _(": non-compliant name"));
+				if (!validate_hier(*s, hier_name, error))
 					return false;
-				}
 
-				// Drop any trailing / that lexically_normal()
-				// might produce.
-
-				if (new_path.back() == '/')
-					new_path.pop_back();
-
-				if (!proc_validpath(new_path))
-				{
-					error(new_path +
-					      _(": non-compliant name"));
-					return false;
-				}
-
-				requirements.insert(new_path);
+				requirements.insert(*s);
 				return true;
 			},
 			error);
+	}
+
+	static bool validate_hier(
+		std::string &s,
+		const std::filesystem::path &hier_name,
+		const std::function<void (const std::string &)> &error
+	)
+	{
+		if (*s.c_str() == '/')
+		{
+			auto rel=s.substr(1);
+
+			if (!proc_validpath(rel))
+			{
+				error(s + _(": non-compliant name"))
+							;
+				return false;
+			}
+			s=rel;
+			return true;
+		}
+
+		std::string new_path;
+
+		try {
+			new_path = (hier_name.parent_path() / s)
+				.lexically_normal();
+		} catch (...) {
+
+
+		}
+
+		if (new_path.empty())
+		{
+			error(s +
+			      _(": non-compliant name"));
+			return false;
+		}
+
+		// Drop any trailing / that lexically_normal()
+		// might produce.
+
+		if (new_path.back() == '/')
+			new_path.pop_back();
+
+		if (!proc_validpath(new_path))
+		{
+			error(new_path +
+			      _(": non-compliant name"));
+			return false;
+		}
+
+		s=new_path;
+		return true;
 	}
 
 	/* Parse starting/stopping section in a unit specification */

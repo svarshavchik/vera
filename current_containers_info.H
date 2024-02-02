@@ -95,6 +95,14 @@ public:
 		all_dependencies all_stopping_first;
 	};
 
+	/*! Additional dependencies used in install()
+
+	  Additional dependencies install() tracks, per container, until
+	  all dependencies get calculated, then these are no longer needed.
+
+	  Only dependency_info gets preserved, as part of all_dependency_info.
+
+	 */
 	struct extra_dependency_info : dependency_info {
 
 		//! Reverse dependencies for all_starting_first
