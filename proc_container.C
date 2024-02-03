@@ -1958,6 +1958,124 @@ struct current_containers_infoObj::start_eligibility {
 	}
 };
 
+/*
+  We just started an alternate runlevel or runmode.
+
+  Compute which containers should now be stopped.
+
+  The constructor gets a list of containers that are about to be started, or
+  have been started.
+
+*/
+
+struct current_containers_infoObj::stop_alternate_group {
+
+	proc_container_set containers_to_stop;
+
+	stop_alternate_group(
+		current_containers_infoObj &me,
+		alternate_runmodes_t &alt,
+		current_container_lookup_t &new_runlevel_containers)
+	{
+		// Now, go through all the alternate runlevels and compile
+		// a list of them, and any other containers that require them.
+
+		proc_container_set to_remove;
+
+		for (auto &rm : alt.containers)
+		{
+			// But exclude anything that we are going to start.
+
+			if (new_runlevel_containers.find(rm) !=
+			    new_runlevel_containers.end())
+				continue;
+
+			to_remove.insert(rm);
+			me.all_required_by_dependencies(
+				rm,
+				[&]
+				(const current_container &c)
+				{
+					if (new_runlevel_containers.find(
+						    c->first
+					    ) !=
+					    new_runlevel_containers.end())
+						return;
+
+					to_remove.insert(c->first);
+				}
+			);
+		}
+
+		// Now, retrieve the containers required by the
+		// alternate containers in the group that are getting stopped,
+		// they're also getting stopped.
+		//
+		// They, and the containers getting stopped are checked to
+		// make sure their state allows them to be stopped.
+
+		for (auto &rm:to_remove)
+		{
+			auto iter=me.containers.find(rm);
+
+			if (iter != me.containers.end())
+				std::visit([&, this]
+					   (auto &s)
+				{
+					check(rm, s);
+				}, iter->second.state);
+
+			me.all_required_dependencies(
+				rm,
+				[&, this]
+				(const current_container &dep)
+				{
+					if (new_runlevel_containers.find(
+						    dep->first
+					    ) != new_runlevel_containers.end())
+						return;
+
+					std::visit([&, this]
+						   (auto &s)
+					{
+						check(dep->first, s);
+					}, dep->second.state);
+				});
+		}
+
+		// We can now proceed and stop them.
+
+		for (auto &c:containers_to_stop)
+		{
+			auto iter=me.containers.find(c);
+
+			if (iter != me.containers.end())
+				me.do_stop_or_terminate(iter);
+		}
+	}
+
+	void check(const proc_container &s,
+			state_started &state)
+	{
+		containers_to_stop.insert(s);
+	}
+
+	void check(const proc_container &s,
+			state_starting &state)
+	{
+	}
+
+	void check(const proc_container &s,
+			state_stopped &)
+	{
+	}
+
+	void check(const proc_container &s,
+			state_stopping &)
+	{
+	}
+};
+
 /*! Process a start request
 
 Immediately writes back to the requesting socket either an empty string
@@ -3919,111 +4037,6 @@ void current_containers_infoObj::alternate_runmodes_t::request_switch(
 	requester=requester_arg;
 }
 
-// Check if we can now switch runlevels, returns true if switch was
-// initiated.
-
-// Compute which containers to stop when switching run levels.
-
-struct current_containers_infoObj::stop_current_runlevel {
-
-	proc_container_set containers_to_stop;
-
-	stop_current_runlevel(current_containers_infoObj &me,
-			      alternate_runmodes_t &alt)
-	{
-		// Retrieve the containers required by the new run
-		// level.
-
-		proc_container_set new_runlevel_containers;
-
-		new_runlevel_containers.insert(alt.upcoming);
-
-		me.all_required_dependencies(
-			alt.upcoming,
-			[&]
-			(const current_container &dep)
-			{
-				new_runlevel_containers.insert(
-					dep->first
-				);
-			});
-
-		// Now, go through all the alternate runlevels and compile
-		// a list of them, and any other containers that require them.
-
-		proc_container_set to_remove;
-
-		for (auto &rm : alt.containers)
-		{
-			// But exclude anything that we are going to start.
-
-			if (new_runlevel_containers.find(rm) !=
-			    new_runlevel_containers.end())
-				continue;
-
-			to_remove.insert(rm);
-			me.all_required_by_dependencies(
-				rm,
-				[&]
-				(const current_container &c)
-				{
-					if (new_runlevel_containers.find(
-						    c->first
-					    ) !=
-					    new_runlevel_containers.end())
-						return;
-
-					to_remove.insert(c->first);
-				}
-			);
-		}
-		// Now, retrieve the containers required by the
-		// current run level. If they don't exist in the
-		// new run level: they are the containers to stop.
-
-		for (auto &rm:to_remove)
-		{
-			me.all_required_dependencies(
-				rm,
-				[&, this]
-				(const current_container &dep)
-				{
-					if (new_runlevel_containers.find(
-						    dep->first
-					    ) != new_runlevel_containers.end())
-						return;
-
-					containers_to_stop.insert(dep->first);
-				});
-		}
-	}
-
-	bool operator()(const proc_container &s,
-			state_started &state)
-	{
-		return containers_to_stop.find(s) !=
-			containers_to_stop.end();
-	}
-
-	bool operator()(const proc_container &s,
-			state_starting &state)
-	{
-		return false;
-	}
-
-	bool operator()(const proc_container &s,
-			state_stopped &)
-	{
-		return false;
-	}
-
-	bool operator()(const proc_container &s,
-			state_stopping &)
-	{
-		return false;
-	}
-};
-
 proc_container current_containers_infoObj::alternate_runmode_process_switch(
 	alternate_runmodes_t &alt
 )
@@ -4042,23 +4055,28 @@ proc_container current_containers_infoObj::alternate_runmode_process_switch(
 	// Compare everything that the new run level
 	// requires that the current run level does
 	// not require.
+		// Retrieve the containers required by the new run
+		// level.
 
-	stop_current_runlevel should_stop{*this, alt};
+	current_container_lookup_t new_runlevel_containers;
 
-	for (auto b=containers.begin(),
-		     e=containers.end(); b != e; ++b)
+	if (auto iter=containers.find(alt.upcoming);
+	    iter != containers.end())
 	{
-		if (std::visit(
-			    [&]
-			    (auto &s)
-			    {
-				    return should_stop(b->first, s);
-			    },
-			    b->second.state))
-		{
-			do_stop_or_terminate(b);
-		}
+		new_runlevel_containers.emplace(alt.upcoming, iter);
 	}
+
+	all_required_dependencies(
+		alt.upcoming,
+		[&]
+		(const current_container &dep)
+		{
+			new_runlevel_containers.emplace(
+				dep->first, dep
+			);
+		});
+
+	stop_alternate_group should_stop{*this, alt, new_runlevel_containers};
 
 	log_message(_("Starting ") + alt.upcoming->name);
 

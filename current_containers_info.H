@@ -200,7 +200,7 @@ private:
 		void reloaded(const alternate_runmodes_t &existing);
 	};
 
-	struct stop_current_runlevel;
+	struct stop_alternate_group;
 
 	//! See if an alternate runlevel can be started now.
 
