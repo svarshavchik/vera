@@ -1304,6 +1304,18 @@ void current_containers_infoObj::install(
 		);
 
 		new_containers_lookup.add(b);
+
+		// Create all the alternative groups
+		auto &alternative_group =
+			(*b)->new_container->alternative_group;
+
+		if (!alternative_group.empty() &&
+		    alternative_group != system_runlevel)
+		{
+			new_alternate_runmodes[
+				alternative_group
+			].containers.insert((*b)->new_container);
+		}
 	}
 
 	propagate_dependencies_t propagate_dependencies{
@@ -1975,7 +1987,7 @@ struct current_containers_infoObj::stop_alternate_group {
 	stop_alternate_group(
 		current_containers_infoObj &me,
 		alternate_runmodes_t &alt,
-		current_container_lookup_t &new_runlevel_containers)
+		proc_container_set &new_runlevel_containers)
 	{
 		// Now, go through all the alternate runlevels and compile
 		// a list of them, and any other containers that require them.
@@ -2106,7 +2118,11 @@ void current_containers_infoObj::start(
 
 	//! Check the eligibility of the specified container, first.
 
+	proc_container_set all_containers_to_start;
+
 	start_eligibility eligibility{iter};
+
+	all_containers_to_start.insert(iter->first);
 
 	std::visit(eligibility, iter->second.state);
 
@@ -2169,6 +2185,7 @@ void current_containers_infoObj::start(
 		{
 			eligibility.next_visited_container=c;
 
+			all_containers_to_start.insert(c->first);
 			std::visit(eligibility,
 				   c->second.state);
 		}
@@ -2194,6 +2211,24 @@ void current_containers_infoObj::start(
 		error_message += "\n";
 		requester->write_all(error_message);
 		return;
+	}
+
+	// We now have a set of containers that we're starting. If the
+	// starting container is a member of an alternate group we will
+	// stop the alternative containers that are currently started.
+
+	if (!pc->alternative_group.empty())
+	{
+		auto iter=alternate_runmodes.find(pc->alternative_group);
+
+		if (iter != alternate_runmodes.end())
+		{
+			stop_alternate_group should_stop{
+				*this,
+				iter->second,
+				all_containers_to_start
+			};
+		}
 	}
 
 	// Ok, we're good. Put everything into a starting state.
@@ -4058,22 +4093,16 @@ proc_container current_containers_infoObj::alternate_runmode_process_switch(
 		// Retrieve the containers required by the new run
 		// level.
 
-	current_container_lookup_t new_runlevel_containers;
+	proc_container_set new_runlevel_containers;
 
-	if (auto iter=containers.find(alt.upcoming);
-	    iter != containers.end())
-	{
-		new_runlevel_containers.emplace(alt.upcoming, iter);
-	}
+	new_runlevel_containers.insert(alt.upcoming);
 
 	all_required_dependencies(
 		alt.upcoming,
 		[&]
 		(const current_container &dep)
 		{
-			new_runlevel_containers.emplace(
-				dep->first, dep
-			);
+			new_runlevel_containers.emplace(dep->first);
 		});
 
 	stop_alternate_group should_stop{*this, alt, new_runlevel_containers};

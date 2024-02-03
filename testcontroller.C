@@ -3122,6 +3122,167 @@ void testunpopulated1st()
 	}
 }
 
+void testalternategroups()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+	auto b=std::make_shared<proc_new_containerObj>("b");
+	auto c=std::make_shared<proc_new_containerObj>("c");
+	auto d=std::make_shared<proc_new_containerObj>("d");
+
+	a->dep_requires.insert("c");
+	b->dep_requires.insert("c");
+	b->dep_requires.insert("d");
+
+	a->new_container->alternative_group="alt";
+	b->new_container->alternative_group="alt";
+
+	a->new_container->starting_command="starta";
+	b->new_container->starting_command="startb";
+	c->new_container->starting_command="startc";
+	d->new_container->starting_command="startd";
+	a->new_container->stopping_command="stopa";
+	b->new_container->stopping_command="stopb";
+	c->new_container->stopping_command="stopc";
+	d->new_container->stopping_command="stopd";
+
+	proc_containers_install({a,b,c,d}, container_install::update);
+
+	auto [socketa, socketb] = create_fake_request();
+
+	send_start(socketa, "a");
+	proc_do_request(socketb);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a: start pending (manual)",
+			"c: start pending",
+			"c: cgroup created",
+			"c: starting",
+		})
+		throw "Unexpected state changes after starting a (1)";
+
+	if (logged_runners != std::vector<std::string>{
+			"c: /bin/sh|-c|startc (pid 1)",
+		})
+		throw "Unexpected runners after starting a (1)";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"c: started",
+			"a: cgroup created",
+			"a: starting (manual)",
+		})
+		throw "Unexpected state changes after starting a (2)";
+
+	if (logged_runners != std::vector<std::string>{
+			"a: /bin/sh|-c|starta (pid 2)",
+		})
+		throw "Unexpected runners after starting a (2)";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(2, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a: started (manual)",
+		})
+		throw "Unexpected state changes after starting a (3)";
+
+	if (logged_runners != std::vector<std::string>{
+		})
+		throw "Unexpected runners after starting a (3)";
+
+	auto err=get_start_status(socketa);
+
+	if (!err.empty())
+		throw "proc_container_start(1): " + err;
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+
+	std::tie(socketa, socketb) = create_fake_request();
+
+	send_start(socketa, "b");
+	proc_do_request(socketb);
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a: stop pending",
+			"a: stopping",
+			"b: start pending (manual)",
+			"d: start pending",
+		})
+		throw "Unexpected state changes after starting b (1)";
+
+	if (logged_runners != std::vector<std::string>{
+			"a: /bin/sh|-c|stopa (pid 3)",
+		})
+		throw "Unexpected runners after starting b (1)";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(3, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a: removing",
+			"a: sending SIGTERM",
+		})
+		throw "Unexpected state changes after starting b (2)";
+
+	if (logged_runners != std::vector<std::string>{
+		})
+		throw "Unexpected runners after starting b (2)";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	proc_container_stopped("a");
+
+	if (logged_state_changes != std::vector<std::string>{
+			"a: cgroup removed",
+			"a: stopped",
+			"d: cgroup created",
+			"d: starting",
+		})
+		throw "Unexpected state changes after starting b (3)";
+
+	if (logged_runners != std::vector<std::string>{
+			"d: /bin/sh|-c|startd (pid 4)",
+		})
+		throw "Unexpected runners after starting b (3)";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(4, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"d: started",
+			"b: cgroup created",
+			"b: starting (manual)",
+		})
+		throw "Unexpected state changes after starting b (4)";
+
+	if (logged_runners != std::vector<std::string>{
+			"b: /bin/sh|-c|startb (pid 5)",
+		})
+		throw "Unexpected runners after starting b (4)";
+
+	logged_state_changes.clear();
+	logged_runners.clear();
+	runner_finished(5, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"b: started (manual)",
+		})
+		throw "Unexpected state changes after starting b (5)";
+
+	if (logged_runners != std::vector<std::string>{
+		})
+		throw "Unexpected runners after starting b (5)";
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3297,6 +3458,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="unpopulated1st";
 		testunpopulated1st();
+
+		test_reset();
+		test="testalternategroups";
+		testalternategroups();
 
 		test_reset();
 	} catch (const char *e)

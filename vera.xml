@@ -1227,6 +1227,72 @@ Respawn:
 	    </para>
 	  </note>
 	</refsect2>
+
+	<refsect2 id="alternativegroups">
+	  <title>Alternative Groups</title>
+
+	  <para>
+	    An <quote>alternative-group</quote> names units which are not
+	    meant to be started at the same time. Starting an
+	    <quote>alternative-group</quote> unit automatically stops any
+	    other unit in the same <quote>alternative-group</quote>.
+	  </para>
+
+	  <blockquote>
+	    <informalexample>
+	      <literallayout>
+Name: http-apache
+Description: Apache web server
+Alternative-Group: webservers
+
+Version: 1
+---
+Name: http-nginx
+Description: Nginx web server
+Alternative-Group: webservers
+
+Version: 1
+	      </literallayout>
+	    </informalexample>
+	  </blockquote>
+
+	  <para>
+	    A unit in an alternative group should not have a
+	    <quote>Required-By</quote> dependency and other units should not
+	    have a <quote>requires</quote> dependency of
+	    an alternative group unit
+	    (see <xref linkend="dependencies" /> for more information).
+	  </para>
+
+	  <para>
+	    Names of alternative groups are arbitrary labels that generally
+	    follow the same requirements as unit names (but are not unit
+	    names and exist in their own namespace):
+	  </para>
+
+	  <itemizedlist>
+	    <listitem>
+	      <para>
+		They follow the same requirements as unit filenames and names
+		(see <xref linkend="unitfilename" /> for more information).
+	      </para>
+	    </listitem>
+
+	    <listitem>
+	      <para>
+		They are resolved according to their unit's hierarchy.
+		If the above units are installed as
+		<filename>networking/http-apache</filename> and
+		<filename>networking/http-nginx</filename> then their
+		alternative group's name is relaly
+		<quote>networking/webservers</quote> (unless it's given as
+		<quote>/webserver</quote>).
+		See <xref linkend="hierarchy" /> for a description of
+		unit hierarchies. For example:
+	      </para>
+	    </listitem>
+	  </itemizedlist>
+	</refsect2>
       </refsect1>
 
       <refsect1 id="dependencies">
@@ -1436,7 +1502,7 @@ Respawn:
 	  </para>
 
 	  <para>
-	    See <xref linkend="additionalconfig" /> for a description of
+	    See <xref linkend="hierarchy" /> for a description of
 	    unit hierarchies. For example:
 	  </para>
 	  <blockquote>
@@ -1492,7 +1558,7 @@ Before: networking
 	</refsect2>
 
 	<refsect2 id="hierarchy">
-	  <title>Unit specification files hierarchies</title>
+	  <title>Hierarchies of unit specification files</title>
 
 	  <para>
 	    It's possible to create subdirectories in
