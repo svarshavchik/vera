@@ -21,6 +21,9 @@ struct state_stopped {
 
 	//! Human readable label.
 	operator std::string() const;
+
+	//! There are no timers here.
+	const proc_container_timer *timer() const { return nullptr; }
 };
 
 //! A process container that's starting
@@ -51,6 +54,12 @@ struct state_starting {
 
 	//! Human readable label.
 	operator std::string() const;
+
+	//! Return the starting_runner_timeout
+	const proc_container_timer *timer() const
+	{
+		return &starting_runner_timeout;
+	}
 };
 
 //! A process container that's started
@@ -103,6 +112,12 @@ struct state_started {
 
 	//! Whether the respawnable runner succeeded
 	bool respawn_succeeded=false;
+
+	//! Return the respawn_prepare_timer
+	const proc_container_timer *timer() const
+	{
+		return &respawn_prepare_timer;
+	}
 };
 
 //! A \ref state_stopping "state_stopping container" that's waiting to be able to begin stopping
@@ -111,6 +126,8 @@ struct stop_pending {
 
 	//! Human readable label.
 	operator std::string() const;
+
+	const proc_container_timer *timer() const { return nullptr; }
 };
 
 //! A \ref state_stopping "state_stopping container" that's running its stopping process
@@ -125,6 +142,12 @@ struct stop_running {
 
 	//! Human readable label.
 	operator std::string() const;
+
+	//! Return the stopping_runner_timeout
+	const proc_container_timer *timer() const
+	{
+		return &stopping_runner_timeout;
+	}
 };
 
 //! A \ref state_stopping "state_stopping container" that's removing its processes
@@ -141,6 +164,9 @@ struct stop_removing {
 
 	//! Human readable label.
 	operator std::string() const;
+
+	//! Return the sigkill_timer.
+	const proc_container_timer *timer() const { return &sigkill_timer; }
 };
 
 //! The phase of a \ref state_stopping "state_stopping container".
@@ -179,6 +205,17 @@ struct state_stopping {
 	}
 	//! Human readable label.
 	operator std::string() const;
+
+	//! No timers here
+	const proc_container_timer *timer() const
+	{
+		return std::visit(
+			[]
+			(auto &phase)
+			{
+				return phase.timer();
+			}, phase);
+	}
 };
 
 #endif

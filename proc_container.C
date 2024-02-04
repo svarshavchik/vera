@@ -1674,6 +1674,8 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 	o.imbue(std::locale{"C"});
 
+	time_t current_time=log_current_time();
+
 	for (auto &[pc, run_info] : containers)
 	{
 		switch (pc->type) {
@@ -1685,14 +1687,42 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 		}
 
 		o << pc->name << "\n";
+
+		const proc_container_timer *timer;
+
 		o << "status:" << std::visit(
-			[]
+			[&timer]
 			(const auto &state) -> std::string
 			{
+				timer=state.timer();
 				return state;
 			}, run_info.state)
 		  << "\n";
 
+		if (timer && *timer
+		    // Sanity check:
+		    && (*timer)->time_start <= current_time)
+		{
+			auto &t=**timer;
+
+			o << "elapsed: ";
+
+			if (t.time_start == t.time_end)
+			{
+				o << (current_time-t.time_start);
+			}
+			else
+			{
+				time_t c=current_time;
+
+				if (c > t.time_end)
+					c=t.time_end;
+
+				o << (c-t.time_start) << "/" <<
+					(t.time_end-t.time_start);
+			}
+			o << "\n";
+		}
 		auto dep_info=all_dependency_info.find(pc);
 
 		for (const auto &[map, label] : std::array<std::tuple<
@@ -3106,30 +3136,29 @@ void current_containers_infoObj::do_start_runner(
 
 			return;
 		}
-		if (pc->starting_timeout > 0)
-		{
-			// Set a timeout
 
-			starting.starting_runner_timeout=create_timer(
-				shared_from_this(),
-				pc,
-				pc->starting_timeout,
-				[]
-				(const auto &info)
-				{
-					const auto &[me, cc]=info;
+		// Set a timeout
 
-					// Timeout expired
+		starting.starting_runner_timeout=create_timer(
+			shared_from_this(),
+			pc,
+			pc->starting_timeout,
+			[]
+			(const auto &info)
+			{
+				const auto &[me, cc]=info;
 
-					auto &[pc, run_info] = *cc;
-					log_container_error(
-						pc,
-						_("start process timed out")
-					);
-					me->stop_with_all_requirements(cc, {});
-				}
-			);
-		}
+				// Timeout expired
+
+				auto &[pc, run_info] = *cc;
+				log_container_error(
+					pc,
+					_("start process timed out")
+				);
+				me->stop_with_all_requirements(cc, {});
+			}
+		);
+
 		log_state_change(pc, run_info.state);
 		return;
 	}
@@ -3567,28 +3596,26 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 		{
 			proc_container_timer timer;
 
-			if (pc->stopping_timeout > 0)
-				timer=create_timer(
-					shared_from_this(),
-					pc,
-					pc->stopping_timeout,
-					[]
-					(const auto &info)
-					{
-						const auto &[me, cc]=info;
+			timer=create_timer(
+				shared_from_this(),
+				pc,
+				pc->stopping_timeout,
+				[]
+				(const auto &info)
+				{
+					const auto &[me, cc]=info;
 
-						// Timeout expired
+					// Timeout expired
 
-						auto &[pc, run_info] = *cc;
-						log_container_error(
-							pc,
-							_("stop process "
-							  "timed out")
-						);
-						me->do_remove(cc, false);
-					}
-				);
-
+					auto &[pc, run_info] = *cc;
+					log_container_error(
+						pc,
+						_("stop process "
+						  "timed out")
+					);
+					me->do_remove(cc, false);
+				}
+			);
 
 			return state.emplace<state_stopping>(
 				std::in_place_type_t<stop_running>{},

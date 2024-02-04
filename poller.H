@@ -47,6 +47,8 @@ public:
 
 void do_poll(int timeout= -1);
 
+/* Update current_time, in current_containers_infoObj */
+void update_current_time();
 
 typedef std::function<void (const char *, uint32_t)> inotify_cb_t;
 

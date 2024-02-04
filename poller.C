@@ -163,9 +163,14 @@ void do_poll(int timeout)
 
 	ep.current_timeout= &timeout;
 
+	bool time_updated=false;
+
 	while ((n=epoll_wait(ep.epollfd, events, std::size(events), timeout))
 	       > 0)
 	{
+		update_current_time();
+		time_updated=true;
+
 		for (int i=0; i<n; ++i)
 		{
 			auto iter=ep.callbacks.find(events[i].data.fd);
@@ -177,6 +182,9 @@ void do_poll(int timeout)
 		}
 		timeout=0; // Drain, but don't wait any more.
 	}
+
+	if (!time_updated)
+		update_current_time();
 }
 
 // IN_IGNORED removes the registered callback, and updates the watch handler

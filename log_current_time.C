@@ -7,15 +7,18 @@
 #include <errno.h>
 #include <unistd.h>
 
-time_t log_current_time()
-{
-	struct timespec ts;
+static struct timespec ts;
 
+void update_current_time()
+{
 	if (clock_gettime(CLOCK_MONOTONIC_COARSE, &ts))
 	{
 		perror("clock_gettime");
 		abort();
 	}
+}
 
+time_t log_current_time()
+{
 	return ts.tv_sec;
 }

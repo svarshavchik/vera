@@ -3283,6 +3283,97 @@ void testalternategroups()
 		throw "Unexpected runners after starting b (5)";
 }
 
+static std::vector<std::string> capturetimestamps()
+{
+	FILE *fp=tmpfile();
+	auto [socketa, socketb] = create_fake_request();
+
+	proc_do_status_request(
+		socketb,
+		std::make_shared<external_filedescObj>(dup(fileno(fp)))
+	);
+
+	auto s=get_status(socketa, fileno(fp));
+
+	std::vector<std::string> ret;
+
+	for (auto &c:s)
+	{
+		ret.push_back( c.first + ": "
+			       + c.second.state
+			       + (c.second.elapsed.empty() ?
+				  std::string{} :
+				  " " +
+				  c.second.elapsed));
+	}
+	std::sort(ret.begin(), ret.end());
+
+	return ret;
+}
+
+void teststatustimestamp()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+	auto b=std::make_shared<proc_new_containerObj>("b");
+	auto c=std::make_shared<proc_new_containerObj>("c");
+	auto d=std::make_shared<proc_new_containerObj>("d");
+
+	a->dep_requires.insert("b");
+	a->dep_requires.insert("c");
+	a->dep_requires.insert("d");
+
+	b->new_container->starting_command="startb";
+	c->new_container->starting_command="startc";
+	d->new_container->starting_command="startd";
+
+	b->new_container->starting_timeout=0;
+	c->new_container->starting_timeout=60;
+	d->new_container->starting_timeout=90;
+
+	proc_containers_install({a,b,c,d}, container_install::update);
+
+	{
+		auto [socketa, socketb] = create_fake_request();
+
+		send_start(socketa, "a");
+		proc_do_request(socketb);
+	}
+
+	auto ts=capturetimestamps();
+
+	if (ts != std::vector<std::string>{
+			"a: start pending (manual)",
+			"b: starting 0s/unlimited",
+			"c: starting 0s/1m",
+			"d: starting 0s/1m30s",
+		})
+	{
+		throw "Unexpected timestamp results (1)";
+	}
+	fake_time += 30;
+	ts=capturetimestamps();
+	if (ts != std::vector<std::string>{
+			"a: start pending (manual)",
+			"b: starting 30s/unlimited",
+			"c: starting 30s/1m",
+			"d: starting 30s/1m30s",
+		})
+	{
+		throw "Unexpected timestamp results (2)";
+	}
+	fake_time += 45;
+	ts=capturetimestamps();
+	if (ts != std::vector<std::string>{
+			"a: start pending (manual)",
+			"b: starting 1m15s/unlimited",
+			"c: starting 1m/1m",
+			"d: starting 1m15s/1m30s",
+		})
+	{
+		throw "Unexpected timestamp results (3)";
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3463,6 +3554,9 @@ int main(int argc, char **argv)
 		test="testalternategroups";
 		testalternategroups();
 
+		test_reset();
+		test="teststatustimestamp";
+		teststatustimestamp();
 		test_reset();
 	} catch (const char *e)
 	{

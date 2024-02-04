@@ -5,6 +5,7 @@
 #include "config.h"
 #include "privrequest.H"
 #include "proc_loader.H"
+#include "messages.H"
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sstream>
@@ -249,6 +250,37 @@ void request_status(const external_filedesc &efd)
 	efd->write_all("status\n");
 }
 
+static std::string telapsed(time_t n)
+{
+	time_t m=n/60;
+	time_t s=n%60;
+
+	std::string_view minutes{_("m:minutes")};
+	std::string_view seconds{_("s:seconds")};
+
+	std::ostringstream o;
+
+	o.imbue(std::locale{""});
+
+	if (m)
+	{
+		o << m;
+		o.write(minutes.data(),
+			std::find(minutes.begin(), minutes.end(), ':')-
+			minutes.begin());
+	}
+
+	if (s || m == 0)
+	{
+		o << s;
+
+		o.write(seconds.data(),
+			std::find(seconds.begin(), seconds.end(), ':')-
+			seconds.begin());
+	}
+	return o.str();
+}
+
 std::unordered_map<std::string, container_state_info> get_status(
 	const external_filedesc &efd,
 	int fd)
@@ -302,6 +334,36 @@ std::unordered_map<std::string, container_state_info> get_status(
 				info.state=std::string{++p, e};
 			}
 
+			if (keyword == "elapsed" && p != e)
+			{
+				std::istringstream elapsed{std::string{++p, e}};
+
+				elapsed.imbue(std::locale{"C"});
+
+				time_t s;
+
+				if (elapsed >> s)
+				{
+					if (elapsed.get() == '/')
+					{
+						time_t t;
+
+						if (elapsed >> t)
+						{
+							info.elapsed=
+								telapsed(s)
+								+ "/"
+								+ telapsed(t);
+						}
+					}
+					else
+					{
+						info.elapsed=telapsed(s)
+							+ "/"
+							+ _("unlimited");
+					}
+				}
+			}
 			if (keyword == "timestamp" && p != e)
 			{
 				std::istringstream i{{++p, e}};

@@ -425,6 +425,8 @@ void sigusr1()
 
 void vera_init()
 {
+	update_current_time();
+
 	create_priv_poller();
 
 	// Create our cgroup
@@ -796,18 +798,9 @@ void vera()
 	       adjusted_default_path().data(),
 	       1);
 
-	// Make sure the process has stdin/stdout, so at least the first
-	// three file descriptors won't be rudely used by other stuff.
-
 	int fd;
 
-	do
-	{
-		fd=open("/dev/null", O_RDWR|O_CLOEXEC, 0644);
-	} while (fd >= 0 && fd < 3);
-
-	if (fd > 0)
-		close(fd);
+	const char *consolepath="/dev/null";
 
 	// init compatibility: set CONSOLE
 
@@ -818,7 +811,8 @@ void vera()
 		if (fd >= 0)
 		{
 			close(fd);
-			setenv("CONSOLE", "/dev/console", 1);
+			consolepath="/dev/console";
+			setenv("CONSOLE", consolepath, 1);
 		}
 		else
 		{
@@ -826,11 +820,24 @@ void vera()
 
 			if (fd >= 0)
 			{
+				consolepath="/dev/tty0";
 				close(fd);
-				setenv("CONSOLE", "/dev/tty0", 1);
+				setenv("CONSOLE", consolepath, 1);
 			}
 		}
 	}
+
+	// Make sure the process has stdin/stdout, so at least the first
+	// three file descriptors won't be rudely used by other stuff.
+
+	do
+	{
+		fd=open(consolepath, O_RDWR|O_CLOEXEC, 0644);
+	} while (fd >= 0 && fd < 3);
+
+	if (fd > 0)
+		close(fd);
+
 
 	// halt.c in syvinit wants to see INIT_VERSION
 	setenv("INIT_VERSION", "vera-" PACKAGE_VERSION, 1);
@@ -1154,6 +1161,9 @@ void vlad(std::vector<std::string> args)
 			std::cout << name << ":\n";
 			std::cout << "    " << info.state;
 
+			if (!info.elapsed.empty())
+				std::cout << " (" << info.elapsed << ")";
+
 			if (info.enabled)
 				std::cout << ", enabled";
 
@@ -1464,13 +1474,15 @@ int main(int argc, char **argv)
 
 		if (exename.substr(slash) == "vlad" || argc > 1)
 		{
+			umask(022);
+			std::locale::global(std::locale(""));
+
 			// Ignore -t option
 
 			while (getopt_long(argc, argv, "t:", options, NULL)
 			       >= 0)
 				;
 
-			umask(022);
 			vlad({argv+optind, argv+argc});
 		}
 		else

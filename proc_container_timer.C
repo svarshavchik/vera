@@ -10,17 +10,25 @@
 #include <iostream>
 #include <map>
 
+static current_timers_t current_timers;
+
 proc_container_timerObj::proc_container_timerObj(
 	const current_containers_info &all_containers,
 	const proc_container &container,
+	time_t time_start,
+	time_t time_end,
 	const std::function<void (const current_containers_callback_info &
 						 )> &done
-) : all_containers(all_containers), container{container}, done{done}
+) : my_iter{current_timers.end()}, time_start{time_start}, time_end{time_end},
+    all_containers(all_containers), container{container}, done{done}
 {
 }
 
-static std::multimap<time_t, std::weak_ptr<proc_container_timerObj>
-		     > current_timers;
+proc_container_timerObj::~proc_container_timerObj()
+{
+	if (my_iter != current_timers.end())
+		current_timers.erase(my_iter);
+}
 
 void update_timer_containers(const current_containers &new_current_containers)
 {
@@ -51,14 +59,19 @@ proc_container_timer create_timer(
 				  )> &done
 )
 {
+	time_t time_start=log_current_time();
+	time_t time_end=time_start+timeout;
+
 	auto timer=std::make_shared<proc_container_timerObj>(
-		all_containers, container, done
+		all_containers, container, time_start, time_end, done
 	);
 
 	if (timeout == 0)
 		return timer; // Pretend there's a timeout, but there's not.
 
-	current_timers.emplace(timeout + log_current_time(), timer);
+	auto iter=current_timers.emplace(time_end, timer);
+
+	timer->my_iter=iter;
 
 	return timer;
 }
@@ -89,7 +102,9 @@ time_t run_timers()
 		current_timers.erase(b);
 
 		if (!timer)
-			continue;
+			continue; // Shouldn't happen
+
+		timer->my_iter=current_timers.end();
 
 		auto me=timer->all_containers.lock();
 		auto pc=timer->container.lock();

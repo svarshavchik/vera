@@ -12,6 +12,8 @@
 #include <unordered_set>
 #include <map>
 #include <optional>
+#include <variant>
+#include <time.h>
 #include <signal.h>
 
 // Send requests and process responses over a privileged (root) sockets.
@@ -133,6 +135,8 @@ void request_send_fd(const external_filedesc &efd, int statusfd);
 
 struct container_state_info {
 	std::string state;
+
+	std::string elapsed;
 
 	time_t timestamp=0;
 

@@ -88,4 +88,8 @@ time_t log_current_time()
 {
 	return fake_time;
 }
+
+void update_current_time()
+{
+}
 #endif
