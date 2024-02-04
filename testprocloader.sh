@@ -527,6 +527,8 @@ version: 1
 EOF
 
 $VALGRIND ../testprocloader validatetest \
+	  built-in system/built-in . ../localdir ../configdir
+../testprocloader validatetest \
 	  built-in system/built-in . ../localdir ../configdir \
 	  >/dev/null 2>../loadtest.out
 echo 'Alternative-Group container with a required-by dependency: system/built-in' >../loadtest.txt
@@ -547,6 +549,9 @@ version: 1
 EOF
 
 $VALGRIND ../testprocloader validatetest \
+	  built-in built-in . ../localdir ../configdir
+
+../testprocloader validatetest \
 	  built-in built-in . ../localdir ../configdir \
 	  >/dev/null 2>../loadtest.out
 echo 'Container with a dependency on an Alternative-Group: something' >../loadtest.txt
