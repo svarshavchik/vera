@@ -76,7 +76,7 @@ proc_container_timer create_timer(
 	return timer;
 }
 
-time_t run_timers()
+int run_timers()
 {
 	bool ran_something=false;
 
@@ -87,14 +87,31 @@ time_t run_timers()
 		if (b == current_timers.end())
 			break;
 
-		auto now=log_current_time();
+		const auto &now=log_current_timespec();
 
-		if (b->first > now)
+		if (b->first > now.tv_sec)
 		{
 			if (ran_something)
 				return 0;
 
-			return b->first-now;
+			// Compute the delay in whole seconds
+
+			int ms = (b->first-now.tv_sec < 60
+				  ? b->first-now.tv_sec:60)*1000;
+
+			// Subtract the milliseconds that already elapsed in
+			// this fraction of a second.
+			int sub = now.tv_nsec / 1000000;
+
+			// The delay must be at least 1 second or 1000 ms,
+			// when we get here.
+			//
+			// So the fractional second here cannot really exceed
+			// this, this is more of a sanity check.
+			if (sub < ms)
+				ms -= sub;
+
+			return ms;
 		}
 
 		auto timer=b->second.lock();
@@ -128,5 +145,5 @@ time_t run_timers()
 
 	if (ran_something)
 		return 0;
-	return 60 * 60;
+	return -1;
 }

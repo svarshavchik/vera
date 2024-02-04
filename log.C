@@ -86,10 +86,16 @@ void log_message(const std::string &msg)
 #ifdef UNIT_TEST
 time_t log_current_time()
 {
-	return fake_time;
+	return fake_time.tv_sec;
 }
 
 void update_current_time()
 {
 }
+
+const struct timespec &log_current_timespec()
+{
+	return fake_time;
+}
+
 #endif

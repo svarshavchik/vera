@@ -10,7 +10,7 @@
 
 std::vector<std::string> logged_state_changes;
 
-time_t fake_time;
+struct timespec fake_time;
 
 #define UNIT_TEST
 #include "log.C"
@@ -79,7 +79,7 @@ void test_reset(bool keep_cgroupfs=false)
 	logged_runners.clear();
 	next_pid=1;
 	all_forks_fail=false;
-	fake_time=1;
+	fake_time.tv_sec=1;
 
 	if (!keep_cgroupfs)
 	{
@@ -96,7 +96,7 @@ void test_reset(bool keep_cgroupfs=false)
 
 void test_advance(time_t interval)
 {
-	fake_time += interval;
+	fake_time.tv_sec += interval;
 	run_timers();
 }
 

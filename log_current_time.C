@@ -22,3 +22,8 @@ time_t log_current_time()
 {
 	return ts.tv_sec;
 }
+
+const struct timespec &log_current_timespec()
+{
+	return ts;
+}

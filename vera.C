@@ -554,7 +554,7 @@ void vera_init()
 
 	while (1)
 	{
-		do_poll(static_cast<int>(run_timers() * 1000));
+		do_poll(run_timers());
 		proc_check_reexec();
 	}
 }

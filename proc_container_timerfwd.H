@@ -23,7 +23,7 @@ typedef std::shared_ptr<const proc_container_timerObj> proc_container_timer;
 //! Returns a timeout before run_timers() should be checked again, for
 //! a possible timer expiration.
 
-time_t run_timers();
+int run_timers();
 
 
 #endif

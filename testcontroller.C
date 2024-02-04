@@ -3350,7 +3350,7 @@ void teststatustimestamp()
 	{
 		throw "Unexpected timestamp results (1)";
 	}
-	fake_time += 30;
+	fake_time.tv_sec += 30;
 	ts=capturetimestamps();
 	if (ts != std::vector<std::string>{
 			"a: start pending (manual)",
@@ -3361,7 +3361,7 @@ void teststatustimestamp()
 	{
 		throw "Unexpected timestamp results (2)";
 	}
-	fake_time += 45;
+	fake_time.tv_sec += 45;
 	ts=capturetimestamps();
 	if (ts != std::vector<std::string>{
 			"a: start pending (manual)",

@@ -65,7 +65,7 @@ public:
 		std::tuple<runlevels, bool> config_and_override
 	);
 public:
-	friend time_t run_timers();
+	friend int run_timers();
 	friend class proc_container_runnerObj;
 
 	//! All direct and indirect dependencies of a container.

@@ -23,6 +23,7 @@ void log_container_message(const proc_container &, const std::string &);
 void log_message(const std::string &);
 
 time_t log_current_time();
+const struct timespec &log_current_timespec();
 
 //! Timeout for SIGTERM to do its work
 
