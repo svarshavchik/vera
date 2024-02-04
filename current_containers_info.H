@@ -9,6 +9,7 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container.H"
 #include "external_filedesc.H"
+#include <sys/wait.h>
 #include <type_traits>
 #include <functional>
 #include <unordered_map>
@@ -20,6 +21,32 @@
 //! A current container: encompasses the container and its running state
 
 typedef current_containers::iterator current_container;
+
+/*!
+  Information about an active unit
+
+  What information is collected about all starting or stopping units whose
+  completion is being waited for. This is for reporting purposes only, and
+  this is collected only when switching runmodes.
+
+ */
+
+struct active_unit_info {
+	proc_container container;
+	const char *state;
+	time_t time_start;
+	time_t time_end;
+};
+
+/*! Active units
+
+  Units that are running a start or a stop process. A vector of: a container,
+  it's state (starting or stopping)
+  the process's start time, and end_time (timeout). An end_time that's same
+  as the starting time indicates a process without a timeout.
+*/
+
+typedef std::vector<active_unit_info> active_units_t;
 
 //! Information about the process containers, and their current state
 
@@ -52,6 +79,25 @@ private:
 public:
 	//! A re-exec has been requested
 	bool reexec_requested=false;
+
+	//! Verbose logging enabled
+
+	//! This is enabled at system boot and when switching runlevels,
+	//! then turned off when the dust settles.
+
+	struct verbose_logging_t {
+
+		//! Whether the logging is enabled
+		bool enabled=false;
+
+		//! Active units
+
+		//! A list of: container, runner's starting time, end time.
+		active_units_t active_units;
+	};
+
+	//! Verbose logging record
+	verbose_logging_t verbose_logging;
 
 	//! Return the previous and current rulevels
 	std::tuple<std::string, std::string> prev_current_runlevel() const;
@@ -467,6 +513,10 @@ private:
 		std::vector<proc_container> &restored_containers,
 		std::string &active
 	);
+
+public:
+	//! Return the pids in the container
+	std::vector<pid_t> container_pids(const proc_container &pc);
 };
 
 //! Information used by callback from timers and processes
@@ -520,5 +570,13 @@ struct group_create_info {
 const current_containers_info &get_containers_info(
 	current_containers_info *replacement
 );
+//! Return a vector of containers that are starting or stopping
+
+//! Internal data. Only available when switching runlevels.
+const active_units_t &proc_container_inprogress();
+
+//! When reporting on progress of a container, return its pits
+
+std::vector<pid_t> proc_container_pids(const proc_container &pc);
 
 #endif

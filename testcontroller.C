@@ -2099,6 +2099,21 @@ void testgroup()
 		throw "Unexpected state changes after start (1)";
 	}
 
+	std::vector<std::string> active_units;
+
+	for (auto &info:proc_container_inprogress())
+		active_units.push_back(info.container->name);
+
+	std::sort(active_units.begin(), active_units.end());
+
+	if (active_units != std::vector<std::string>{
+			"group/1",
+			"group/2",
+		})
+	{
+		throw "Unexpected list of active units after start (1)";
+	}
+
 	for (auto &l:logged_runners)
 	{
 		l.erase(std::find(l.begin(), l.end(), '('), l.end());
@@ -2129,6 +2144,8 @@ void testgroup()
 		throw "Unexpected state changes after start (2)";
 	}
 
+	if (proc_container_inprogress().size())
+		throw "Unexpected list of active units after start(2)";
 }
 
 void testfailcgroupcreate()

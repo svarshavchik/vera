@@ -254,3 +254,7 @@ void sigusr1()
 void sigusr2()
 {
 }
+
+void showing_verbose_progress_off()
+{
+}

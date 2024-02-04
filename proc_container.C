@@ -31,6 +31,8 @@
 
 const char system_runlevel[]="system/runlevel";
 
+extern void showing_verbose_progress_off();
+
 #define DEP_DEBUG(x) (std::cout << x << "\n")
 
 #undef DEP_DEBUG
@@ -1687,21 +1689,38 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 		o << pc->name << "\n";
 
-		auto status=get_state_and_elapsed_for(
-			run_info.state,
-			current_time,
-			[&o]
-			(time_t elapsed)
-			{
-				o << "elapsed: " << elapsed << "\n";
-			},
-			[&o]
-			(time_t elapsed, time_t expires)
-			{
-				o << "elapsed: " << elapsed
-				  << "/" << expires << "\n";
-			});
+		const char *status;
+		const proc_container_timer *timerptr;
 
+		std::visit(
+			[&]
+			(const auto &s)
+			{
+				status=s;
+
+				timerptr=s.timer();
+			}, run_info.state);
+
+		if (timerptr && *timerptr &&
+		    current_time >= (*timerptr)->time_start)
+		{
+			auto &timer=**timerptr;
+			time_t t=current_time;
+
+			if (timer.time_end > timer.time_start &&
+			    t>timer.time_end)
+			{
+				t=timer.time_end; // Sanity check
+			}
+
+			o << "elapsed: " << (t-timer.time_start);
+
+			if (timer.time_end > timer.time_start)
+			{
+				o << "/" << (timer.time_end-timer.time_start);
+			}
+			o << "\n";
+		}
 		o << "status:" << status << "\n";
 		auto dep_info=all_dependency_info.find(pc);
 
@@ -1862,6 +1881,8 @@ void proc_do_request(external_filedesc efd)
 		auto runlevel=efd->readln();
 		auto command=efd->readln();
 
+		get_containers_info(nullptr)->verbose_logging.enabled=false;
+		showing_verbose_progress_off();
 		setenv("RUNLEVEL", runlevel.c_str(), 1);
 		execl("/bin/sh", "/bin/sh", "-c", command.c_str(), nullptr);
 		efd->write_all(command + ": " + strerror(errno));
@@ -2701,6 +2722,69 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			}
 		}
 	}
+
+	if (verbose_logging.enabled)
+	{
+		verbose_logging.active_units.clear();
+
+		for (auto b=containers.begin(), e=containers.end();
+		     b != e; ++b)
+		{
+			const char *state;
+
+			const proc_container_timer *timer=std::visit(
+				[&state]
+				(const auto &s)
+				{
+					state=s;
+					return s.timer();
+				}, b->second.state);
+
+			if (timer && *timer)
+			{
+				verbose_logging.active_units.emplace_back(
+					b->first,
+					state,
+					(*timer)->time_start,
+					(*timer)->time_end);
+			}
+		}
+		std::sort(verbose_logging.active_units.begin(),
+			  verbose_logging.active_units.end(),
+			  []
+			  (auto &a, auto &b)
+			  {
+				  return a.container->name <
+					  b.container->name;
+			  });
+
+		if (verbose_logging.active_units.empty())
+			verbose_logging.enabled=false;
+	}
+}
+
+const active_units_t &proc_container_inprogress()
+{
+	return get_containers_info(nullptr)->verbose_logging.active_units;
+}
+
+std::vector<pid_t> proc_container_pids(const proc_container &pc)
+{
+	return get_containers_info(nullptr)->container_pids(pc);
+}
+
+std::vector<pid_t> current_containers_infoObj::container_pids(
+	const proc_container &pc
+)
+{
+	auto iter=containers.find(pc);
+
+	if (iter != containers.end() &&
+	    iter->second.group)
+	{
+		return iter->second.group->cgroups_getpids();
+	}
+	return {};
 }
 
 //! Attempt to start a container
@@ -4114,6 +4198,7 @@ proc_container current_containers_infoObj::alternate_runmode_process_switch(
 
 	stop_alternate_group should_stop{*this, alt, new_runlevel_containers};
 
+	verbose_logging.enabled=true;
 	log_message(_("Starting ") + alt.upcoming->name);
 
 	all_required_dependencies(

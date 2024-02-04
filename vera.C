@@ -35,6 +35,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <time.h>
+#include <termios.h>
 #include <fstream>
 #include <locale>
 #include <iomanip>
@@ -63,6 +64,8 @@ const struct option options[]={
 extern int optind;
 
 std::string exename;
+
+struct winsize console_winsize;
 
 std::string installconfigdir()
 {
@@ -229,11 +232,97 @@ namespace {
 
 /*! We are showing verbose progress
 
-This structure keeps track of additional metadata when showing verbose
-progress.
+This structure keeps track of additional metadata when the lower half of the
+console shows vera's progress.
+
  */
 
 struct showing_verbose_progress_t {
+
+	// The separator row between the top and the bottom half
+	const size_t separator_row=console_winsize.ws_row/2;
+
+	// How many rows there are in the bottom half
+	const size_t bottom_size=console_winsize.ws_row-separator_row-1;
+
+	std::ostringstream o;
+
+	showing_verbose_progress_t()
+	{
+		o.imbue(std::locale{"C"});
+
+		o <<
+			// Just in case: column 1
+			"\e[1G" <<
+			// cursor down, scroll existing content to the top
+			// half.
+			std::string(bottom_size+1, '\n') <<
+			// Move back up to the separator row
+			"\e[" << bottom_size << "A"
+			// Disable autowrap
+			"\e[?7l" <<
+			std::string(console_winsize.ws_col, '_') <<
+			// Enable autowrap
+			"\e[?7h"
+			// Column 1
+			"\e[1G"
+			// Up one row, last row in the top half.
+			"\e[1A"
+			// Save cursor position
+			"\e[s"
+			// Set scrolling region, this apparently moves the
+			// cursor, hence the need for save/restore position
+			"\e[1;" << separator_row << "r"
+			// Restore cursor position
+			"\e[u";
+
+		emit();
+	}
+
+	void emit()
+	{
+		auto s=o.str();
+		if (write(1, s.c_str(), s.size()) < 0)
+			;
+		o.str("");
+	}
+
+	~showing_verbose_progress_t()
+	{
+		o <<
+			// Save cursor position.
+			"\e[s"
+			"\e[" << (separator_row+1) << ";1f" <<
+			// Clear to end of display
+			"\e[J"
+			// Scrolling region entire console
+			"\e[1;" << console_winsize.ws_row << "r"
+			// Restore cursor position.
+			"\e[u"
+			;
+
+		emit();
+	}
+
+	void program_message(const char *program, const char *message)
+	{
+		o <<
+			// Save cursor position.
+			"\e[s"
+
+			// Bottom half is the scrolling region
+			"\e[" << (separator_row+2) << ";"
+			      << (console_winsize.ws_row-1) << "r"
+			// First column of the last row in the bottom half
+			"\e[" << (console_winsize.ws_row-1) << ";1f" <<
+
+			program << ": " << message << "\n"
+			// Restore scroll area to the top half
+			"\e[1;" << separator_row << "r"
+			// Restore cursor position
+			"\e[u";
+		emit();
+	}
 
 	/*! Progress is shown
 
@@ -251,62 +340,179 @@ struct showing_verbose_progress_t {
 
 	void display_progress()
 	{
-		std::cout << "\e[?7l"
-			  << shown_progress
-			  << "\e[?7h"
-			  << "\n"
-			  << std::flush;
+		o <<
+			// Save cursor position.
+			"\e[s"
+			// Start of last row, column 1
+			"\e[" << console_winsize.ws_row << ";1f"
+
+			"\e[?7l"			// autowrap off
+			"\e[K" <<			// erase to EOL
+			shown_progress <<
+			"\e[?7h"			// autowrap on
+
+			// Restore cursor position
+			"\e[u";
+
+		emit();
 	}
 
-	/*!
-	  Remove previously shown progress.
+	/*! Update shown_progress
 
-	  There's no more progress, or there's updates progress to show.
-	*/
+	  Based on the currently starting/stopping containers.
+	  Then display_progress().
 
-	void clear()
-	{
-		if (!shown_progress.empty())
-		{
-			// Clear the shown progress line.
-			std::cout <<
-				"\e[1A"			// CUU
-				"\e[1K"			// EL
-				  << std::flush;
-			shown_progress.clear();
-		}
-	}
-
-	void update(const std::vector<proc_container> &containers)
-	{
-		clear();
-		if (next_index_to_update < containers.size())
-			// Should be the case
-		{
-			shown_progress=
-				_("Running: ") +
-				containers[next_index_to_update]->description;
-			display_progress();
-		}
-	}
-
-	void update(const std::vector<proc_container> &containers,
-		    time_t timestamp)
+	 */
+	void update(const active_units_t &containers, time_t timestamp)
 	{
 		if (timestamp == index_timestamp)
 			return;
 
 		index_timestamp=timestamp;
 
+		update(containers);
+	}
+
+	void update(const active_units_t &containers)
+	{
+		if (containers.size() == 0)
+			return;
+
+		if (next_index_to_update < containers.size())
+		{
+			auto pids=proc_container_pids(
+				containers[next_index_to_update].container
+			);
+
+			if (++next_pid_to_show < pids.size())
+			{
+				std::sort(pids.begin(), pids.end());
+
+				update(containers[next_index_to_update],
+				       containers.size(),
+				       pids[next_pid_to_show]);
+				return;
+			}
+		}
+
+		next_pid_to_show=0;
+
 		if (++next_index_to_update >= containers.size())
 			next_index_to_update=0;
-	}
-	/*! Which process to show the status of, on the next update.
 
-	  We cycle through the names of the starting/stopping processes,
+		auto pids=proc_container_pids(
+			containers[next_index_to_update].container
+		);
+
+		std::sort(pids.begin(), pids.end());
+
+		update(containers[next_index_to_update],
+		       containers.size(),
+		       pids.empty() ? 0:pids[0]);
+	}
+
+	void update(const active_unit_info &container_info, size_t n, pid_t p)
+	{
+		std::string pid;
+
+		if (p)
+		{
+			o << p;
+
+			pid=o.str();
+			o.str("");
+
+			std::error_code ec;
+
+			auto link=std::filesystem::read_symlink(
+				"/proc/"+pid+"/exe", ec
+			);
+
+			if (!ec)
+			{
+				std::string filename=link.filename();
+
+				pid += " [";
+				pid += filename;
+				pid += "]";
+			}
+		}
+
+		// Borrow the stringstream to format the parenthesized
+		// annotation for which container the shown status is
+		// for.
+
+		const char *paren_pfix=" (";
+
+		if (!pid.empty())
+		{
+			o << " pid " << pid;
+		}
+
+		if (n > 1)
+		{
+			o << paren_pfix;
+			paren_pfix=", ";
+			o << (next_index_to_update+1)
+			  << "/" << (n+1);
+		}
+
+		auto current_time=log_current_time();
+
+		if (current_time < container_info.time_start)
+			// Sanity check
+			current_time=container_info.time_start;
+
+		if (container_info.time_end
+		    > container_info.time_start &&
+		    current_time > container_info.time_end)
+			// Sanity check
+			current_time=container_info.time_end;
+
+		o << paren_pfix << log_elapsed(
+			current_time-container_info.time_start);
+
+		if (container_info.time_end > container_info.time_start)
+		{
+			o << "/" << log_elapsed(
+				container_info.time_end-
+				container_info.time_start);
+		}
+		o << ")";
+
+		auto paren=o.str();
+		o.str("");
+
+		o <<
+			_("In progress: ") <<
+			container_info.state <<
+			" " <<
+			container_info.container->description <<
+			// Erase to EOL
+			"\e[K"
+			// Bottom right corner.
+			"\e[" << console_winsize.ws_col << "`" <<
+			// Then backspace back.
+			std::string(paren.size(), '\x08') <<
+			paren;
+
+		shown_progress = o.str();
+		o.str("");
+
+		display_progress();
+	}
+
+
+	/*! Which container to show the status of, on the next update.
+
+	  We cycle through the names of the starting/stopping container,
 	  one at a time.
 	 */
 	size_t next_index_to_update=0;
+
+	/*! Which container pid to show, on the next update. */
+
+	size_t next_pid_to_show=0;
 
 	/*! When the current index was shown.
 
@@ -328,22 +534,17 @@ struct showing_verbose_progress_t {
 
 static std::optional<showing_verbose_progress_t> showing_verbose_progress;
 
+void showing_verbose_progress_off()
+{
+	showing_verbose_progress.reset();
+}
+
 void log_to_real_syslog(int level, const char *program,
 			const char *message)
 {
 	if (showing_verbose_progress)
 	{
-		auto &progress=*showing_verbose_progress;
-
-		if (!progress.shown_progress.empty())
-		{
-			std::cout <<
-				"\e[1A"			// CUU
-				"\e[1K"			// EL
-				  << program << ": " << message << "\n";
-		}
-		progress.display_progress();
-		return;
+		showing_verbose_progress->program_message(program, message);
 	}
 
 	// We use openlog() with the unit's name in order to log each message
@@ -554,6 +755,21 @@ void vera_init()
 {
 	update_current_time();
 
+	if (ioctl(0, TIOCGWINSZ, &console_winsize) < 0 ||
+	    console_winsize.ws_row < 8) // Sanity check
+	{
+		console_winsize.ws_row=0;
+		console_winsize.ws_col=0;
+		std::cout << "vera: could not determine console size\n"
+			  << std::flush;
+	}
+	else
+	{
+		std::cout << "vera: console size is "
+			  << console_winsize.ws_col
+			  << "x" << console_winsize.ws_row << "\n"
+			  << std::flush;
+	}
 	create_priv_poller();
 
 	// Create our cgroup
@@ -683,33 +899,30 @@ void vera_init()
 	{
 		do_poll(run_timers());
 
-		auto &inprogress=proc_container_inprogress();
-
-		if (inprogress.empty())
+		// If we determined the console's size...
+		if (console_winsize.ws_row)
 		{
-			if (showing_verbose_progress)
-			{
-				// No longer showing progress
+			auto &inprogress=proc_container_inprogress();
 
-				showing_verbose_progress->clear();
-				showing_verbose_progress.reset();
-			}
-		}
-		else
-		{
-			if (!showing_verbose_progress)
+			if (inprogress.empty())
 			{
-				// Initial progress
-				showing_verbose_progress.emplace().update(
-					inprogress
-				);
+				showing_verbose_progress_off();
 			}
 			else
 			{
-				showing_verbose_progress->update(
-					inprogress,
-					log_current_time()
-				);
+				if (!showing_verbose_progress)
+				{
+					// Initial progress
+					showing_verbose_progress.emplace()
+						.update(inprogress);
+				}
+				else
+				{
+					showing_verbose_progress->update(
+						inprogress,
+						log_current_time()
+					);
+				}
 			}
 		}
 		proc_check_reexec();
