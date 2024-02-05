@@ -1687,41 +1687,22 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 		o << pc->name << "\n";
 
-		const proc_container_timer *timer;
-
-		o << "status:" << std::visit(
-			[&timer]
-			(const auto &state) -> std::string
+		auto status=get_state_and_elapsed_for(
+			run_info.state,
+			current_time,
+			[&o]
+			(time_t elapsed)
 			{
-				timer=state.timer();
-				return state;
-			}, run_info.state)
-		  << "\n";
-
-		if (timer && *timer
-		    // Sanity check:
-		    && (*timer)->time_start <= current_time)
-		{
-			auto &t=**timer;
-
-			o << "elapsed: ";
-
-			if (t.time_start == t.time_end)
+				o << "elapsed: " << elapsed << "\n";
+			},
+			[&o]
+			(time_t elapsed, time_t expires)
 			{
-				o << (current_time-t.time_start);
-			}
-			else
-			{
-				time_t c=current_time;
+				o << "elapsed: " << elapsed
+				  << "/" << expires << "\n";
+			});
 
-				if (c > t.time_end)
-					c=t.time_end;
-
-				o << (c-t.time_start) << "/" <<
-					(t.time_end-t.time_start);
-			}
-			o << "\n";
-		}
+		o << "status:" << status << "\n";
 		auto dep_info=all_dependency_info.find(pc);
 
 		for (const auto &[map, label] : std::array<std::tuple<

@@ -211,23 +211,150 @@ bool proc_container_group::cgroups_try_rmdir()
 	return true;
 }
 
-// Log some message
-
 void (*log_to_syslog)(int level,
 		      const char *program,
 		      const char *message);
 
-std::string real_syslog_program;
+//////////////////////////////////////////////////////////////////////////
+//
+// Log some message from pid (1), typically to syslog.
+
+//! Last syslog message was from this unit
+std::string last_syslog_program;
+
+namespace {
+#if 0
+}
+#endif
+
+/*! We are showing verbose progress
+
+This structure keeps track of additional metadata when showing verbose
+progress.
+ */
+
+struct showing_verbose_progress_t {
+
+	/*! Progress is shown
+
+	** The names of starting/stopping processes were shown and the
+	** cursor was moved to the next line.
+	*/
+
+	std::string shown_progress;
+
+	/*! Show new progress
+
+	  Turn off autowrap, so if this blows off the end of the line, we
+	  won't wrap to the next one.
+	*/
+
+	void display_progress()
+	{
+		std::cout << "\e[?7l"
+			  << shown_progress
+			  << "\e[?7h"
+			  << "\n"
+			  << std::flush;
+	}
+
+	/*!
+	  Remove previously shown progress.
+
+	  There's no more progress, or there's updates progress to show.
+	*/
+
+	void clear()
+	{
+		if (!shown_progress.empty())
+		{
+			// Clear the shown progress line.
+			std::cout <<
+				"\e[1A"			// CUU
+				"\e[1K"			// EL
+				  << std::flush;
+			shown_progress.clear();
+		}
+	}
+
+	void update(const std::vector<proc_container> &containers)
+	{
+		clear();
+		if (next_index_to_update < containers.size())
+			// Should be the case
+		{
+			shown_progress=
+				_("Running: ") +
+				containers[next_index_to_update]->description;
+			display_progress();
+		}
+	}
+
+	void update(const std::vector<proc_container> &containers,
+		    time_t timestamp)
+	{
+		if (timestamp == index_timestamp)
+			return;
+
+		index_timestamp=timestamp;
+
+		if (++next_index_to_update >= containers.size())
+			next_index_to_update=0;
+	}
+	/*! Which process to show the status of, on the next update.
+
+	  We cycle through the names of the starting/stopping processes,
+	  one at a time.
+	 */
+	size_t next_index_to_update=0;
+
+	/*! When the current index was shown.
+
+	  next_index_to_update gets increment on the next second.
+	*/
+
+	time_t index_timestamp=log_current_time();
+};
+
+#if 0
+{
+#endif
+}
+
+/*! Whether progress is being shown
+
+  If this exists, progress is being shown.
+*/
+
+static std::optional<showing_verbose_progress_t> showing_verbose_progress;
 
 void log_to_real_syslog(int level, const char *program,
 			const char *message)
 {
-	if (program != real_syslog_program)
+	if (showing_verbose_progress)
 	{
-		if (!real_syslog_program.empty())
+		auto &progress=*showing_verbose_progress;
+
+		if (!progress.shown_progress.empty())
+		{
+			std::cout <<
+				"\e[1A"			// CUU
+				"\e[1K"			// EL
+				  << program << ": " << message << "\n";
+		}
+		progress.display_progress();
+		return;
+	}
+
+	// We use openlog() with the unit's name in order to log each message
+	// under its unit.
+
+	if (program != last_syslog_program)
+	{
+		if (!last_syslog_program.empty())
 			closelog();
-		real_syslog_program=program;
-		openlog(real_syslog_program.c_str(),
+		last_syslog_program=program;
+		openlog(last_syslog_program.c_str(),
 			LOG_CONS,
 			LOG_DAEMON);
 	}
@@ -555,6 +682,36 @@ void vera_init()
 	while (1)
 	{
 		do_poll(run_timers());
+
+		auto &inprogress=proc_container_inprogress();
+
+		if (inprogress.empty())
+		{
+			if (showing_verbose_progress)
+			{
+				// No longer showing progress
+
+				showing_verbose_progress->clear();
+				showing_verbose_progress.reset();
+			}
+		}
+		else
+		{
+			if (!showing_verbose_progress)
+			{
+				// Initial progress
+				showing_verbose_progress.emplace().update(
+					inprogress
+				);
+			}
+			else
+			{
+				showing_verbose_progress->update(
+					inprogress,
+					log_current_time()
+				);
+			}
+		}
 		proc_check_reexec();
 	}
 }

@@ -250,37 +250,6 @@ void request_status(const external_filedesc &efd)
 	efd->write_all("status\n");
 }
 
-static std::string telapsed(time_t n)
-{
-	time_t m=n/60;
-	time_t s=n%60;
-
-	std::string_view minutes{_("m:minutes")};
-	std::string_view seconds{_("s:seconds")};
-
-	std::ostringstream o;
-
-	o.imbue(std::locale{""});
-
-	if (m)
-	{
-		o << m;
-		o.write(minutes.data(),
-			std::find(minutes.begin(), minutes.end(), ':')-
-			minutes.begin());
-	}
-
-	if (s || m == 0)
-	{
-		o << s;
-
-		o.write(seconds.data(),
-			std::find(seconds.begin(), seconds.end(), ':')-
-			seconds.begin());
-	}
-	return o.str();
-}
-
 std::unordered_map<std::string, container_state_info> get_status(
 	const external_filedesc &efd,
 	int fd)
@@ -351,14 +320,14 @@ std::unordered_map<std::string, container_state_info> get_status(
 						if (elapsed >> t)
 						{
 							info.elapsed=
-								telapsed(s)
-								+ "/"
-								+ telapsed(t);
+								log_elapsed(s)
+								+ "/" +
+								log_elapsed(t);
 						}
 					}
 					else
 					{
-						info.elapsed=telapsed(s)
+						info.elapsed=log_elapsed(s)
 							+ "/"
 							+ _("unlimited");
 					}

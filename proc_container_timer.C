@@ -99,6 +99,14 @@ int run_timers()
 			int ms = (b->first-now.tv_sec < 60
 				  ? b->first-now.tv_sec:60)*1000;
 
+			if (!proc_container_inprogress().empty() &&
+			    ms > 1000)
+			{
+				// Update verbose progress indication once a
+				// second.
+				ms=1000;
+			}
+
 			// Subtract the milliseconds that already elapsed in
 			// this fraction of a second.
 			int sub = now.tv_nsec / 1000000;

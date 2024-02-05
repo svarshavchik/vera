@@ -6,6 +6,7 @@
 #include "log.H"
 #include "messages.H"
 #include "proc_container.H"
+#include "proc_container_timer.H"
 #include <functional>
 #include <iostream>
 #include <sstream>
@@ -99,3 +100,74 @@ const struct timespec &log_current_timespec()
 }
 
 #endif
+
+std::string log_elapsed(time_t n)
+{
+	time_t m=n/60;
+	time_t s=n%60;
+
+	std::string_view minutes{_("m:minutes")};
+	std::string_view seconds{_("s:seconds")};
+
+	std::ostringstream o;
+
+	o.imbue(std::locale{""});
+
+	if (m)
+	{
+		o << m;
+		o.write(minutes.data(),
+			std::find(minutes.begin(), minutes.end(), ':')-
+			minutes.begin());
+	}
+
+	if (s || m == 0)
+	{
+		o << s;
+
+		o.write(seconds.data(),
+			std::find(seconds.begin(), seconds.end(), ':')-
+			seconds.begin());
+	}
+	return o.str();
+}
+
+std::string get_state_and_elapsed_for(
+	const proc_container_state &state,
+	time_t current_time,
+	const std::function<void (time_t)> &running,
+	const std::function<void (time_t, time_t)> &running2)
+{
+	const proc_container_timer *timer;
+
+	std::string s=std::visit(
+		[&timer]
+		(const auto &state) -> std::string
+		{
+			timer=state.timer();
+			return state;
+		}, state);
+
+	if (timer && *timer
+	    // Sanity check:
+	    && (*timer)->time_start <= current_time)
+	{
+		auto &t=**timer;
+
+		if (t.time_start == t.time_end)
+		{
+			running(current_time-t.time_start);
+		}
+		else
+		{
+			time_t c=current_time;
+
+			if (c > t.time_end)
+				c=t.time_end;
+
+			running2(c-t.time_start,
+				 t.time_end-t.time_start);
+		}
+	}
+	return s;
+}
