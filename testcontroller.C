@@ -708,7 +708,7 @@ void verify_container_state(
 		states.push_back(
 			pc->name + ": " +
 			std::visit([]
-				   (auto &ss) -> std::string
+				   (auto &ss) -> const char *
 			{
 				return ss;
 			}, s));

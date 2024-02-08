@@ -20,7 +20,7 @@
 struct state_stopped {
 
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	//! There are no timers here.
 	const proc_container_timer *timer() const { return nullptr; }
@@ -53,7 +53,7 @@ struct state_starting {
 	proc_container_timer starting_runner_timeout;
 
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	//! Return the starting_runner_timeout
 	const proc_container_timer *timer() const
@@ -73,7 +73,7 @@ struct state_started {
 	state_started(bool dependency) : dependency{dependency} {}
 
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	//! Currently running reload or restart command
 
@@ -125,7 +125,7 @@ struct state_started {
 struct stop_pending {
 
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	const proc_container_timer *timer() const { return nullptr; }
 };
@@ -141,7 +141,7 @@ struct stop_running {
 	proc_container_timer stopping_runner_timeout;
 
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	//! Return the stopping_runner_timeout
 	const proc_container_timer *timer() const
@@ -163,7 +163,7 @@ struct stop_removing {
 	bool sigkill_sent;
 
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	//! Return the sigkill_timer.
 	const proc_container_timer *timer() const { return &sigkill_timer; }
@@ -204,7 +204,7 @@ struct state_stopping {
 	{
 	}
 	//! Human readable label.
-	operator std::string() const;
+	operator const char *() const;
 
 	//! No timers here
 	const proc_container_timer *timer() const

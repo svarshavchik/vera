@@ -36,12 +36,12 @@ const char system_runlevel[]="system/runlevel";
 #undef DEP_DEBUG
 #define DEP_DEBUG(x) do {}while(0)
 
-state_stopped::operator std::string() const
+state_stopped::operator const char *() const
 {
 	return "stopped";
 }
 
-state_starting::operator std::string() const
+state_starting::operator const char *() const
 {
 	if (starting_runner)
 	{
@@ -53,35 +53,35 @@ state_starting::operator std::string() const
 		: "start pending (manual)";
 }
 
-state_started::operator std::string() const
+state_started::operator const char *() const
 {
 	return respawn_prepare_timer
 		? dependency ? "respawning":"respawning (manual)"
 		: dependency ? "started" : "started (manual)";
 }
 
-state_stopping::operator std::string() const
+state_stopping::operator const char *() const
 {
 	return std::visit(
 		[&]
-		(const auto &phase) -> std::string
+		(const auto &phase) -> const char *
 		{
 			return phase;
 		}, phase);
 }
 
 
-stop_pending::operator std::string() const
+stop_pending::operator const char *() const
 {
 	return "stop pending";
 }
 
-stop_running::operator std::string() const
+stop_running::operator const char *() const
 {
 	return "stopping";
 }
 
-stop_removing::operator std::string() const
+stop_removing::operator const char *() const
 {
 	if (sigkill_sent)
 		return "force-removing";

@@ -19,7 +19,7 @@ void log_state_change(const proc_container &pc,
 
 	o << std::visit(
 		[&]
-		(const auto &s) -> std::string
+		(const auto &s) -> const char *
 		{
 #ifdef UNIT_TEST
 			logged_state_changes.push_back(
@@ -142,7 +142,7 @@ std::string get_state_and_elapsed_for(
 
 	std::string s=std::visit(
 		[&timer]
-		(const auto &state) -> std::string
+		(const auto &state) -> const char *
 		{
 			timer=state.timer();
 			return state;
