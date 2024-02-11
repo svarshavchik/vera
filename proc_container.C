@@ -12,6 +12,7 @@
 #include "messages.H"
 #include "log.H"
 #include "poller.H"
+#include "verac.h"
 #include <stdio.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,8 +28,6 @@
 #include <string.h>
 #include <string_view>
 #include <fstream>
-
-const char reexec_envar[]="VERA_REEXEC_FD";
 
 const char system_runlevel[]="system/runlevel";
 

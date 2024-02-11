@@ -17,6 +17,10 @@ extern "C" {
 }
 #endif
 
+//! An environment variable is set when we re-execed.
+
+extern const char reexec_envar[];
+
 /* Make an AF_UNIX connection */
 
 int connect_sun_socket(const char *socketname);

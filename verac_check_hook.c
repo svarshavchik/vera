@@ -5,8 +5,11 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+
+const char reexec_envar[]="VERA_REEXEC_FD";
 
 static int hooked(const char *hookfile)
 {
@@ -51,7 +54,9 @@ const char *check_hookfile(const char *hookfile,
 		return init_path;
 	}
 
-	(*run_sysinit_cb)("/etc/inittab");
+	// vera is getting re-execed
+	if (!getenv(reexec_envar))
+		(*run_sysinit_cb)("/etc/inittab");
 
 	if (flag < 0)
 	{
