@@ -6,6 +6,7 @@
 #define privrequest_h
 
 #include "external_filedesc.H"
+#include <sys/stat.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -148,6 +149,11 @@ struct container_state_info {
 		// Its parent process id
 		pid_t ppid{1};
 
+		// exe's device/inode
+
+		dev_t exedev{};
+		ino_t exeino{};
+
 		// Its command line
 		std::vector<std::string> cmdline;
 		bool operator==(const pid_info &) const=default;
@@ -198,6 +204,27 @@ std::unordered_map<std::string, container_state_info> get_status(
 	const external_filedesc &efd,
 	int statusfd
 );
+
+/*! Populate container_state_info::pid_info
+
+This reads an input stream containing pids, then reads /proc and populates
+a pid_info map.
+
+ */
+
+void get_pid_status(std::istream &i,
+		    std::unordered_map<pid_t,
+		    container_state_info::pid_info> &processes);
+
+/*! Sort container pids into a hierarchical tree
+
+This removes each pid from the map populated by get_pid_status and puts them
+into a hierarchical parent/children tree.
+
+ */
+void sort_pids(std::unordered_map<pid_t,
+	       container_state_info::pid_info> &processes,
+	       container_state_info::hier_pids &pids);
 
 // Update the container_state_info map to reflect the current overrides
 

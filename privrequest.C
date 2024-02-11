@@ -362,49 +362,7 @@ std::unordered_map<std::string, container_state_info> get_status(
 			{
 				std::istringstream i{{++p, e}};
 
-				i.imbue(std::locale{"C"});
-
-				pid_t p;
-
-				while (i >> p)
-				{
-					auto &pid_info=processes[p];
-
-					{
-						std::ostringstream o;
-
-						o.imbue(std::locale{"C"});
-						o << "/proc/" << p << "/stat";
-
-						std::ifstream i{o.str()};
-
-						std::string s;
-
-						i >> s; // pid
-
-						i >> s; // comm
-
-						i >> s; // state
-
-						i >> pid_info.ppid;
-					}
-
-					{
-						std::ostringstream o;
-
-						o.imbue(std::locale{"C"});
-						o << "/proc/"
-						  << p << "/cmdline";
-
-						std::ifstream i{o.str()};
-
-						std::string s;
-
-						while (std::getline(i, s, '\0'))
-							pid_info.cmdline
-								.push_back(s);
-					}
-				}
+				get_pid_status(i, processes);
 			}
 		}
 
@@ -422,51 +380,136 @@ std::unordered_map<std::string, container_state_info> get_status(
 			};
 		}
 #endif
-		std::unordered_map<pid_t,
-				   container_state_info::hier_pid_info *
-				   > parent_pid_lookup;
-
-		while (!processes.empty())
-		{
-			auto b=processes.begin();
-
-			auto p=processes.find(b->second.ppid);
-
-			while (p != processes.end())
-			{
-				b=p;
-				p=processes.find(b->second.ppid);
-			}
-
-			auto parent=parent_pid_lookup.find(b->second.ppid);
-
-			if (parent != parent_pid_lookup.end())
-			{
-				parent_pid_lookup[b->first]=&(
-					parent->second->child_pids[b->first]=
-					container_state_info::hier_pid_info{
-						std::move(b->second)
-					}
-				);
-			}
-			else
-			{
-				parent_pid_lookup[b->first]=&(
-					info.processes[b->first]=
-					container_state_info::hier_pid_info{
-						std::move(b->second),
-						{}
-					}
-				);
-			}
-			processes.erase(b);
-		}
-
+		sort_pids(processes, info.processes);
 
 		m.emplace(std::move(name), std::move(info));
 	}
 
 	return m;
+}
+
+void get_pid_status(std::istream &i,
+		    std::unordered_map<pid_t,
+		    container_state_info::pid_info> &processes)
+{
+	i.imbue(std::locale{"C"});
+
+	pid_t p;
+
+	while (i >> p)
+	{
+		auto &pid_info=processes[p];
+
+		{
+			std::ostringstream o;
+
+			o.imbue(std::locale{"C"});
+			o << "/proc/" << p << "/exe";
+
+			struct stat stat_buf;
+
+			if (stat(o.str().c_str(), &stat_buf) == 0)
+			{
+				pid_info.exedev=stat_buf.st_dev;
+				pid_info.exeino=stat_buf.st_ino;
+			}
+		}
+
+		{
+			std::ostringstream o;
+
+			o.imbue(std::locale{"C"});
+			o << "/proc/" << p << "/stat";
+
+			std::ifstream i{o.str()};
+
+			std::string s;
+
+			i >> s; // pid
+
+			i >> s; // comm
+
+			i >> s; // state
+
+			i >> pid_info.ppid;
+		}
+
+		{
+			std::ostringstream o;
+
+			o.imbue(std::locale{"C"});
+			o << "/proc/"
+			  << p << "/cmdline";
+
+			std::ifstream i{o.str()};
+
+			std::string s;
+
+			while (std::getline(i, s, '\0'))
+				pid_info.cmdline
+					.push_back(s);
+		}
+	}
+}
+
+void sort_pids(std::unordered_map<pid_t,
+	       container_state_info::pid_info> &processes,
+	       container_state_info::hier_pids &pids)
+{
+	std::unordered_map<pid_t,
+			   container_state_info::hier_pid_info *
+			   > parent_pid_lookup;
+
+	// Take each pid in the original map
+
+	while (!processes.empty())
+	{
+		auto b=processes.begin();
+
+		// See if its parent also exists in the map, if so look at
+		// the parent, and proceed recursively.
+
+		auto p=processes.find(b->second.ppid);
+
+		while (p != processes.end())
+		{
+			b=p;
+			p=processes.find(b->second.ppid);
+		}
+
+		// We maintain a lookup map of pids to their entry in the
+		// hier_pids list.
+
+		auto parent=parent_pid_lookup.find(b->second.ppid);
+
+		if (parent != parent_pid_lookup.end())
+		{
+			// This pid is a child of a parent pid that's already
+			// in the pids, so move it there, and update the
+			// parent_pid_lookup so that the moved pid can be found
+			// in the hier_pids
+
+			parent_pid_lookup[b->first]=&(
+				parent->second->child_pids[b->first]=
+				container_state_info::hier_pid_info{
+					std::move(b->second)
+				}
+			);
+		}
+		else
+		{
+			// Move the pid to the hier pid and update the
+			// lookup map.
+			parent_pid_lookup[b->first]=&(
+				pids[b->first]=
+				container_state_info::hier_pid_info{
+					std::move(b->second),
+					{}
+				}
+			);
+		}
+		processes.erase(b);
+	}
 }
 
 void update_status_overrides(
