@@ -185,6 +185,7 @@ Loading installed units
 system/inittab/rc:start=forking:stop=manual
 system/inittab/rc:description=rc: /etc/rc.d/rc.M
 system/inittab/rc:starting:/etc/rc.d/rc.M
+system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K
 system/inittab/rc:required-by system/custom
 system/inittab/rc:required-by system/graphical
 system/inittab/rc:required-by system/multi-user

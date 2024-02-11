@@ -893,7 +893,12 @@ struct inittab_converter {
 			new_entry.required_by_runlevel(rl);
 
 		bool is_local_after=
-			new_entry.starting_command == "/etc/rc.d/rc.M";;
+			new_entry.starting_command == "/etc/rc.d/rc.M";
+
+		if (is_local_after)
+			new_entry.stopping_command =
+				pkgdata_dir + "/vera-rck "
+				"/etc/rc.d/rc.K";
 		// rc.K and rc.M run initscripts after it finished its
 		// business.
 

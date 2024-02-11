@@ -5,8 +5,10 @@
 # Comment out "killall". The containers already took care of it, and it'll
 # kill vera's public process.
 #
+# Comment out call to telinit
+#
 # Also comment out "sleep 1"s, that serve no prupose any more
 
 RCK="$1"
 
-sed 's/^killall/#/;s/sleep 1/true/' <$RCK | exec /bin/bash
+sed 's/^killall/#/;s/^\/sbin\/telinit/#/;s/sleep 1/true/' <$RCK | exec /bin/bash

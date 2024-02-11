@@ -142,7 +142,7 @@ struct container_state_info {
 
 	bool enabled=false;
 
-	// Bare-bounes information about a process in the container.
+	// Bare-bones information about a process in the container.
 	struct pid_info {
 
 		// Its parent process id
