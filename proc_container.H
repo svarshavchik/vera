@@ -28,6 +28,13 @@ enum class proc_container_type {
 	synthesized	//!< Synthesized, for dependencies.
 };
 
+//! Who to send a SIGTERM to
+
+enum class sigterm {
+	all,		//!< All processes in the container
+	parents,	//!< All, except children of parents running same exe
+};
+
 //! A set of process containers.
 
 typedef std::unordered_set<proc_container, proc_container_hash,
@@ -141,6 +148,9 @@ public:
 
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
+
+	//! Who to send sigterm to
+	sigterm sigterm_notify=sigterm::all;
 
 	//! The container's starting type
 	start_type_t start_type{start_type_t::forking};

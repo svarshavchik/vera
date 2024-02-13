@@ -189,21 +189,29 @@ struct container_state_info {
 	bool operator==(const container_state_info &) const=default;
 };
 
-// Receive and parse the container state.
+/*! Receive and parse the container state.
 
-// This is the end result of the following sequence: request_status, followed
-// by request_fd_wait, followed by request_send_fd(). get_status() gets
-// called with the daemon connection and the temporary file descriptor that
-// was passed to request_sendfd().
-//
-// Returns a map, the key is the container name.
-//
-// container_state_info does not reflect overrides.
+  This is the end result of the following sequence: request_status, followed
+  by request_fd_wait, followed by request_send_fd(). get_status() gets
+  called with the daemon connection and the temporary file descriptor that
+  was passed to request_sendfd().
+
+  Returns a map, the key is the container name.
+
+  container_state_info does not reflect overrides.
+*/
 
 std::unordered_map<std::string, container_state_info> get_status(
 	const external_filedesc &efd,
 	int statusfd
 );
+
+/*! "/proc/"
+
+  Used to read process information. Overridden in unit tests.
+*/
+
+extern const char slashprocslash[];
 
 /*! Populate container_state_info::pid_info
 

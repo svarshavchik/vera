@@ -3391,6 +3391,102 @@ void teststatustimestamp()
 	}
 }
 
+void testparentsterm()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+
+	a->new_container->sigterm_notify=sigterm::parents;
+	a->new_container->starting_command="/bin/true";
+
+	proc_containers_install({a}, container_install::update);
+
+	proc_container_start("a");
+	runner_finished(1, 0);
+
+	create_fake_cgroup(a->new_container, {10,11,12,13});
+	create_fake_proc(10, 1, "exe1", {"exe1","a","b"});
+	create_fake_proc(11, 10, "exe1", {"exe1","c", "d"});
+	create_fake_proc(12, 11, "exe2", {"exe2","e", "f"});
+	create_fake_proc(13, 10, "exe2", {"exe2","g", "h"});
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		request_status(privsocketa);
+
+		if (privsocketb->readln() != "status")
+			throw "Did not receive status command";
+
+		FILE *fp=tmpfile();
+
+		request_fd(privsocketb);
+
+		request_fd_wait(privsocketa);
+
+		request_send_fd(privsocketa, fileno(fp));
+
+		proc_do_status_request(privsocketb,
+				       request_recvfd(privsocketb));
+
+		privsocketb=nullptr;
+
+		auto ret=get_status(privsocketa, fileno(fp));
+
+		struct stat exe1, exe2;
+
+		if (stat((slashprocslash + std::string{"/exe1"}).c_str(), &exe1)
+		    ||
+		    stat((slashprocslash + std::string{"/exe2"}).c_str(), &exe2)
+		)
+		{
+			throw "Could not start exe1 and exe2.";
+		}
+
+		std::map<pid_t, container_state_info::hier_pid_info>
+			expected_processes{
+			{10, { {1, exe1.st_dev, exe1.st_ino,
+				{"exe1", "a", "b"}},
+			       {{11, { {10, exe1.st_dev,
+						exe1.st_ino,
+						{"exe1", "c", "d"}},
+				       {{12, {{11,
+						       exe2.st_dev,
+						       exe2.st_ino,
+						       {"exe2", "e", "f"}}}},
+				       }}},
+				{13, { {10, exe2.st_dev,
+						exe2.st_ino,
+						{"exe2", "g", "h"}}}},
+			       }}},
+		};
+
+		if (ret.size() != 1)
+			throw "Unexpected get_status() return (1).";
+
+		if (ret.begin()->second.processes != expected_processes)
+			throw "Unexpected get_status() return (2).";
+		fclose(fp);
+	}
+
+	proc_container_stop("a");
+	std::sort(sent_sigs.begin(),
+		  sent_sigs.end(),
+		  []
+		  (std::tuple<pid_t, int> &a,
+		   std::tuple<pid_t, int> &b)
+		  {
+			  return std::get<0>(a) < std::get<0>(b);
+		  });
+
+	if (sent_sigs != std::vector<std::tuple<pid_t, int>>{
+			{ 10, SIGTERM},
+			{ 12, SIGTERM},
+			{ 13, SIGTERM}
+		})
+	{
+		throw "Unexpected list of parent processes who got SIGTERM";
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3574,6 +3670,11 @@ int main(int argc, char **argv)
 		test_reset();
 		test="teststatustimestamp";
 		teststatustimestamp();
+
+		test_reset();
+		test="testparentsterm";
+		testparentsterm();
+
 		test_reset();
 	} catch (const char *e)
 	{

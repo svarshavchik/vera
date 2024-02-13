@@ -7,19 +7,20 @@
 #include <time.h>
 #include <sstream>
 #include <string>
+#include "privrequest.H"
 
-std::vector<std::string> logged_state_changes;
-
-struct timespec fake_time;
+extern std::vector<std::string> logged_state_changes;
+extern struct timespec fake_time;
+extern std::vector<std::tuple<pid_t, int>> sent_sigs;
 
 #define UNIT_TEST
 #include "log.C"
 #undef UNIT_TEST
 
-static std::vector<std::string> logged_runners;
+extern std::vector<std::string> logged_runners;
 
-static pid_t next_pid=1;
-static bool all_forks_fail=false;
+extern pid_t next_pid;
+extern bool all_forks_fail;
 
 void populated(const proc_container &container, bool isit);
 
@@ -88,6 +89,9 @@ void test_reset(bool keep_cgroupfs=false)
 		);
 	}
 
+	std::filesystem::remove_all(slashprocslash);
+
+	sent_sigs.clear();
 	reexec_handler=[]
 	{
 		throw "unexpected call to reexec.";
@@ -115,5 +119,22 @@ std::string proc_container_runlevel(const std::string &new_runlevel);
 
 //! Get current runlevels
 std::string current_runlevel();
+
+//! Create a fake cgroup.procs file.
+
+void create_fake_cgroup(const proc_container &pc,
+			const std::vector<pid_t> &pids);
+
+/*! Create a fake /proc/ entry.
+
+For the given pid, with the given parent pid, for the given executable,
+and arg args.
+*/
+
+void create_fake_proc(
+	pid_t p,
+	pid_t ppid,
+	const std::string &exe,
+	const std::vector<std::string> &args);
 
 #endif

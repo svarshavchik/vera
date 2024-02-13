@@ -23,6 +23,14 @@
 #include <fstream>
 #include <iostream>
 
+std::vector<std::string> logged_state_changes;
+struct timespec fake_time;
+std::vector<std::string> logged_runners;
+std::vector<std::tuple<pid_t, int>> sent_sigs;
+
+pid_t next_pid=1;
+bool all_forks_fail=false;
+
 current_containers_infoObj::current_containers_infoObj()
 	: current_containers_infoObj{
 			std::tuple{default_runlevels(), false}
@@ -127,13 +135,9 @@ void proc_container_stopped(const std::string &s)
 	ci->populated(s, false);
 }
 
-void proc_container_group::cgroups_sendsig(int sig)
+void proc_container_group::cgroups_sendsig(pid_t p, int s)
 {
-}
-
-std::vector<pid_t> proc_container_group::cgroups_getpids()
-{
-	return {};
+	sent_sigs.emplace_back(p, s);
 }
 
 void proc_container_group::prepare_to_transfer_fd(int &fd)
@@ -228,11 +232,6 @@ std::string current_runlevel()
 	return s;
 }
 
-void proc_container_group::refresh_populated_after_fork()
-{
-	populated=true;
-}
-
 std::string populated_sh(const proc_container &container, bool isit)
 {
 	proc_container_group_data dummy;
@@ -257,4 +256,81 @@ void sigusr2()
 
 void showing_verbose_progress_off()
 {
+}
+
+const char slashprocslash[] = "testslashproc/";
+
+void create_fake_cgroup(const proc_container &pc,
+			const std::vector<pid_t> &pids)
+{
+	proc_container_group_data pg;
+
+	pg.container=pc;
+
+	if (!pg.cgroups_dir_create())
+		throw "Cannot create " + pg.cgroups_dir();
+
+	std::ofstream o{pg.cgroups_dir() + "/cgroup.procs"};
+
+	for (auto &p:pids)
+		o << p << "\n";
+
+	o.close();
+
+	if (!o)
+		throw "Cannot create " + pg.cgroups_dir() + "/cgroup.procs";
+}
+
+void create_fake_proc(
+	pid_t p,
+	pid_t ppid,
+	const std::string &exe,
+	const std::vector<std::string> &args)
+{
+	std::error_code ec;
+
+	std::filesystem::create_directory(slashprocslash);
+
+	// Create a null file
+	std::ofstream dummyfile{ slashprocslash + exe };
+
+	std::ostringstream o;
+	o << slashprocslash << p;
+
+	std::string piddir=o.str();
+
+	ec=std::error_code{};
+	std::filesystem::create_directory(piddir, ec);
+
+	if (ec)
+	{
+		throw "Cannot create " + piddir;
+	}
+
+	std::filesystem::create_symlink( "../" + exe, piddir + "/exe", ec);
+
+	if (ec)
+	{
+		throw "Cannot create " + piddir + "/" + exe;
+	}
+
+	{
+		std::ofstream o{piddir + "/stat"};
+
+		o << p << " comm state " << ppid;
+		o.close();
+
+		if (!o)
+			throw "Cannot create " + piddir + "/stat";
+	}
+
+	{
+		std::ofstream o{piddir + "/cmdline"};
+
+		for (auto &argv:args)
+			o.write(argv.c_str(), argv.size()+1);
+
+		if (!o)
+			throw "Cannot create " + piddir + "/stat";
+	}
 }

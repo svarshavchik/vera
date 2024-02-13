@@ -7,6 +7,7 @@
 
 #include "poller.H"
 #include "proc_containerfwd.H"
+#include "privrequest.H"
 #include <tuple>
 #include <string>
 #include <vector>
@@ -101,6 +102,7 @@ An active system process container group
 
 class proc_container_group : proc_container_group_data {
 
+	struct cgroup_procs_file;
 public:
 	proc_container_group()=default;
 
@@ -135,7 +137,26 @@ public:
 
 	//! Send a signal to all processes in the group
 
-	void cgroups_sendsig(int);
+	void cgroups_sendsig_all(int);
+
+	//! Send a signal to all processes except children with same exes.
+
+	void cgroups_sendsig_parents(int);
+
+private:
+
+	//! Recursive implementation function.
+	void cgroups_sendsig_parents(
+		const container_state_info::hier_pids &pids,
+		const container_state_info::pid_info *parent,
+		int sig);
+
+public:
+	//! Send a signal to a pid
+
+	//! Stubbed out in unit tests.
+
+	static void cgroups_sendsig(pid_t p, int sig);
 
 	//! Return a list of processes in the group
 
@@ -149,10 +170,6 @@ public:
 	}
 
 	using proc_container_group_data::populated;
-
-	//! Manually set populated flag after fork() when we know we registered
-
-	void refresh_populated_after_fork();
 
 	///////////////////////////////////////////////////////////////////
 	//

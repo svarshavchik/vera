@@ -8,10 +8,12 @@
 #include "log.H"
 #include "poller.H"
 #include "messages.H"
+#include "privrequest.H"
 #include <algorithm>
 #include <unistd.h>
 #include <string.h>
 #include <sstream>
+#include <fstream>
 #include <fcntl.h>
 #include <iostream>
 
@@ -313,4 +315,96 @@ void proc_container_group::all_restored(const group_create_info &create_info)
 	{
 		log_message(container->name + _(": not active after re-exec"));
 	}
+}
+
+// Open the cgroup.procs file.
+
+struct proc_container_group::cgroup_procs_file {
+
+	std::ifstream i;
+
+	cgroup_procs_file(proc_container_group *me)
+		: i{me->cgroups_dir() + "/cgroup.procs"}
+	{
+		if (i)
+			i.imbue(std::locale{"C"});
+	}
+};
+
+// Send a signal to all processes in a container.
+
+void proc_container_group::cgroups_sendsig_all(int sig)
+{
+	cgroup_procs_file cp(this);
+
+	if (!cp.i)
+		return;
+
+	pid_t p;
+
+	while (cp.i >> p)
+	{
+		cgroups_sendsig(p, sig);
+	}
+}
+
+// Send a signal to all processes in a container except those whose parent
+// is the same process.
+
+void proc_container_group::cgroups_sendsig_parents(int sig)
+{
+	cgroup_procs_file cp(this);
+
+	if (!cp.i)
+		return;
+
+	std::unordered_map<pid_t,
+			   container_state_info::pid_info> processes;
+
+	get_pid_status(cp.i, processes);
+
+	container_state_info::hier_pids pids;
+
+	sort_pids(processes, pids);
+
+	cgroups_sendsig_parents(pids, nullptr, sig);
+}
+
+void proc_container_group::cgroups_sendsig_parents(
+	const container_state_info::hier_pids &pids,
+	const container_state_info::pid_info *parent,
+	int sig)
+{
+	for (auto &[pid, info]: pids)
+	{
+		// Do not send signal to this proc if parent proc is the same
+		// exe.
+		if (!(
+			    parent && parent->exedev == info.parent_pid.exedev
+			    && parent->exeino == info.parent_pid.exeino
+		    ))
+		{
+			cgroups_sendsig(pid, sig);
+		}
+		cgroups_sendsig_parents(info.child_pids, &info.parent_pid, sig);
+	}
+}
+
+// Return all processes in a container.
+
+std::vector<pid_t> proc_container_group::cgroups_getpids()
+{
+	std::vector<pid_t> pids;
+
+	cgroup_procs_file cp(this);
+
+	if (cp.i)
+	{
+		pid_t p;
+
+		while (cp.i >> p)
+			pids.push_back(p);
+	}
+
+	return pids;
 }

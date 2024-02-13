@@ -227,8 +227,10 @@ proc_container_runner create_runner(
 	if (read(exec_pipe[0], reinterpret_cast<char *>(&n), sizeof(n))
 	    == sizeof(n))
 	{
+		// Did not exec
+
 		if (n[1] == 0) // Child process did register in the cgroup.
-			group.refresh_populated_after_fork();
+			group.populated=true;
 
 		close(exec_pipe[0]);
 		// child process exits upon an empty command.
@@ -238,14 +240,9 @@ proc_container_runner create_runner(
 		return {};
 	}
 	close(exec_pipe[0]);
-	group.refresh_populated_after_fork();
 
-	// A rare race condition: above we forked and exec the child
-	// process but it finished before we refresh_populated_after_fork(),
-	// which saw the container not populated. We want to force
-	// populated to true here, because we'll get an inotify event
-	// on cgroup_eventsfd, which we'll want to process, and we'll see
-	// "populated 0" at that time.
+	// registered the container group and execed
+
 	group.populated=true;
 	return reinstall_runner(p, all_containers, container, done);
 }

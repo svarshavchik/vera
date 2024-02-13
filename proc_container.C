@@ -3278,9 +3278,12 @@ void current_containers_infoObj::starting_command_finished(
 						cc->first,
 						_("sending SIGTERM"));
 
-					if (cc->second.group)
-						cc->second.group->cgroups_sendsig
-							(SIGTERM);
+					auto &g=cc->second.group;
+
+					if (g)
+						g->cgroups_sendsig_all(
+							SIGTERM
+						);
 
 					current_state.respawn_succeeded=
 						succeeded;
@@ -3373,7 +3376,7 @@ void current_containers_infoObj::prepare_respawn(
 						cc->first,
 						_("sending SIGKILL"));
 
-					cc->second.group->cgroups_sendsig(
+					cc->second.group->cgroups_sendsig_all(
 						SIGKILL
 					);
 
@@ -3769,9 +3772,21 @@ void current_containers_infoObj::do_remove(const current_container &cc,
 			      send_sigkill ? _("sending SIGKILL")
 			      : _("sending SIGTERM"));
 
-	run_info.group->cgroups_sendsig(
-		send_sigkill ? SIGKILL:SIGTERM
-	);
+	if (send_sigkill)
+	{
+		run_info.group->cgroups_sendsig_all(SIGKILL);
+	}
+	else
+	{
+		switch (cc->first->sigterm_notify) {
+		case sigterm::all:
+			run_info.group->cgroups_sendsig_all(SIGTERM);
+			break;
+		case sigterm::parents:
+			run_info.group->cgroups_sendsig_parents(SIGTERM);
+			break;
+		}
+	}
 }
 
 // The container has started.
@@ -3828,9 +3843,9 @@ void current_containers_infoObj::populated(const std::string &s,
 	{
 		// Unless we're called after a reexec, we want to check
 		// if the reported is_populated really changed. This is
-		// to handle race condition. After a fork(), the
-		// cotainer does refresh_populated_after_fork() which will
-		// correctly reflect
+		// to handle race condition. After a fork(), populated gets
+		// set to true explicitly, and we might get an inotify for
+		// this.
 
 		if (!is_restored)
 		{

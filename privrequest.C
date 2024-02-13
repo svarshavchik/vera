@@ -362,6 +362,8 @@ std::unordered_map<std::string, container_state_info> get_status(
 			{
 				std::istringstream i{{++p, e}};
 
+				i.imbue(std::locale{"C"});
+
 				get_pid_status(i, processes);
 			}
 		}
@@ -392,8 +394,6 @@ void get_pid_status(std::istream &i,
 		    std::unordered_map<pid_t,
 		    container_state_info::pid_info> &processes)
 {
-	i.imbue(std::locale{"C"});
-
 	pid_t p;
 
 	while (i >> p)
@@ -404,7 +404,7 @@ void get_pid_status(std::istream &i,
 			std::ostringstream o;
 
 			o.imbue(std::locale{"C"});
-			o << "/proc/" << p << "/exe";
+			o << slashprocslash << p << "/exe";
 
 			struct stat stat_buf;
 
@@ -419,7 +419,7 @@ void get_pid_status(std::istream &i,
 			std::ostringstream o;
 
 			o.imbue(std::locale{"C"});
-			o << "/proc/" << p << "/stat";
+			o << slashprocslash << p << "/stat";
 
 			std::ifstream i{o.str()};
 
@@ -438,7 +438,7 @@ void get_pid_status(std::istream &i,
 			std::ostringstream o;
 
 			o.imbue(std::locale{"C"});
-			o << "/proc/"
+			o << slashprocslash
 			  << p << "/cmdline";
 
 			std::ifstream i{o.str()};

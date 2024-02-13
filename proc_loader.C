@@ -251,6 +251,7 @@ static bool proc_load_container(
 	const std::string &key,
 	yaml_node_t *n,
 	bool enabled,
+	bool &parsed_sigterm_notify,
 	const std::function<void (const std::string &)> &error);
 
 proc_new_container_set proc_load(
@@ -406,6 +407,8 @@ proc_new_container_set proc_load(
 			return results;
 		}
 
+		bool parsed_sigterm_notify=false;
+
 		if (!parsed.parse_map(
 			    n,
 			    unit_path,
@@ -419,12 +422,19 @@ proc_new_container_set proc_load(
 					    key,
 					    n,
 					    enabled,
+					    parsed_sigterm_notify,
 					    error);
 			    },
 			    error))
 		{
 			results.clear();
 			return results;
+		}
+
+		if (!parsed_sigterm_notify &&
+		    !nc->new_container->stopping_command.empty())
+		{
+			nc->new_container->sigterm_notify=sigterm::parents;
 		}
 	}
 
@@ -450,6 +460,7 @@ static bool proc_load_container(
 	const std::string &key,
 	yaml_node_t *n,
 	bool enabled,
+	bool &parsed_sigterm_notify,
 	const std::function<void (const std::string &)> &error)
 {
 	std::string name=unit_path;
@@ -592,6 +603,52 @@ static bool proc_load_container(
 						error);
 				}
 
+				return true;
+			},
+			error);
+	}
+
+	if (key == "sigterm")
+	{
+		return parsed.parse_map(
+			n, name,
+			[&](const std::string &key, auto n,
+			    auto &error)
+			{
+				if (key == "notify")
+				{
+					std::string sigterm;
+
+					if (!parsed.parse_scalar(
+						    n,
+						    name + ":notify",
+						    error,
+						    sigterm))
+						return false;
+
+					if (sigterm == "all")
+					{
+						nc->new_container
+							->sigterm_notify=
+							sigterm::all;
+					}
+					else if (sigterm == "parents")
+					{
+						nc->new_container
+							->sigterm_notify=
+							sigterm::parents;
+					}
+					else
+					{
+						error(name + _(": invalid "
+							       "SIGTERM "
+							       "setting"));
+						return false;
+					}
+					parsed_sigterm_notify=true;
+
+					return true;
+				}
 				return true;
 			},
 			error);
@@ -878,6 +935,17 @@ void proc_load_dump(const proc_new_container_set &set)
 			std::cout << name << ":stopping_timeout "
 				  << n->new_container->stopping_timeout
 				  << "\n";
+
+		std::cout << name << ":sigterm:notify=";
+
+		switch (n->new_container->sigterm_notify) {
+		case sigterm::all:
+			std::cout << "all\n";
+			break;
+		case sigterm::parents:
+			std::cout << "parents\n";
+			break;
+		}
 
 		if (!n->new_container->restarting_command.empty())
 			std::cout << name << ":restart:"

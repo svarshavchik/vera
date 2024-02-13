@@ -208,16 +208,17 @@
 	  </listitem>
 	  <listitem>
 	    <para>
-	      <xref linkend="additionalconfig" /> contains additional,
-	      configuration information.
+	      <xref linkend="additionalconfig" /> with additional
+	      documentation of runlevels and hierarchical and compound
+	      units.
 	    </para>
 	  </listitem>
 
 	  <listitem>
 	    <para>
 	      <xref linkend="management" /> contains instructions for
-	      reconfiguring the system to use <command>vera</command>
-	      instead of <command>init</command>.
+	      switching the system to use <command>vera</command>
+	      instead of <command>init</command>, and switching back.
 	    </para>
 	  </listitem>
 	</itemizedlist>
@@ -1243,6 +1244,70 @@ Respawn:
 	  </note>
 	</refsect2>
 
+	<refsect2 id="sigterm">
+	  <title><acronym>SIGTERM</acronym> and <acronym>SIGKILL</acronym></title>
+	  <para>
+	    A unit gets stopped by running its
+	    <link linkend="startstop">stopping command</link> if its
+	    specified; then
+	    sending the <acronym>SIGTERM</acronym> signal to the remaining
+	    processes (subject to the settings below),
+	    giving them a few seconds to wrap things up on their
+	    own, and then immediately <acronym>SIGKILL</acronym>ing any
+	    processes that remain.
+	  </para>
+
+	  <blockquote>
+	    <informalexample>
+	      <programlisting>
+Name: scheduler
+Description: "System Scheduler"
+Starting:
+    type: forking
+    command: "/usr/bin/scheduler start"
+Sigterm:
+    notify: parents
+version: 1
+</programlisting>
+	    </informalexample>
+	  </blockquote>
+	  <para>
+	    The <quote>Sigterm</quote> key in the unit specification file
+	    specifies how processes in the container receive a
+	    <acronym>SIGTERM</acronym> signal.
+	  </para>
+	  <variablelist>
+	    <varlistentry>
+	      <term>notify: all</term>
+	      <listitem>
+		<para>
+		  All processes in the unit's container get a
+		  <acronym>SIGTERM</acronym>.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term>notify: parents</term>
+	      <listitem>
+		<para>
+		  Processes that are children of other processes in the same
+		  container and which run the same executable as their parent
+		  process do not receive a <acronym>SIGTERM</acronym>, only
+		  its parent process does. A child process that runs a
+		  different executable does get a <acronym>SIGTERM</acronym>
+		  normally.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+
+	  <para>
+	    <quote>notify: parents</quote> is the default if the unit
+	    specification file specifies a stopping command.
+	    <quote>notify: all</quote> is the default if the unit
+	    specification file does not specify an explicit stopping command.
+	  </para>
+	</refsect2>
 	<refsect2 id="alternativegroups">
 	  <title>Alternative Groups</title>
 
@@ -1299,7 +1364,7 @@ Version: 1
 		If the above units are installed as
 		<filename>networking/http-apache</filename> and
 		<filename>networking/http-nginx</filename> then their
-		alternative group's name is relaly
+		alternative group's name is really
 		<quote>networking/webservers</quote> (unless it's given as
 		<quote>/webserver</quote>).
 		See <xref linkend="hierarchy" /> for a description of

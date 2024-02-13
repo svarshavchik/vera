@@ -51,6 +51,7 @@ int dependencies_flag;
 int waitrunlevel_flag;
 int nowait_flag;
 int override_flag;
+const char slashprocslash[] = "/proc/";
 
 const struct option options[]={
 	{"stopped", 0, &stopped_flag, 1},
@@ -151,17 +152,6 @@ proc_container_group_data::cgroups_events_open(int fd)
 
 	return {fd, path};
 }
-
-void proc_container_group::refresh_populated_after_fork()
-{
-	if (cgroup_eventsfd < 0)
-		return;
-
-	std::string s;
-
-	populated=is_populated(cgroup_eventsfd, s);
-}
-
 
 // Put this forked process into the cgroup
 
@@ -568,44 +558,9 @@ void log_to_stdout(int level, const char *program,
 	std::cout << program << ": " << message << "\n" << std::flush;
 }
 
-// Send a signal to all processes in a container.
-
-void proc_container_group::cgroups_sendsig(int sig)
+void proc_container_group::cgroups_sendsig(pid_t p, int sig)
 {
-	std::ifstream i{cgroups_dir() + "/cgroup.procs"};
-
-	if (i)
-	{
-		pid_t p;
-
-		i.imbue(std::locale{"C"});
-
-		while (i >> p)
-		{
-			kill(p, sig);
-		}
-	}
-}
-
-// Return all processes in a container.
-
-std::vector<pid_t> proc_container_group::cgroups_getpids()
-{
-	std::vector<pid_t> pids;
-
-	std::ifstream i{cgroups_dir() + "/cgroup.procs"};
-
-	if (i)
-	{
-		pid_t p;
-
-		i.imbue(std::locale{"C"});
-
-		while (i >> p)
-			pids.push_back(p);
-	}
-
-	return pids;
+	kill (p, sig);
 }
 
 ///////////////////////////////////////////////////////////////////////////
