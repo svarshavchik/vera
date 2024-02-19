@@ -2141,6 +2141,89 @@ version: 1
 	</para>
       </refsect1>
 
+      <refsect1 id="files">
+	<title>FILES</title>
+
+	<variablelist>
+	  <varlistentry>
+	    <term><filename>@INSTALLCONFIGDIR@</filename></term>
+	    <listitem>
+	      <para>
+		Unit specification files.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><filename>@LOCALCONFIGDIR@</filename></term>
+	    <listitem>
+	      <para>
+		Locally-modified unit specification files.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><filename>@OVERRIDECONFIGDIR@</filename></term>
+	    <listitem>
+	      <para>
+		<command>vera</command>-maintained directory that keeps track
+		of masked and enabled units.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </refsect1>
+
+      <refsect1 id="envvars">
+	<title>ENVIRONMENT VARIABLES</title>
+
+	<para>
+	  Commands executed by <command>vera</command> (namely the
+	  <link linkend="startstop">starting and stopping commands</link>)
+	  inherit the following environment variables.
+	</para>
+
+	<variablelist>
+	  <varlistentry>
+	    <term><envar>PATH</envar></term>
+	    <listitem>
+	      <para>
+		The default path is <quote>/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin</quote>.
+		Any non-default <command>vera</command> installation directory
+		gets prepended to this default path.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><envar>CONSOLE</envar></term>
+	    <listitem>
+	      <para>
+		The path to the system console device in
+		<filename>/dev</filename>.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><envar>INIT_VERSION</envar></term>
+	    <listitem>
+	      <para>
+		<command>vera</command>'s version, for compatibility
+		with <command>init</command>.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><envar>RUNLEVEL</envar> and <envar>PREVRUNLEVEL</envar> (if
+	    applicable)</term>
+	    <listitem>
+	      <para>
+		The current and possibly the previous runlevel (the
+		one-character <command>init</command> alias), for compatibility
+		with <command>init</command>.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </refsect1>
       <refsect1 id="bugs">
 	<title>BUGS</title>
 

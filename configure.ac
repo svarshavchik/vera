@@ -19,6 +19,10 @@ then
 fi
 AC_SUBST(VALGRIND)
 
+AC_PATH_PROGS(PAGER, less more)
+
+AC_DEFINE_UNQUOTED(PAGER,["${PAGER}"],[Default system pager])
+
 # Checks for libraries.
 
 save_CPPFLAGS="$CPPFLAGS"

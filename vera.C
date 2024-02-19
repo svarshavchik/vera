@@ -916,6 +916,48 @@ external_filedesc connect_vera_pub()
 	return fd;
 }
 
+void pager()
+{
+	if (!isatty(1))
+		return;
+
+	int fd[2];
+
+	if (pipe(fd) < 0)
+	{
+		perror("pipe");
+		exit(1);
+	}
+
+	switch (fork()) {
+	case 0:
+		dup2(fd[1], 1);
+		dup2(fd[1], 2);
+		close(fd[1]);
+		close(fd[0]);
+		return;
+	case -1:
+		perror("fork");
+		exit(1);
+	}
+	if (dup2(fd[0], 0) != 0)
+	{
+		perror("dup");
+		exit(1);
+	}
+	close(fd[0]);
+	close(fd[1]);
+
+	const char *p=getenv("PAGER");
+
+	if (!p)
+		p=PAGER;
+
+	execlp(PAGER, PAGER, nullptr);
+	perror(PAGER);
+	exit(1);
+}
+
 // Connection on the public socket.
 
 // A separate process listens on the public socket and it does not affect
@@ -1437,6 +1479,8 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() >= 1 && args[0] == "status")
 	{
+		pager();
+
 		FILE *fpfd=tmpfile();
 
 		auto fd=connect_vera_pub();
@@ -1710,6 +1754,8 @@ void vlad(std::vector<std::string> args)
 	}
 	if (args.size() >= 2 && args[0] == "validate")
 	{
+		pager();
+
 		bool error=false;
 
 		if (!proc_validate(args[1], (
