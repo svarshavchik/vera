@@ -226,7 +226,7 @@ vera.html.stamp: vera.xml
 	   --stringparam use.id.as.filename 1 \
            http://docbook.sourceforge.net/release/xsl/current/xhtml/chunk.xsl \
            vera.xml
-	elinks -dump -no-references <html.tmp/INSTALL.html >INSTALL.tmp
+	$(HTML2TXT) <html.tmp/INSTALL.html >INSTALL.tmp
 	mv INSTALL.tmp INSTALL
 	rm -rf html.tmp
 	touch vera.html.stamp

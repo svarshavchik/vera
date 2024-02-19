@@ -61,6 +61,7 @@ bool proc_container_group_data::cgroups_dir_create()
 			return false;
 	}
 
+	log_container_message(container, "cgroup created");
 	return true;
 }
 
@@ -101,6 +102,10 @@ bool proc_container_group::cgroups_try_rmdir()
 		if (errno != ENOENT)
 			return false;
 	}
+
+	log_container_message(
+		container, "cgroup removed"
+	);
 
 	return true;
 }

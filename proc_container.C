@@ -3919,9 +3919,6 @@ void current_containers_infoObj::stopped(const std::string &s)
 		if (run_info.group->cgroups_try_rmdir())
 		{
 			cc->second.group.reset();
-			log_container_message(
-				pc, _("cgroup removed")
-			);
 		}
 		else
 		{

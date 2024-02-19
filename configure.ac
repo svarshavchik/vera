@@ -19,9 +19,30 @@ then
 fi
 AC_SUBST(VALGRIND)
 
-AC_PATH_PROGS(PAGER, less more)
+AC_PATH_PROGS(PAGER, less more, none)
+
+if test "$PAGER" = "none"
+then
+	AC_MSG_ERROR([did not find less or more])
+fi
 
 AC_DEFINE_UNQUOTED(PAGER,["${PAGER}"],[Default system pager])
+
+AC_PATH_PROGS(elinks, elinks, none)
+AC_PATH_PROGS(links, links, none)
+
+if test "$elinks" != "none"
+then
+	HTML2TXT="$elinks -dump -no-references"
+else
+	if test '$links' != "none"
+	then
+		HTML2TXT="$links -dump /dev/stdin"
+	else
+		AC_MSG_ERROR(did not find links or elinks)
+	fi
+fi
+AC_SUBST(HTML2TXT)
 
 # Checks for libraries.
 

@@ -43,7 +43,15 @@
     </para>
 
     <para>
-      Then run <command>make</command> to build <command>vera</command>.
+      If <filename>/usr/local</filename> is not a separate, mounted partition,
+      if it's on a root partition, running <command>./configure</command>
+      without any options installs everything into
+      <filename>/usr/local</filename>.
+    </para>
+
+    <para>
+      Next, run <quote><command>make [-j #]</command></quote>
+      to build <command>vera</command>.
     </para>
 
     <para>
@@ -52,6 +60,72 @@
       an installation image in <filename>/tmp/tmp-inst</filename>, this shows
       where everything gets installed.
     </para>
+
+    <para>
+      <quote><command>make install</command></quote> runs a script that
+      reads <filename>/etc/inittab</filename> and
+      <filename>/etc/rc.d/rc?.d</filename> and converts them
+      to <command>vera</command>'s unit specifications. The script fails
+      if it doesn't understand them.
+      The user id that runs <command>make install</command> must have access
+      to <filename>/etc/inittab</filename> and
+      <filename>/etc/rc.d/rc?.d</filename>.
+    </para>
+
+    <para>
+      After verifying the correct installation paths, run
+      <quote><command>sudo make install</command></quote>. When
+      done, execute (as root)
+      <quote><command>vlad hookonce</command></quote> and reboot. This
+      triggers only the next reboot into <command>vera</command> so that
+      if there's any issue then forcing another reboot should restore the
+      status quo.
+    </para>
+
+    <para>
+      After
+      rebooting run <command>vlad status</command> to see all containers
+      that were started for converted <filename>/etc/inittab</filename>
+      entries. Run
+      <quote><command>vlad hook</command></quote> to set
+      <command>vera</command> for all future reboots.
+    </para>
+
+    <note>
+      <para>
+	Do not update <command>init</command> after installing
+	<command>vera</command>. If you would like to go back to
+	<command>init</command>, or to update:
+      </para>
+
+      <itemizedlist>
+	<listitem>
+	  <para>Run <quote><command>vlad unhook</command></quote>.</para>
+	</listitem>
+
+	<listitem>
+	  <para>
+	    Reboot, this will boot with <command>init</command>.
+	    IMPORTANT: run
+	    <quote><command>vlad unhook</command></quote> a second time.
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </note>
+
+    <sect2 id="issues">
+      <title>Known issues</title>
+
+      <para>
+	When using NetworkManager there's always a ten second delay in the
+	middle of every shutdown, with <command>vera</command> waiting for
+	one <command>dhcpcd</command> process to stop. This is a small glitch
+	in Slackware's initscripts. NetworkManager does not shutdown cleanly.
+	This gets covered up normally by <command>rc.K</command> terminating
+	all processes at once, but gets exposed when NetworkManager runs in
+	a container.
+      </para>
+    </sect2>
   </sect1>
   <sect1 id="manpages">
     <title>Manual pages</title>

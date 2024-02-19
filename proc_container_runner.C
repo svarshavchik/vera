@@ -161,7 +161,6 @@ proc_container_runner create_runner(
 			cc->second.group.reset();
 			return {};
 		}
-		log_container_message(cc->first, "cgroup created");
 	}
 
 	auto &group=*cc->second.group;
