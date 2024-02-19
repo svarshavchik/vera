@@ -527,14 +527,16 @@ struct signal_poller {
 	{
 		switch (ssi.ssi_signo) {
 		case SIGCHLD:
+			while(1)
 			{
-				int wstatus=0;
+				int wstatus;
 
-				if (wait4(ssi.ssi_pid, &wstatus, 0, 0) ==
-				    (pid_t)ssi.ssi_pid)
-				{
-					runner_finished(ssi.ssi_pid, wstatus);
-				}
+				auto pid=waitpid(-1, &wstatus, WNOHANG);
+
+				if (pid <= 0)
+					break;
+
+				runner_finished(pid, wstatus);
 			}
 			return;
 		case SIGHUP:
