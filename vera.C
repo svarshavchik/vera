@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022-2024 Double Precision, Inc.
 ** See COPYING for distribution information.
 */
 
@@ -86,6 +86,11 @@ std::string overrideconfigdir()
 std::string runlevelconfig()
 {
 	return RUNLEVELCONFIG;
+}
+
+std::string environconfig()
+{
+	return ENVIRONCONFIG;
 }
 
 // Load the runlevelconfig file at startup. Returns the runlevels and an
@@ -1159,6 +1164,14 @@ constexpr std::string_view adjusted_default_path()
 	return SBINDIR ":" DEFAULT_PATH;
 }
 
+void set_global_locale()
+{
+	std::locale::global(std::locale{""});
+
+	bindtextdomain(PACKAGE, LOCALEDIR);
+	textdomain(PACKAGE);
+}
+
 void vera()
 {
 	setenv("PATH",
@@ -1205,6 +1218,20 @@ void vera()
 	if (fd > 0)
 		close(fd);
 
+	proc_get_environconfig(
+		[]
+		(const std::string &msg)
+		{
+			std::cerr << "vera:" << msg << std::endl;
+		});
+
+	auto iter=environconfigvars.find("LANG");
+
+	if (iter != environconfigvars.end())
+	{
+		setenv("LANG", iter->second.c_str(), 1);
+	}
+	set_global_locale();
 
 	// halt.c in syvinit wants to see INIT_VERSION
 	setenv("INIT_VERSION", "vera-" PACKAGE_VERSION, 1);
@@ -1792,6 +1819,23 @@ void vlad(std::vector<std::string> args)
 		}
 		exit(0);
 	}
+
+	if (args.size() == 3 && args[0] == "setenv")
+	{
+		auto fd=connect_vera_priv();
+
+		send_setenv(fd, args[1], args[2]);
+		exit(wait_setunsetenv(fd));
+	}
+
+	if (args.size() == 2 && args[0] == "unsetenv")
+	{
+		auto fd=connect_vera_priv();
+
+		send_unsetenv(fd, args[1]);
+		exit(wait_setunsetenv(fd));
+	}
+
 	// Handle one-character init-style commands.
 
 	if (args.size() == 1 && args[0].size() == 1)
@@ -1814,13 +1858,8 @@ void vlad(std::vector<std::string> args)
 	exit(1);
 }
 
-
 int main(int argc, char **argv)
 {
-	std::locale::global(std::locale{""});
-
-	bindtextdomain(PACKAGE, LOCALEDIR);
-	textdomain(PACKAGE);
 	// Set up logging.
 
 	log_to_syslog=getpid() == 1 ? log_to_real_syslog:log_to_stdout;
@@ -1840,21 +1879,46 @@ int main(int argc, char **argv)
 		if (argc >= 3 &&
 		    std::string_view{argv[1]} == PUB_PROCESS_SIGNATURE)
 		{
+			set_global_locale();
 			vera_pub(argv[2]);
 		}
 
 		if (exename.substr(slash) == "vlad" || argc > 1)
 		{
 			umask(022);
-			std::locale::global(std::locale(""));
+			set_global_locale();
 
 			// Ignore -t option
 
-			while (getopt_long(argc, argv, "t:", options, NULL)
-			       >= 0)
-				;
+			int c;
 
-			vlad({argv+optind, argv+argc});
+			while ((c=getopt_long(argc, argv, "t:e:", options, NULL)
+			       ) >= 0)
+				switch (c) {
+				case 'e':
+					std::string s{optarg};
+
+					auto p=s.find('=');
+
+					auto fd=connect_vera_priv();
+
+					if (p != s.npos)
+					{
+						send_setenv(fd,
+							    s.substr(0, p),
+							    s.substr(p+1));
+					}
+					else
+					{
+						send_unsetenv(fd, s);
+					}
+
+					if (wait_setunsetenv(fd))
+						exit(1);
+			       }
+
+			if (optind < argc)
+				vlad({argv+optind, argv+argc});
 		}
 		else
 		{

@@ -153,6 +153,7 @@ struct parsed_yaml {
 	 */
 
 	bool parse_map(yaml_node_t *n,
+		       bool case_sensitive,
 		       const std::string &name,
 		       const std::function<bool (
 			       const std::string &,
@@ -181,7 +182,8 @@ struct parsed_yaml {
 
 			auto &keys=*key;
 
-			lc(keys);
+			if (!case_sensitive)
+				lc(keys);
 
 			if (!key_value(keys,
 				       yaml_document_get_node(&doc, b->value),

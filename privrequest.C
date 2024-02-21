@@ -576,3 +576,44 @@ std::tuple<external_filedesc, external_filedesc> create_fake_request()
 
 	return efd;
 }
+
+void send_setenv(const external_filedesc &fd,
+		 std::string name,
+		 std::string value)
+{
+	if (name.find('\n') != name.npos ||
+	    value.find('\n') != value.npos)
+	{
+		throw std::runtime_error{
+			_("Variable name or value cannot contain a newline")
+				};
+	}
+
+	fd->write_all("setenv\n" + name + "\n" + value + "\n");
+}
+
+void send_unsetenv(const external_filedesc &fd,
+		    std::string name)
+{
+	if (name.find('\n') != name.npos)
+	{
+		throw std::runtime_error{
+			_("Variable name cannot contain a newline")
+				};
+	}
+
+	fd->write_all("unsetenv\n" + name + "\n");
+}
+
+int wait_setunsetenv(const external_filedesc &fd)
+{
+	auto error=fd->readln();
+
+	if (!error.empty())
+	{
+		std::cerr << error << std::endl;
+		return 1;
+	}
+
+	return 0;
+}

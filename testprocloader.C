@@ -296,7 +296,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	if (args.size() == 4 && args[1] == "genrunlevels")
+	if (args.size() == 5 && args[1] == "genrunlevels")
 	{
 		auto rl=default_runlevels();
 
@@ -406,7 +406,24 @@ int main(int argc, char **argv)
 			}
 		}
 
-		return 0;
+		const char *p=getenv("LANG");
+		if (!p)
+			p="en_US.UTF-8";
+
+		environconfigvars.clear();
+		environconfigvars.emplace("LANG", p);
+
+		int exitcode=0;
+
+		proc_set_environconfig(
+			args[4],
+			[&]
+			(const std::string &error)
+			{
+				std::cerr << error << std::endl;
+				exitcode=1;
+			});
+		return exitcode;
 	}
 
 	if (args.size() > 2 && args[1] == "testupdatestatusoverrides")

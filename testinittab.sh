@@ -15,7 +15,9 @@ mkdir -p testinittab.dir/etc/rc.d/rc0.d
 mkdir -p testinittab.dir/etc/rc.d/rc6.d
 
 mkdir -p testinittab.dir/share
-$VALGRIND ./testprocloader genrunlevels testinittab.dir/runlevels testinittab.dir/vera/system
+$VALGRIND ./testprocloader genrunlevels testinittab.dir/runlevels testinittab.dir/vera/system environconfigfile
+
+rm environconfigfile
 
 cat >testinittab.dir/inittab <<EOF
 id:3:initdefault:

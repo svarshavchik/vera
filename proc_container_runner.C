@@ -6,6 +6,7 @@
 #include "proc_container.H"
 #include "proc_container_runner.H"
 #include "current_containers_info.H"
+#include "proc_loader.H"
 #include "log.H"
 #include "messages.H"
 #include <string.h>
@@ -200,6 +201,9 @@ proc_container_runner create_runner(
 
 			auto [prev, cur]=
 				all_containers->prev_current_runlevel();
+
+			for (auto &[var, value] : environconfigvars)
+				setenv(var.c_str(), value.c_str(), 1);
 
 			setenv("PREVRUNLEVEL", prev.c_str(), 1);
 

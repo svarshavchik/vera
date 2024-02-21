@@ -232,17 +232,28 @@
 	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>setenv</arg>
+	  <arg choice='req'><replaceable>name</replaceable></arg>
+	  <arg choice='req'><replaceable>value</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>unsetenv</arg>
+	  <arg choice='req'><replaceable>name</replaceable></arg>
+	</cmdsynopsis>
 	<blockquote>
 	  <para>
 	    Internal commands
 	  </para>
-	  <cmdsynopsis>
-	    <command>vlad</command>
-	    <arg choice='plain'>sysdown</arg>
-	    <arg choice='req'>runlevel</arg>
-	    <arg choice='req'>script</arg>
-	  </cmdsynopsis>
 	</blockquote>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>sysdown</arg>
+	  <arg choice='req'>runlevel</arg>
+	  <arg choice='req'>script</arg>
+	</cmdsynopsis>
       </refsynopsisdiv>
 
       <refsect1 id="description">
@@ -2194,6 +2205,17 @@ version: 1
 	    </para>
 	  </listitem>
 	</itemizedlist>
+
+	<para>
+	  The <command>setenv</command> and <command>unsetenv</command>
+	  commands update the environment variables for all commands started
+	  by <command>vera</command>. These commands update the
+	  <filename>@ENVIRONCONFIG@</filename> file that sets the
+	  environment variables for all commands started
+	  by <command>vera</command> (in addition to several environment
+	  variables that are always set, see <xref linkend="envvars" />
+	  for more information).
+	</para>
       </refsect1>
 
       <refsect1 id="internal">
@@ -2236,11 +2258,30 @@ version: 1
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
+	    <term><filename>@RUNLEVELCONFIG@</filename></term>
+	    <listitem>
+	      <para>
+		Runlevel configuration, for compatibility with sysvinit.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
 	    <term><filename>@OVERRIDECONFIGDIR@</filename></term>
 	    <listitem>
 	      <para>
 		<command>vera</command>-maintained directory that keeps track
 		of masked and enabled units.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><filename>@ENVIRONCONFIG@</filename></term>
+	    <listitem>
+	      <para>
+		Environment variables that are set for all started commands.
+		This file is maintained by
+		<quote>setenv</quote> and <quote>unsetenv</quote>
+		commands.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -2253,7 +2294,9 @@ version: 1
 	<para>
 	  Commands executed by <command>vera</command> (namely the
 	  <link linkend="startstop">starting and stopping commands</link>)
-	  inherit the following environment variables.
+	  inherit the following environment variables, in addition to the
+	  ones that are set by the <quote>setenv</quote> command (and
+	  recorded in <filename>@ENVIRONCONFIG@</filename>).
 	</para>
 
 	<variablelist>

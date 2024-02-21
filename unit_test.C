@@ -31,6 +31,11 @@ std::vector<std::tuple<pid_t, int>> sent_sigs;
 pid_t next_pid=1;
 bool all_forks_fail=false;
 
+std::string environconfig()
+{
+	return "testenviron";
+}
+
 current_containers_infoObj::current_containers_infoObj()
 	: current_containers_infoObj{
 			std::tuple{default_runlevels(), false}

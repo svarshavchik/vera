@@ -305,6 +305,7 @@ proc_new_container_set proc_load(
 
 		if (!parsed.parse_map(
 			    n,
+			    false,
 			    unit_path,
 			    [&](const std::string &key, auto n,
 			       auto &error)
@@ -411,6 +412,7 @@ proc_new_container_set proc_load(
 
 		if (!parsed.parse_map(
 			    n,
+			    false,
 			    unit_path,
 			    [&](const std::string &key, auto n,
 			       auto &error)
@@ -579,7 +581,7 @@ static bool proc_load_container(
 	if (key == "respawn")
 	{
 		return parsed.parse_map(
-			n, name,
+			n, false, name,
 			[&](const std::string &key, auto n,
 			    auto &error)
 			{
@@ -611,7 +613,7 @@ static bool proc_load_container(
 	if (key == "sigterm")
 	{
 		return parsed.parse_map(
-			n, name,
+			n, false, name,
 			[&](const std::string &key, auto n,
 			    auto &error)
 			{
@@ -673,6 +675,7 @@ bool parsed_yaml::starting_or_stopping(
 
 	return parse_map(
 		n,
+		false,
 		name,
 		[&](const std::string &key, auto n,
 		    auto &error)

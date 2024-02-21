@@ -17,6 +17,8 @@
 #include <time.h>
 #include <signal.h>
 
+std::string environconfig();
+
 // Send requests and process responses over a privileged (root) sockets.
 
 // Send a start request
@@ -242,5 +244,21 @@ void update_status_overrides(
 	const std::string &localdir,
 	const std::string &overridedir);
 
+// Send environment variable set
+
+void send_setenv(const external_filedesc &fd,
+		 std::string name,
+		 std::string value);
+
+// Send environment variable unset
+
+void send_unsetenv(const external_filedesc &fd,
+		   std::string name);
+
+// Wait for the setenv or unsetenv to be processed
+//
+// Returns: 0 - success, 1 - error.
+
+int wait_setunsetenv(const external_filedesc &fd);
 
 #endif

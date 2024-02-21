@@ -84,6 +84,7 @@ configdirs.h: config.status Makefile
 	echo '#define INSTALLCONFIGDIR "$(INSTALLCONFIGDIR)"' >configdirs.h.tmp
 	echo '#define CONFIGDIR "$(CONFIGDIR)"' >>configdirs.h.tmp
 	echo '#define RUNLEVELCONFIG "$(RUNLEVELCONFIG)"' >>configdirs.h.tmp
+	echo '#define ENVIRONCONFIG "$(ENVIRONCONFIG)"' >>configdirs.h.tmp
 	echo '#define LOCALCONFIGDIR "$(LOCALCONFIGDIR)"' >>configdirs.h.tmp
 	echo '#define OVERRIDECONFIGDIR "$(OVERRIDECONFIGDIR)"' >>configdirs.h.tmp
 	echo '#define LOCALSTATEDIR "$(localstatedir)"' >>configdirs.h.tmp
@@ -143,7 +144,10 @@ install-data-local:
 	chmod 755 $(DESTDIR)$(CONFIGDIR)
 	chmod 755 $(DESTDIR)$(LOCALCONFIGDIR)
 	chmod 755 $(DESTDIR)$(OVERRIDECONFIGDIR)
-	umask 022; ./testprocloader genrunlevels $(DESTDIR)$(RUNLEVELCONFIG) $(DESTDIR)$(INSTALLCONFIGDIR)/system && \
+	umask 022; ./testprocloader genrunlevels \
+		$(DESTDIR)$(RUNLEVELCONFIG) \
+		$(DESTDIR)$(INSTALLCONFIGDIR)/system \
+		$(DESTDIR)$(ENVIRONCONFIG) && \
 		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
 			-p $(DESTDIR)${pkgdatadir} \
@@ -185,7 +189,8 @@ vera.8: vera.8.in Makefile
 	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~;   # \
 	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~;                # \
 	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~;          # \
-	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~;               # \
+	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~;                # \
+	     s~@''ENVIRONCONFIG@''~$(ENVIRONCONFIG)~;                  # \
 	     s~@''CONFIGDIR@''~$(CONFIGDIR)~'    	                 \
 					<$(srcdir)/vera.8.in >vera.8.tmp
 	mv -f vera.8.tmp vera.8

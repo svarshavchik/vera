@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include "privrequest.H"
+#include "proc_loader.H"
 
 extern std::vector<std::string> logged_state_changes;
 extern struct timespec fake_time;
@@ -90,6 +91,8 @@ void test_reset(bool keep_cgroupfs=false)
 	}
 
 	std::filesystem::remove_all(slashprocslash);
+	std::filesystem::remove_all(environconfig());
+	environconfigvars.clear();
 
 	sent_sigs.clear();
 	reexec_handler=[]

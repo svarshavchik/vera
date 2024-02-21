@@ -523,7 +523,8 @@ diff -U 3 loadtest.expected loadtest.out
 
 rm -rf globaldir
 mkdir -p globaldir
-./testprocloader genrunlevels loadtest.txt globaldir
+./testprocloader genrunlevels loadtest.txt globaldir environconfig
+rm environconfig
 cd globaldir
 for f in *
 do

@@ -1923,6 +1923,45 @@ void proc_do_request(external_filedesc efd)
 			proc_do_status_request(efd, tmp);
 		return;
 	}
+
+	if (ln == "setenv")
+	{
+		auto name=efd->readln();
+		auto value=efd->readln();
+
+		std::string last_errmsg;
+
+		proc_set_environconfig(
+			std::move(name), std::move(value),
+			[&]
+			(const std::string &errmsg)
+			{
+				last_errmsg=errmsg;
+				log_message(errmsg);
+			});
+
+		efd->write_all(last_errmsg);
+		return;
+	}
+
+	if (ln == "unsetenv")
+	{
+		auto name=efd->readln();
+
+		std::string last_errmsg;
+
+		proc_set_environconfig(
+			std::move(name), std::nullopt,
+			[&]
+			(const std::string &errmsg)
+			{
+				last_errmsg=errmsg;
+				log_message(errmsg);
+			});
+
+		efd->write_all(last_errmsg);
+		return;
+	}
 }
 
 void proc_do_status_request(const external_filedesc &req,

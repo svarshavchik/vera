@@ -105,6 +105,7 @@ runlevels proc_get_runlevel_config(
 
 	if (parsed.parse_map(
 		    yaml_document_get_root_node(&parsed.doc),
+		    false,
 		    configfile,
 		    [&]
 		    (const std::string &key,
@@ -117,6 +118,7 @@ runlevels proc_get_runlevel_config(
 
 			    if (!parsed.parse_map(
 					n,
+					false,
 					this_key,
 					[&]
 					(const std::string &key,

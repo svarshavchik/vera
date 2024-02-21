@@ -229,4 +229,29 @@ bool proc_validate(const std::string &unitfile,
 #define PWRFAILNOW_UNIT "powerfailnow"
 #define PWROK_UNIT      "powerok"
 
+/*! Environment that's read from the environment variable configuration file */
+
+extern std::unordered_map<std::string, std::string> environconfigvars;
+
+/*! Load the environ config file */
+
+void proc_get_environconfig(
+	const std::function<void (const std::string &)> &error
+);
+
+/*! Set an environment variable, in the environment config file */
+
+void proc_set_environconfig(
+	std::string key,
+	std::optional<std::string> value,
+	const std::function<void (const std::string &)> &error
+);
+
+/*! Write out a new environment config file */
+
+void proc_set_environconfig(
+	std::string configfile,
+	const std::function<void (const std::string &)> &error
+);
+
 #endif

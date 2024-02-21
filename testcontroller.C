@@ -3487,6 +3487,102 @@ void testparentsterm()
 	}
 }
 
+void testenv()
+{
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		send_setenv(privsocketa, "LANG", "en_US.UTF-8");
+		proc_do_request(privsocketb);
+		privsocketb={};
+		if (wait_setunsetenv(privsocketa))
+			throw "Unexpected error setting an env var";
+	}
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		send_setenv(privsocketa, "LC_ALL", "en_US.UTF-8");
+		proc_do_request(privsocketb);
+		privsocketb={};
+		if (wait_setunsetenv(privsocketa))
+			throw "Unexpected error setting an env var";
+	}
+
+	proc_get_environconfig(
+		[]
+		(const auto &errmsg)
+		{
+			std::cerr << errmsg << std::endl;
+		});
+
+	if (environconfigvars != std::unordered_map<std::string, std::string>{
+			{ "LANG", "en_US.UTF-8" },
+			{ "LC_ALL", "en_US.UTF-8" },
+		})
+	{
+		throw "Unexpected environconfig file (1)";
+	}
+
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		send_setenv(privsocketa, "LC_ALL", "en_UK.UTF-8");
+		proc_do_request(privsocketb);
+		privsocketb={};
+		if (wait_setunsetenv(privsocketa))
+			throw "Unexpected error setting an env var";
+	}
+
+	proc_get_environconfig(
+		[]
+		(const auto &errmsg)
+		{
+			std::cerr << errmsg << std::endl;
+		});
+
+	if (environconfigvars != std::unordered_map<std::string, std::string>{
+			{ "LANG", "en_US.UTF-8" },
+			{ "LC_ALL", "en_UK.UTF-8" },
+		})
+	{
+		throw "Unexpected environconfig file (2)";
+	}
+
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		send_unsetenv(privsocketa, "LC_ALL");
+		proc_do_request(privsocketb);
+		privsocketb={};
+		if (wait_setunsetenv(privsocketa))
+			throw "Unexpected error setting an env var";
+	}
+
+	{
+		auto [privsocketa, privsocketb] = create_fake_request();
+
+		send_unsetenv(privsocketa, "Z");
+		proc_do_request(privsocketb);
+		privsocketb={};
+		if (wait_setunsetenv(privsocketa))
+			throw "Unexpected error setting an env var";
+	}
+
+	proc_get_environconfig(
+		[]
+		(const auto &errmsg)
+		{
+			std::cerr << errmsg << std::endl;
+		});
+
+	if (environconfigvars != std::unordered_map<std::string, std::string>{
+			{ "LANG", "en_US.UTF-8" },
+		})
+	{
+		throw "Unexpected environconfig file (3)";
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3674,6 +3770,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="testparentsterm";
 		testparentsterm();
+
+		test_reset();
+		test="testenv";
+		testenv();
 
 		test_reset();
 	} catch (const char *e)
