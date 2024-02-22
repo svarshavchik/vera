@@ -254,6 +254,11 @@
 	  <arg choice='req'>runlevel</arg>
 	  <arg choice='req'>script</arg>
 	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vera-init</command>
+	  <arg choice='opt' rep='repeat'>parameter</arg>
+	</cmdsynopsis>
       </refsynopsisdiv>
 
       <refsect1 id="description">
@@ -2019,10 +2024,12 @@ version: 1
 	</para>
 
 	<para>
-	  The replacement <command>/sbin/init</command> checks that
+	  The replacement <command>/sbin/init</command>, called
+	  <command>vera-init</command>, checks that
 	  <filename>@CONFIGDIR@/hook</filename> exists on the next reboot, and
 	  starts <command>vera</command> instead of the replaced
-	  <command>init</command>.
+	  <command>init</command>. See <xref linkend="internal" /> for more
+	  information.
 	</para>
 
 	<para>
@@ -2235,6 +2242,88 @@ version: 1
 	  (the <filename>rc.0</filename> and <filename>rc.6</filename>
 	  scripts).
 	</para>
+
+	<para>
+	  The <command>vera-init</command> executable gets linked as
+	  <filename>/sbin/init</filename> and it performs a delicate juggling
+	  act of switching between <command>vera</command> and the legacy
+	  <command>init</command> command, which gets renamed as
+	  <filename>/sbin/init.init</filename> by the <quote>hook</quote>
+	  command.
+	</para>
+
+	<para>
+	  When it's not started as PID 1 <command>vera-init</command>
+	  determines whether the system was booted by <command>vera</command>
+	  or <command>init</command> by connecting to
+	  <command>vera</command>'s internal communication socket. A connection
+	  failure indicates that <command>vera</command> is hooked as
+	  <command>/sbin/init</command> but the system has not been rebooted
+	  yet, so <command>vera-init</command> executes
+	  <command>/sbin/init.init</command> and forwards all parameters to it.
+	  A successful connection indicates that <command>vera</command> is
+	  running. <command>vera-init</command> executes
+	  the <command>vlad</command> command and forwards its arguments to it.
+	</para>
+
+	<para>
+	  When started as PID 1 <command>vera-init</command> determines whether
+	  the system should be booted by the legacy <command>init</command>
+	  or vera.
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      Absence of <command>/sbin/init.init</command> indicates
+	      that <command>vera</command> is installed and the legacy
+	      <command>init</command> is removed.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <filename>@CONFIGDIR@/hook</filename> is checked, this file
+	      is updated by <command>hook</command>,
+	      <command>hookonce</command> and <command>unhook</command>
+	      commands.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      If <filename>@CONFIGDIR@/hook</filename> exists but its timestamp
+	      is identical to <filename>/proc/1</filename>'s timestamp then
+	      this is treated as if it does not exist.
+	      <command>hook</command>/<command>hookonce</command> intentionally
+	      sets the hook file's timestamp like this. <command>init</command>
+	      executes itself before a reboot, and this is used to detect this
+	      edge case. Even though this is PID 1 the system is not started
+	      by <command>vera</command>.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      The absence of <filename>@CONFIGDIR@/hook</filename> results
+	      in executing <filename>/sbin/init.init</filename>, the legacy
+	      init.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      A <command>hookonce</command> removes
+	      <filename>@CONFIGDIR@/hook</filename>, for the next boot.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      At this point a final determination is made that the system
+	      is getting booted by <command>vera</command>. Before this happens
+	      <command>vera-init</command> reads
+	      <filename>/etc/inittab</filename> and directly runs all
+	      <command>sysinit</command> commands, then executes
+	      <command>vera</command> to start the rest of the system.
+	    </para>
+	  </listitem>
+	</itemizedlist>
       </refsect1>
 
       <refsect1 id="files">
@@ -2367,7 +2456,7 @@ version: 1
 	  original <command>init</command> if all filesystems are fully
 	  synced before forcing the reboot. Do not update
 	  <command>init</command> before fully
-	  Unhook <command>vera</command> (twice) and rebooting back into
+	  unhooking <command>vera</command> (twice) and rebooting back into
 	  <command>init</command>
 	  (see <xref linkend="management" /> for more information).
 	</para>

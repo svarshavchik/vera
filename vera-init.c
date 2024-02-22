@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 	}
 
 	/*
-	** When root poke the private socket, to avoid interference from
+	** When root: poke the private socket, to avoid interference from
 	** non-root.
 	*/
 

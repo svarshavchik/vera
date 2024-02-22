@@ -8,15 +8,20 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
 
 const char reexec_envar[]="VERA_REEXEC_FD";
 
-static int hooked(const char *hookfile)
+static int hooked(const char *hookfile, const char *init_path)
 {
 	char buf[256];
 	struct stat pid1_stat, hookfile_stat;
+	FILE *fp;
 
-	FILE *fp=fopen(hookfile, "r");
+	if (stat(init_path, &pid1_stat) && errno == ENOENT)
+		return 1;
+
+	fp=fopen(hookfile, "r");
 
 	if (!fp)
 		return 0;
@@ -45,7 +50,9 @@ const char *check_hookfile(const char *hookfile,
 			   const char *init_path,
 			   const char *vera_path)
 {
-	int flag=hooked(hookfile);
+	int flag;
+
+	flag=hooked(hookfile, init_path);
 
 	if (!flag)
 	{

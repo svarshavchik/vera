@@ -81,8 +81,18 @@ void testhook()
 			std::filesystem::perms::owner_all);
 	}
 
+#define INIT "testhook.sbin/init"
+
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
-				       "init", "vera")} != "init" ||
+				       "init", "vera")} != "vera"
+		|| !fake_run_sysinit_called)
+	{
+		throw std::runtime_error{"did not default to vera if no init"};
+	}
+
+	fake_run_sysinit_called=0;
+	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
+				       INIT, "vera")} != INIT ||
 		fake_run_sysinit_called)
 	{
 		throw std::runtime_error{"hook not ignored when not hooked"};
@@ -103,7 +113,7 @@ void testhook()
 				};
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
-				       "init", "vera")} != "init")
+				       INIT, "vera")} != INIT)
 	{
 		throw std::runtime_error{
 			"hook was not ignored with unchanged timestamp"};
@@ -112,14 +122,14 @@ void testhook()
 	utimensat(AT_FDCWD, FAKEHOOKFILE, 0, 0);
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
-				       "init", "vera")} != "vera" ||
+				       INIT, "vera")} != "vera" ||
 		fake_run_sysinit_called != 1)
 	{
 		throw std::runtime_error{"hook was ignored the first time"};
 	}
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
-				       "init", "vera")} != "init" ||
+				       INIT, "vera")} != INIT ||
 		fake_run_sysinit_called != 1)
 	{
 		throw std::runtime_error{
@@ -190,14 +200,14 @@ void testhook()
 	utimensat(AT_FDCWD, FAKEHOOKFILE, 0, 0);
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
-				       "init", "vera")} != "vera" ||
+				       INIT, "vera")} != "vera" ||
 		fake_run_sysinit_called != 2)
 	{
 		throw std::runtime_error{"permanent hook ignored"};
 	}
 
 	if (std::string{check_hookfile(FAKEHOOKFILE, fake_run_sysinit,
-				       "init", "vera")} != "vera" ||
+				       INIT, "vera")} != "vera" ||
 		fake_run_sysinit_called != 3)
 	{
 		throw std::runtime_error{"permanent hook ignored 2nd time"};
