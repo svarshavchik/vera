@@ -715,6 +715,17 @@ void vera_init()
 {
 	update_current_time();
 
+	bool initial;
+
+	if (getenv(reexec_envar))
+	{
+		initial=false;
+	}
+	else
+	{
+		initial=true;
+	}
+
 	if (ioctl(0, TIOCGWINSZ, &console_winsize) < 0 ||
 	    console_winsize.ws_row < 8) // Sanity check
 	{
@@ -725,10 +736,11 @@ void vera_init()
 	}
 	else
 	{
-		std::cout << "vera: console size is "
-			  << console_winsize.ws_col
-			  << "x" << console_winsize.ws_row << "\n"
-			  << std::flush;
+		if (!initial)
+			std::cout << "vera: console size is "
+				  << console_winsize.ws_col
+				  << "x" << console_winsize.ws_row << "\n"
+				  << std::flush;
 	}
 	create_priv_poller();
 
@@ -755,18 +767,13 @@ void vera_init()
 			perror(("chmod 0755 " + cgroups).c_str());
 		}
 	}
-	// Garbage collection on the configuration directory.
 
-	bool initial;
-
-	if (getenv(reexec_envar))
+	if (!initial)
 	{
-		initial=false;
 		log_message("restarted");
 	}
 	else
 	{
-		initial=true;
 		log_message("starting");
 
 		if (getpid() == 1)
@@ -798,6 +805,8 @@ void vera_init()
 				log_message(warning_message);
 			});
 	}
+
+	// Garbage collection on the configuration directory.
 
 	// We'll monitor the config directory for changes.
 
