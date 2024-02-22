@@ -177,8 +177,9 @@ bool hook(std::string etc_sysinit_dir,
 			std::cerr << "init appears to be hooked already: "
 				  << h.backup
 				  << " exists" << std::endl;
+			std::cerr << "Reinstalled hook file." << std::endl;
 			sethookfile(hookfile, once);
-			return false;
+			return true;
 		}
 	}
 

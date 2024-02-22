@@ -136,14 +136,14 @@ void testhook()
 			"hook was not ignored the second time"};
 	}
 
-	if (hook("testhook.etcrc",
-		 "testhook.sbin",
-		 "testhook.sbin/vlad",
-		 "../testhook.pkgdata",
+	if (!hook("testhook.etcrc",
+		  "testhook.sbin",
+		  "testhook.sbin/vlad",
+		  "../testhook.pkgdata",
 		  FAKEHOOKFILE,
 		  true
 	    ))
-		throw std::runtime_error{"Hook succeeded unexpectedly"};
+		throw std::runtime_error{"Hook failed unexpectedly (1)"};
 
 	if (WEXITSTATUS(system("testhook.etcrc/rc.sysvinit")) != 6)
 		throw std::runtime_error{
@@ -195,7 +195,7 @@ void testhook()
 		  "testhook.sbin/vlad",
 		  "../testhook.pkgdata",
 		  FAKEHOOKFILE, false))
-		throw std::runtime_error{"Hook failed unexpectedly"};
+		throw std::runtime_error{"Hook failed unexpectedly (2)"};
 
 	utimensat(AT_FDCWD, FAKEHOOKFILE, 0, 0);
 
