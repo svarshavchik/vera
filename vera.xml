@@ -29,7 +29,7 @@
 
     <blockquote>
       <informalexample>
-	<programlisting>./configure --sysconfdir=/etc --sbindir=/sbin \&#10;    --libdir=/lib --localstatedir=/run \&#10;    --localedir=/usr/share/locale</programlisting>
+	<programlisting>./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \&#10;    --libdir=/lib --localstatedir=/run \&#10;    --localedir=/usr/share/locale</programlisting>
       </informalexample>
     </blockquote>
 

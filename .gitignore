@@ -4,6 +4,7 @@
 *.stamp
 *.tar.gz
 *.tar.xz
+*.txz
 /m4
 Makefile
 Makefile.in

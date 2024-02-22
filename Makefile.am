@@ -22,6 +22,7 @@ noinst_PROGRAMS=\
 	testprocloader
 
 EXTRA_DIST= 							\
+	slack-desc						\
 	testinittab.sh						\
 	testinittab.txt						\
 	testprocloader.sh					\
@@ -78,7 +79,7 @@ libvera_a_SOURCES=						\
 	verac_runsysinit.c					\
 	verac.h							\
 	yaml_writer.C						\
-	yaml-writer.H
+	yaml_writer.H
 
 configdirs.h: config.status Makefile
 	echo '#define INSTALLCONFIGDIR "$(INSTALLCONFIGDIR)"' >configdirs.h.tmp
@@ -178,7 +179,9 @@ check-am:
 	./testcontroller3 respawn3 "$(VALGRIND)"
 	./testcontroller3 respawn4
 	$(VALGRIND) ./testcontroller3 testnoreexec
-	export VALGRIND='$(VALGRIND)'; sh $(srcdir)/testinittab.sh "$(srcdir)"
+	export VALGRIND='$(VALGRIND)'; \
+		export srcdir=$(srcdir); \
+		sh $(srcdir)/testinittab.sh "$(srcdir)"
 	./testhook
 
 man8_MANS=vera.8 vlad.8
@@ -238,3 +241,35 @@ vera.html.stamp: vera.xml
 
 CLEANFILES += INSTALL
 endif
+
+# Make a Slackware package
+
+NVR=$(PACKAGE)-$(VERSION)-`uname -m`-1
+
+slackpkg: dist
+	rm -rf $(PACKAGE)-$(VERSION)
+	tar xf $(PACKAGE)-$(VERSION).tar.xz
+	cd $(PACKAGE)-$(VERSION) && \
+		./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \
+			--libdir=/lib --localstatedir=/run \
+			--localedir=/usr/share/locale && \
+		make -j `grep '^processor' /proc/cpuinfo | wc -l` && \
+                strip vera && strip vera-init && \
+		make install DESTDIR=inst && \
+		cd inst && \
+                   find lib/vera/system/inittab \
+                        lib/vera/system/rc -type f -print | xargs rm -f && \
+                   mkdir install && \
+			echo '#! /bin/sh' > install/doinst.sh && \
+                        echo '/sbin/vlad inittab' >> install/doinst.sh && \
+			chmod +x install/doinst.sh && \
+			cp ../../slack-desc install && \
+                   gzip usr/share/man/*/* && \
+                   mkdir -p var/lib/pkgtools/douninst.sh && \
+                   echo '#! /bin/sh' >uninst.sh && \
+                   echo 'rm -rf /lib/vera /etc/vera' >>uninst.sh && \
+                   mv uninst.sh \
+                        var/lib/pkgtools/douninst.sh/$(NVR) && \
+                   /sbin/makepkg -c y -l y \
+     ../../$(NVR).txz
+	rm -rf $(PACKAGE)-$(VERSION)
