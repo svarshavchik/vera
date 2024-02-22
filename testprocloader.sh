@@ -160,7 +160,7 @@ cat >loadtest.expected <<EOF
 system/built-in:start=forking:stop=manual
 system/built-in:alternative-group=system/alternative
 system/built-in:description=Alternative 1
-system/built-in:sigterm:notify=all
+system/built-in:sigterm:notify=parents
 EOF
 diff -U 3 loadtest.expected loadtest.out
 
@@ -198,10 +198,10 @@ EOF
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.txt <<EOF
 built-in:start=forking:stop=manual
-built-in:sigterm:notify=all
+built-in:sigterm:notify=parents
 
 built-in/sub/unit:start=oneshot:stop=automatic
-built-in/sub/unit:sigterm:notify=all
+built-in/sub/unit:sigterm:notify=parents
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -255,10 +255,10 @@ EOF
 $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.txt <<EOF
 built-in:start=forking:stop=manual
-built-in:sigterm:notify=all
+built-in:sigterm:notify=parents
 
 built-in/sub.un-it:start=forking:stop=manual
-built-in/sub.un-it:sigterm:notify=all
+built-in/sub.un-it:sigterm:notify=parents
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -311,15 +311,15 @@ $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 
 cat >loadtest.txt <<EOF
 built-in:start=forking:stop=manual
-built-in:sigterm:notify=all
+built-in:sigterm:notify=parents
 built-in:requires built-in/sub1
 
 built-in/sub1:start=forking:stop=manual
-built-in/sub1:sigterm:notify=all
+built-in/sub1:sigterm:notify=parents
 built-in/sub1:requires built-in
 
 built-in/sub2:start=forking:stop=manual
-built-in/sub2:sigterm:notify=all
+built-in/sub2:sigterm:notify=parents
 built-in/sub2:requires built-in/sub1
 EOF
 diff -U 3 loadtest.txt loadtest.out
@@ -372,7 +372,7 @@ built-in:starting:/bin/true
 built-in:stopping:/bin/false
 built-in:starting_timeout 120
 built-in:stopping_timeout 180
-built-in:sigterm:notify=parents
+built-in:sigterm:notify=all
 built-in:starting_before dep1
 built-in:starting_before dep2
 built-in:starting_after dep3
@@ -395,7 +395,7 @@ $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 
 cat >loadtest.expected <<EOF
 built-in:start=forking:stop=manual
-built-in:sigterm:notify=all
+built-in:sigterm:notify=parents
 built-in:required-by graphical
 built-in:required-by one
 EOF
@@ -405,7 +405,7 @@ $VALGRIND ./testprocloader disabledloadtest <loadtest.txt >loadtest.out
 
 cat >loadtest.expected <<EOF
 built-in:start=forking:stop=manual
-built-in:sigterm:notify=all
+built-in:sigterm:notify=parents
 built-in:required-by one
 EOF
 diff -U 3 loadtest.expected loadtest.out
@@ -487,15 +487,15 @@ $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir >loadtest.
 cat loadtest.out
 cat >loadtest.txt <<EOF
 unit2-runlevel1:start=forking:stop=manual
-unit2-runlevel1:sigterm:notify=all
+unit2-runlevel1:sigterm:notify=parents
 unit2-runlevel1:required-by runlevel1
 
 unit3-runlevel2:start=forking:stop=manual
-unit3-runlevel2:sigterm:notify=all
+unit3-runlevel2:sigterm:notify=parents
 unit3-runlevel2:required-by runlevel2
 
 unit4-disabled:start=forking:stop=manual
-unit4-disabled:sigterm:notify=all
+unit4-disabled:sigterm:notify=parents
 E: "unit1": does not match its filename
 W: globaldir/.temporary: ignoring non-compliant filename
 EOF
@@ -516,7 +516,7 @@ $VALGRIND ./testprocloader loadtest <loadtest.txt >loadtest.out
 cat >loadtest.expected <<EOF
 built-in:start=forking:stop=manual
 built-in:description=Long multiline description
-built-in:sigterm:notify=all
+built-in:sigterm:notify=parents
 EOF
 
 diff -U 3 loadtest.expected loadtest.out

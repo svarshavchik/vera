@@ -3,13 +3,13 @@ Loading: testinittab.dir/vera/system/boot
 Loading installed units
 system/boot:start=forking:stop=target
 system/boot:description=boot target
-system/boot:sigterm:notify=all
+system/boot:sigterm:notify=parents
 # system/custom
 Loading: testinittab.dir/vera/system/custom
 Loading installed units
 system/custom:start=forking:stop=target
 system/custom:description=processes for runlevel custom
-system/custom:sigterm:notify=all
+system/custom:sigterm:notify=parents
 system/custom:requires system/boot
 system/custom:required-by system/runlevel custom
 # system/graphical
@@ -17,7 +17,7 @@ Loading: testinittab.dir/vera/system/graphical
 Loading installed units
 system/graphical:start=forking:stop=target
 system/graphical:description=processes for runlevel graphical
-system/graphical:sigterm:notify=all
+system/graphical:sigterm:notify=parents
 system/graphical:requires system/boot
 system/graphical:required-by system/runlevel graphical
 # system/inittab/a1
@@ -26,7 +26,7 @@ Loading installed units
 system/inittab/a1:start=oneshot:stop=manual
 system/inittab/a1:description=a1: ondemandcmd1
 system/inittab/a1:starting:ondemandcmd1
-system/inittab/a1:sigterm:notify=all
+system/inittab/a1:sigterm:notify=parents
 system/inittab/a1:required-by system/a
 Warning: system/inittab/a1(required-by): system/a: not defined
 # system/inittab/a2
@@ -35,7 +35,7 @@ Loading installed units
 system/inittab/a2:start=forking:stop=manual
 system/inittab/a2:description=a2: ondemandcmd2
 system/inittab/a2:starting:ondemandcmd2
-system/inittab/a2:sigterm:notify=all
+system/inittab/a2:sigterm:notify=parents
 system/inittab/a2:required-by system/a
 system/inittab/a2:starting_after system/inittab/a1
 system/inittab/a2:stopping_before system/inittab/a1
@@ -46,7 +46,7 @@ Loading installed units
 system/inittab/bo1:start=oneshot:stop=manual
 system/inittab/bo1:description=bo1: bootcmd1
 system/inittab/bo1:starting:bootcmd1
-system/inittab/bo1:sigterm:notify=all
+system/inittab/bo1:sigterm:notify=parents
 system/inittab/bo1:required-by system/boot
 # system/inittab/bo2
 Loading: testinittab.dir/vera/system/inittab/bo2
@@ -54,7 +54,7 @@ Loading installed units
 system/inittab/bo2:start=forking:stop=manual
 system/inittab/bo2:description=bo2: bootcmd
 system/inittab/bo2:starting:bootcmd
-system/inittab/bo2:sigterm:notify=all
+system/inittab/bo2:sigterm:notify=parents
 system/inittab/bo2:required-by system/boot
 # system/inittab/c1
 Loading: testinittab.dir/vera/system/inittab/c1
@@ -62,7 +62,7 @@ Loading installed units
 system/inittab/c1:start=respawn:stop=manual
 system/inittab/c1:description=c1: /sbin/agetty 38400 tty1 linux
 system/inittab/c1:starting:/sbin/agetty 38400 tty1 linux
-system/inittab/c1:sigterm:notify=all
+system/inittab/c1:sigterm:notify=parents
 system/inittab/c1:required-by system/custom
 system/inittab/c1:required-by system/graphical
 system/inittab/c1:required-by system/multi-user
@@ -78,7 +78,7 @@ Loading installed units
 system/inittab/c2:start=respawn:stop=manual
 system/inittab/c2:description=c2: /sbin/agetty 38400 tty2 linux
 system/inittab/c2:starting:/sbin/agetty 38400 tty2 linux
-system/inittab/c2:sigterm:notify=all
+system/inittab/c2:sigterm:notify=parents
 system/inittab/c2:required-by system/custom
 system/inittab/c2:required-by system/graphical
 system/inittab/c2:required-by system/multi-user
@@ -92,7 +92,7 @@ Loading installed units
 system/inittab/ca:start=oneshot:stop=manual
 system/inittab/ca:description=ca: /sbin/shutdown -t5 -r now
 system/inittab/ca:starting:/sbin/shutdown -t5 -r now
-system/inittab/ca:sigterm:notify=all
+system/inittab/ca:sigterm:notify=parents
 system/inittab/ca:required-by system/sigint
 # system/inittab/kb
 Loading: testinittab.dir/vera/system/inittab/kb
@@ -100,7 +100,7 @@ Loading installed units
 system/inittab/kb:start=oneshot:stop=manual
 system/inittab/kb:description=kb: kbrequestcmd
 system/inittab/kb:starting:kbrequestcmd
-system/inittab/kb:sigterm:notify=all
+system/inittab/kb:sigterm:notify=parents
 system/inittab/kb:required-by system/sigwinch
 # system/inittab/l0
 Loading: testinittab.dir/vera/system/inittab/l0
@@ -108,7 +108,7 @@ Loading installed units
 system/inittab/l0:start=forking:stop=manual
 system/inittab/l0:description=l0: /etc/rc.d/rc.0
 system/inittab/l0:starting:vlad sysdown 0 /etc/rc.d/rc.0
-system/inittab/l0:sigterm:notify=all
+system/inittab/l0:sigterm:notify=parents
 system/inittab/l0:required-by system/shutdown
 system/inittab/l0:starting_after system/inittab/l0-started-shutdown
 system/inittab/l0:stopping_before system/inittab/l0-started-shutdown
@@ -118,7 +118,7 @@ Loading installed units
 system/inittab/l0-start-shutdown:start=forking:stop=target
 system/inittab/l0-start-shutdown:description=l0: start rc.d scripts
 system/inittab/l0-start-shutdown:starting:vlad --nowait start system/rc.shutdown
-system/inittab/l0-start-shutdown:sigterm:notify=all
+system/inittab/l0-start-shutdown:sigterm:notify=parents
 system/inittab/l0-start-shutdown:required-by system/shutdown
 system/inittab/l0-start-shutdown:starting_before system/rc
 system/inittab/l0-start-shutdown:stopping_after system/rc
@@ -129,7 +129,7 @@ Loading: testinittab.dir/vera/system/inittab/l0-started-shutdown
 Loading installed units
 system/inittab/l0-started-shutdown:start=oneshot:stop=target
 system/inittab/l0-started-shutdown:description=l0: started rc.d scripts
-system/inittab/l0-started-shutdown:sigterm:notify=all
+system/inittab/l0-started-shutdown:sigterm:notify=parents
 system/inittab/l0-started-shutdown:required-by system/shutdown
 system/inittab/l0-started-shutdown:starting_after system/rc
 system/inittab/l0-started-shutdown:stopping_before system/rc
@@ -141,7 +141,7 @@ Loading installed units
 system/inittab/l6:start=forking:stop=manual
 system/inittab/l6:description=l6: /etc/rc.d/rc.6
 system/inittab/l6:starting:vlad sysdown 6 /etc/rc.d/rc.6
-system/inittab/l6:sigterm:notify=all
+system/inittab/l6:sigterm:notify=parents
 system/inittab/l6:required-by system/reboot
 system/inittab/l6:starting_after system/inittab/l6-started-reboot
 system/inittab/l6:stopping_before system/inittab/l6-started-reboot
@@ -151,7 +151,7 @@ Loading installed units
 system/inittab/l6-start-reboot:start=forking:stop=target
 system/inittab/l6-start-reboot:description=l6: start rc.d scripts
 system/inittab/l6-start-reboot:starting:vlad --nowait start system/rc.reboot
-system/inittab/l6-start-reboot:sigterm:notify=all
+system/inittab/l6-start-reboot:sigterm:notify=parents
 system/inittab/l6-start-reboot:required-by system/reboot
 system/inittab/l6-start-reboot:starting_before system/rc
 system/inittab/l6-start-reboot:stopping_after system/rc
@@ -162,7 +162,7 @@ Loading: testinittab.dir/vera/system/inittab/l6-started-reboot
 Loading installed units
 system/inittab/l6-started-reboot:start=oneshot:stop=target
 system/inittab/l6-started-reboot:description=l6: started rc.d scripts
-system/inittab/l6-started-reboot:sigterm:notify=all
+system/inittab/l6-started-reboot:sigterm:notify=parents
 system/inittab/l6-started-reboot:required-by system/reboot
 system/inittab/l6-started-reboot:starting_after system/rc
 system/inittab/l6-started-reboot:stopping_before system/rc
@@ -174,7 +174,7 @@ Loading installed units
 system/inittab/p1:start=forking:stop=manual
 system/inittab/p1:description=p1: /sbin/genpowerfail stop
 system/inittab/p1:starting:/sbin/genpowerfail stop
-system/inittab/p1:sigterm:notify=all
+system/inittab/p1:sigterm:notify=parents
 system/inittab/p1:required-by system/powerok
 # system/inittab/p2
 Loading: testinittab.dir/vera/system/inittab/p2
@@ -182,7 +182,7 @@ Loading installed units
 system/inittab/p2:start=oneshot:stop=manual
 system/inittab/p2:description=p2: /sbin/genpowerfail stop
 system/inittab/p2:starting:/sbin/genpowerfail stop
-system/inittab/p2:sigterm:notify=all
+system/inittab/p2:sigterm:notify=parents
 system/inittab/p2:required-by system/powerok
 # system/inittab/pf
 Loading: testinittab.dir/vera/system/inittab/pf
@@ -190,7 +190,7 @@ Loading installed units
 system/inittab/pf:start=oneshot:stop=manual
 system/inittab/pf:description=pf: /sbin/genpowerfail start
 system/inittab/pf:starting:/sbin/genpowerfail start
-system/inittab/pf:sigterm:notify=all
+system/inittab/pf:sigterm:notify=parents
 system/inittab/pf:required-by system/powerfail
 # system/inittab/pfn
 Loading: testinittab.dir/vera/system/inittab/pfn
@@ -198,7 +198,7 @@ Loading installed units
 system/inittab/pfn:start=oneshot:stop=manual
 system/inittab/pfn:description=pfn: /sbin/genpowerfail start
 system/inittab/pfn:starting:/sbin/genpowerfail start
-system/inittab/pfn:sigterm:notify=all
+system/inittab/pfn:sigterm:notify=parents
 system/inittab/pfn:required-by system/powerfailnow
 # system/inittab/rc
 Loading: testinittab.dir/vera/system/inittab/rc
@@ -207,7 +207,7 @@ system/inittab/rc:start=forking:stop=manual
 system/inittab/rc:description=rc: /etc/rc.d/rc.M
 system/inittab/rc:starting:/etc/rc.d/rc.M
 system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K
-system/inittab/rc:sigterm:notify=parents
+system/inittab/rc:sigterm:notify=all
 system/inittab/rc:required-by system/custom
 system/inittab/rc:required-by system/graphical
 system/inittab/rc:required-by system/multi-user
@@ -219,7 +219,7 @@ system/inittab/rc-run-local:start=forking:stop=manual
 system/inittab/rc-run-local:description=rc: started rc.local
 system/inittab/rc-run-local:starting:test ! -x /etc/rc.d/rc.local.init || /etc/rc.d/rc.local.init start
 system/inittab/rc-run-local:stopping:test ! -x /etc/rc.d/rc.local_shutdown.init || /etc/rc.d/rc.local_shutdown.init stop
-system/inittab/rc-run-local:sigterm:notify=parents
+system/inittab/rc-run-local:sigterm:notify=all
 system/inittab/rc-run-local:required-by system/custom
 system/inittab/rc-run-local:required-by system/graphical
 system/inittab/rc-run-local:required-by system/multi-user
@@ -238,7 +238,7 @@ Loading installed units
 system/inittab/rc-start-custom:start=forking:stop=target
 system/inittab/rc-start-custom:description=rc: start rc.d scripts
 system/inittab/rc-start-custom:starting:vlad --nowait start system/rc.custom
-system/inittab/rc-start-custom:sigterm:notify=all
+system/inittab/rc-start-custom:sigterm:notify=parents
 system/inittab/rc-start-custom:required-by system/custom
 system/inittab/rc-start-custom:starting_before system/rc
 system/inittab/rc-start-custom:starting_after system/inittab/rc
@@ -252,7 +252,7 @@ Loading installed units
 system/inittab/rc-start-graphical:start=forking:stop=target
 system/inittab/rc-start-graphical:description=rc: start rc.d scripts
 system/inittab/rc-start-graphical:starting:vlad --nowait start system/rc.graphical
-system/inittab/rc-start-graphical:sigterm:notify=all
+system/inittab/rc-start-graphical:sigterm:notify=parents
 system/inittab/rc-start-graphical:required-by system/graphical
 system/inittab/rc-start-graphical:starting_before system/rc
 system/inittab/rc-start-graphical:starting_after system/inittab/rc
@@ -266,7 +266,7 @@ Loading installed units
 system/inittab/rc-start-multi-user:start=forking:stop=target
 system/inittab/rc-start-multi-user:description=rc: start rc.d scripts
 system/inittab/rc-start-multi-user:starting:vlad --nowait start system/rc.multi-user
-system/inittab/rc-start-multi-user:sigterm:notify=all
+system/inittab/rc-start-multi-user:sigterm:notify=parents
 system/inittab/rc-start-multi-user:required-by system/multi-user
 system/inittab/rc-start-multi-user:starting_before system/rc
 system/inittab/rc-start-multi-user:starting_after system/inittab/rc
@@ -280,7 +280,7 @@ Loading installed units
 system/inittab/rc-start-networking:start=forking:stop=target
 system/inittab/rc-start-networking:description=rc: start rc.d scripts
 system/inittab/rc-start-networking:starting:vlad --nowait start system/rc.networking
-system/inittab/rc-start-networking:sigterm:notify=all
+system/inittab/rc-start-networking:sigterm:notify=parents
 system/inittab/rc-start-networking:required-by system/networking
 system/inittab/rc-start-networking:starting_before system/rc
 system/inittab/rc-start-networking:starting_after system/inittab/rc
@@ -293,7 +293,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-custom
 Loading installed units
 system/inittab/rc-started-custom:start=oneshot:stop=target
 system/inittab/rc-started-custom:description=rc: started rc.d scripts
-system/inittab/rc-started-custom:sigterm:notify=all
+system/inittab/rc-started-custom:sigterm:notify=parents
 system/inittab/rc-started-custom:required-by system/custom
 system/inittab/rc-started-custom:starting_after system/inittab/rc
 system/inittab/rc-started-custom:starting_after system/rc
@@ -306,7 +306,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-graphical
 Loading installed units
 system/inittab/rc-started-graphical:start=oneshot:stop=target
 system/inittab/rc-started-graphical:description=rc: started rc.d scripts
-system/inittab/rc-started-graphical:sigterm:notify=all
+system/inittab/rc-started-graphical:sigterm:notify=parents
 system/inittab/rc-started-graphical:required-by system/graphical
 system/inittab/rc-started-graphical:starting_after system/inittab/rc
 system/inittab/rc-started-graphical:starting_after system/rc
@@ -319,7 +319,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-multi-user
 Loading installed units
 system/inittab/rc-started-multi-user:start=oneshot:stop=target
 system/inittab/rc-started-multi-user:description=rc: started rc.d scripts
-system/inittab/rc-started-multi-user:sigterm:notify=all
+system/inittab/rc-started-multi-user:sigterm:notify=parents
 system/inittab/rc-started-multi-user:required-by system/multi-user
 system/inittab/rc-started-multi-user:starting_after system/inittab/rc
 system/inittab/rc-started-multi-user:starting_after system/rc
@@ -332,7 +332,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-networking
 Loading installed units
 system/inittab/rc-started-networking:start=oneshot:stop=target
 system/inittab/rc-started-networking:description=rc: started rc.d scripts
-system/inittab/rc-started-networking:sigterm:notify=all
+system/inittab/rc-started-networking:sigterm:notify=parents
 system/inittab/rc-started-networking:required-by system/networking
 system/inittab/rc-started-networking:starting_after system/inittab/rc
 system/inittab/rc-started-networking:starting_after system/rc
@@ -346,7 +346,7 @@ Loading installed units
 system/inittab/su:start=forking:stop=manual
 system/inittab/su:description=su: /etc/rc.d/rc.K
 system/inittab/su:starting:testinittab.dir/share/vera-rck /etc/rc.d/rc.K
-system/inittab/su:sigterm:notify=all
+system/inittab/su:sigterm:notify=parents
 system/inittab/su:required-by system/single-user
 # system/inittab/su-start-single-user
 Loading: testinittab.dir/vera/system/inittab/su-start-single-user
@@ -354,7 +354,7 @@ Loading installed units
 system/inittab/su-start-single-user:start=forking:stop=target
 system/inittab/su-start-single-user:description=su: start rc.d scripts
 system/inittab/su-start-single-user:starting:vlad --nowait start system/rc.single-user
-system/inittab/su-start-single-user:sigterm:notify=all
+system/inittab/su-start-single-user:sigterm:notify=parents
 system/inittab/su-start-single-user:required-by system/single-user
 system/inittab/su-start-single-user:starting_before system/rc
 system/inittab/su-start-single-user:starting_after system/inittab/su
@@ -367,7 +367,7 @@ Loading: testinittab.dir/vera/system/inittab/su-started-single-user
 Loading installed units
 system/inittab/su-started-single-user:start=oneshot:stop=target
 system/inittab/su-started-single-user:description=su: started rc.d scripts
-system/inittab/su-started-single-user:sigterm:notify=all
+system/inittab/su-started-single-user:sigterm:notify=parents
 system/inittab/su-started-single-user:required-by system/single-user
 system/inittab/su-started-single-user:starting_after system/inittab/su
 system/inittab/su-started-single-user:starting_after system/rc
@@ -381,7 +381,7 @@ Loading installed units
 system/inittab/x1:start=respawn:stop=manual
 system/inittab/x1:description=x1: /etc/rc.d/rc.4
 system/inittab/x1:starting:/etc/rc.d/rc.4
-system/inittab/x1:sigterm:notify=all
+system/inittab/x1:sigterm:notify=parents
 system/inittab/x1:required-by system/graphical
 system/inittab/x1:starting_after system/inittab/c2
 system/inittab/x1:stopping_before system/inittab/c2
@@ -390,7 +390,7 @@ Loading: testinittab.dir/vera/system/multi-user
 Loading installed units
 system/multi-user:start=forking:stop=target
 system/multi-user:description=processes for runlevel multi-user
-system/multi-user:sigterm:notify=all
+system/multi-user:sigterm:notify=parents
 system/multi-user:requires system/boot
 system/multi-user:required-by system/runlevel multi-user
 # system/networking
@@ -398,7 +398,7 @@ Loading: testinittab.dir/vera/system/networking
 Loading installed units
 system/networking:start=forking:stop=target
 system/networking:description=processes for runlevel networking
-system/networking:sigterm:notify=all
+system/networking:sigterm:notify=parents
 system/networking:requires system/boot
 system/networking:required-by system/runlevel networking
 # system/powerfail
@@ -406,75 +406,75 @@ Loading: testinittab.dir/vera/system/powerfail
 Loading installed units
 system/powerfail:start=oneshot:stop=target
 system/powerfail:description=SIGPWR, /etc/powerstatus=F
-system/powerfail:sigterm:notify=all
+system/powerfail:sigterm:notify=parents
 # system/powerfailnow
 Loading: testinittab.dir/vera/system/powerfailnow
 Loading installed units
 system/powerfailnow:start=oneshot:stop=target
 system/powerfailnow:description=SIGPWR, /etc/powerstatus=L
-system/powerfailnow:sigterm:notify=all
+system/powerfailnow:sigterm:notify=parents
 # system/powerok
 Loading: testinittab.dir/vera/system/powerok
 Loading installed units
 system/powerok:start=oneshot:stop=target
 system/powerok:description=SIGPWR, /etc/powerstatus=O
-system/powerok:sigterm:notify=all
+system/powerok:sigterm:notify=parents
 # system/rc.a
 Loading: testinittab.dir/vera/system/rc.a
 Loading installed units
 system/rc.a:start=oneshot:stop=target
 system/rc.a:alternative-group=system/rc
 system/rc.a:description=initscripts in system/rc that are required-by: /system/rc.a
-system/rc.a:sigterm:notify=all
+system/rc.a:sigterm:notify=parents
 # system/rc.custom
 Loading: testinittab.dir/vera/system/rc.custom
 Loading installed units
 system/rc.custom:start=oneshot:stop=target
 system/rc.custom:alternative-group=system/rc
 system/rc.custom:description=initscripts in system/rc that are required-by: /system/rc.custom
-system/rc.custom:sigterm:notify=all
+system/rc.custom:sigterm:notify=parents
 # system/rc.graphical
 Loading: testinittab.dir/vera/system/rc.graphical
 Loading installed units
 system/rc.graphical:start=oneshot:stop=target
 system/rc.graphical:alternative-group=system/rc
 system/rc.graphical:description=initscripts in system/rc that are required-by: /system/rc.graphical
-system/rc.graphical:sigterm:notify=all
+system/rc.graphical:sigterm:notify=parents
 # system/rc.multi-user
 Loading: testinittab.dir/vera/system/rc.multi-user
 Loading installed units
 system/rc.multi-user:start=oneshot:stop=target
 system/rc.multi-user:alternative-group=system/rc
 system/rc.multi-user:description=initscripts in system/rc that are required-by: /system/rc.multi-user
-system/rc.multi-user:sigterm:notify=all
+system/rc.multi-user:sigterm:notify=parents
 # system/rc.networking
 Loading: testinittab.dir/vera/system/rc.networking
 Loading installed units
 system/rc.networking:start=oneshot:stop=target
 system/rc.networking:alternative-group=system/rc
 system/rc.networking:description=initscripts in system/rc that are required-by: /system/rc.networking
-system/rc.networking:sigterm:notify=all
+system/rc.networking:sigterm:notify=parents
 # system/rc.reboot
 Loading: testinittab.dir/vera/system/rc.reboot
 Loading installed units
 system/rc.reboot:start=oneshot:stop=target
 system/rc.reboot:alternative-group=system/rc
 system/rc.reboot:description=initscripts in system/rc that are required-by: /system/rc.reboot
-system/rc.reboot:sigterm:notify=all
+system/rc.reboot:sigterm:notify=parents
 # system/rc.shutdown
 Loading: testinittab.dir/vera/system/rc.shutdown
 Loading installed units
 system/rc.shutdown:start=oneshot:stop=target
 system/rc.shutdown:alternative-group=system/rc
 system/rc.shutdown:description=initscripts in system/rc that are required-by: /system/rc.shutdown
-system/rc.shutdown:sigterm:notify=all
+system/rc.shutdown:sigterm:notify=parents
 # system/rc.single-user
 Loading: testinittab.dir/vera/system/rc.single-user
 Loading installed units
 system/rc.single-user:start=oneshot:stop=target
 system/rc.single-user:alternative-group=system/rc
 system/rc.single-user:description=initscripts in system/rc that are required-by: /system/rc.single-user
-system/rc.single-user:sigterm:notify=all
+system/rc.single-user:sigterm:notify=parents
 # system/rc/S80network.sh
 Loading: testinittab.dir/vera/system/rc/S80network.sh
 Loading installed units
@@ -482,7 +482,7 @@ system/rc/S80network.sh:start=forking:stop=manual
 system/rc/S80network.sh:description=S80network.sh: testinittab.dir/etc/rc.d/network
 system/rc/S80network.sh:starting:test ! -x testinittab.dir/etc/rc.d/network || sh testinittab.dir/etc/rc.d/network start
 system/rc/S80network.sh:stopping:test ! -x testinittab.dir/etc/rc.d/network || sh testinittab.dir/etc/rc.d/network stop
-system/rc/S80network.sh:sigterm:notify=parents
+system/rc/S80network.sh:sigterm:notify=all
 system/rc/S80network.sh:required-by system/rc.multi-user
 # system/rc/S90http
 Loading: testinittab.dir/vera/system/rc/S90http
@@ -491,7 +491,7 @@ system/rc/S90http:start=forking:stop=manual
 system/rc/S90http:description=S90http: testinittab.dir/etc/rc.d/rc4.d/S90http
 system/rc/S90http:starting:test ! -x testinittab.dir/etc/rc.d/rc4.d/S90http || testinittab.dir/etc/rc.d/rc4.d/S90http start
 system/rc/S90http:stopping:test ! -x testinittab.dir/etc/rc.d/rc6.d/K90http || testinittab.dir/etc/rc.d/rc6.d/K90http stop
-system/rc/S90http:sigterm:notify=parents
+system/rc/S90http:sigterm:notify=all
 system/rc/S90http:required-by system/rc.graphical
 system/rc/S90http:required-by system/rc.multi-user
 system/rc/S90http:starting_after system/rc/S80network.sh
@@ -501,38 +501,38 @@ Loading: testinittab.dir/vera/system/reboot
 Loading installed units
 system/reboot:start=forking:stop=target
 system/reboot:description=processes for runlevel reboot
-system/reboot:sigterm:notify=all
+system/reboot:sigterm:notify=parents
 system/reboot:required-by system/runlevel reboot
 # system/shutdown
 Loading: testinittab.dir/vera/system/shutdown
 Loading installed units
 system/shutdown:start=forking:stop=target
 system/shutdown:description=processes for runlevel shutdown
-system/shutdown:sigterm:notify=all
+system/shutdown:sigterm:notify=parents
 system/shutdown:required-by system/runlevel shutdown
 # system/sighup
 Loading: testinittab.dir/vera/system/sighup
 Loading installed units
 system/sighup:start=oneshot:stop=target
 system/sighup:description=SIGHUP received
-system/sighup:sigterm:notify=all
+system/sighup:sigterm:notify=parents
 # system/sigint
 Loading: testinittab.dir/vera/system/sigint
 Loading installed units
 system/sigint:start=oneshot:stop=target
 system/sigint:description=SIGINT received (ctrl-alt-del)
-system/sigint:sigterm:notify=all
+system/sigint:sigterm:notify=parents
 # system/sigwinch
 Loading: testinittab.dir/vera/system/sigwinch
 Loading installed units
 system/sigwinch:start=oneshot:stop=target
 system/sigwinch:description=keyboard attention signal received
-system/sigwinch:sigterm:notify=all
+system/sigwinch:sigterm:notify=parents
 # system/single-user
 Loading: testinittab.dir/vera/system/single-user
 Loading installed units
 system/single-user:start=forking:stop=target
 system/single-user:description=processes for runlevel single-user
-system/single-user:sigterm:notify=all
+system/single-user:sigterm:notify=parents
 system/single-user:requires system/boot
 system/single-user:required-by system/runlevel single-user

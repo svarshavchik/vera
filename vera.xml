@@ -1393,9 +1393,11 @@ version: 1
 
 	  <para>
 	    <quote>notify: parents</quote> is the default if the unit
-	    specification file specifies a stopping command.
+	    specification file does not have a stopping command.
 	    <quote>notify: all</quote> is the default if the unit
-	    specification file does not specify an explicit stopping command.
+	    specification file hasx an explicit stopping command,
+	    <acronym>SIGTERM</acronym> gets sent to all processes after
+	    the stopping command finishes.
 	  </para>
 	</refsect2>
 	<refsect2 id="alternativegroups">

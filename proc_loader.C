@@ -434,7 +434,7 @@ proc_new_container_set proc_load(
 		}
 
 		if (!parsed_sigterm_notify &&
-		    !nc->new_container->stopping_command.empty())
+		    nc->new_container->stopping_command.empty())
 		{
 			nc->new_container->sigterm_notify=sigterm::parents;
 		}
