@@ -273,3 +273,22 @@ slackpkg: dist
                    /sbin/makepkg -c y -l y \
      ../../$(NVR).txz
 	rm -rf $(PACKAGE)-$(VERSION)
+
+RELEASETAG=$(VERSION)
+
+release:
+	scp slackware:src/vera/$(PACKAGE)-$(VERSION).tar.xz .
+	scp slackware:src/vera/$(PACKAGE)-$(VERSION)-*.txz .
+	gpg --detach-sign --default-key mrsam@courier-mta.com $(PACKAGE)-$(VERSION).tar.xz
+	gpg --detach-sign --default-key mrsam@courier-mta.com $(PACKAGE)-$(VERSION)-*.txz
+	git tag $(RELEASETAG)
+	git push --tags -f
+	git push --tags -f github
+	gh release create $(RELEASETAG) \
+		-t "Release $(VERSION)" \
+		-n '' \
+		--latest \
+		'$(PACKAGE)-$(VERSION).tar.xz#$(PACKAGE)-$(VERSION).tar.xz: source code' \
+		'$(PACKAGE)-$(VERSION).tar.xz.sig#$(PACKAGE)-$(VERSION).tar.xz.sig: source code signature' \
+		"`echo $(PACKAGE)-$(VERSION)-*.txz`"'#'"`echo $(PACKAGE)-$(VERSION)-*.txz`"': slackware64 package' \
+		"`echo $(PACKAGE)-$(VERSION)-*.txz.sig`"'#'"`echo $(PACKAGE)-$(VERSION)-*.txz.sig`"': slackware64 package signature'

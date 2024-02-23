@@ -23,7 +23,7 @@
     </itemizedlist>
 
     <para>
-      Run the
+      To compile and install <command>vera</command> from source execute the
       <command>configure</command> script with these recommended options:
     </para>
 
@@ -50,12 +50,28 @@
     </para>
 
     <para>
-      Next, run <quote><command>make [-j #]</command></quote>
+      Next, execute:
+    </para>
+
+    <blockquote>
+      <informalexample>
+	<programlisting>make [-j #]</programlisting>
+      </informalexample>
+    </blockquote>
+
+    <para>
       to build <command>vera</command>.
     </para>
 
     <para>
-      Run <quote><command>make install DESTDIR=/tmp/tmp-inst</command></quote>,
+      Execute:
+    </para>
+    <blockquote>
+      <informalexample>
+	<programlisting>make install DESTDIR=/tmp/tmp-inst</programlisting>
+      </informalexample>
+    </blockquote>
+    <para>
       this creates
       an installation image in <filename>/tmp/tmp-inst</filename>, this shows
       where everything gets installed.
@@ -73,22 +89,57 @@
     </para>
 
     <para>
-      After verifying the correct installation paths, run
-      <quote><command>sudo make install</command></quote>. When
-      done, execute (as root)
-      <quote><command>vlad hookonce</command></quote> and reboot. This
+      After verifying the correct installation paths, execute
+    </para>
+
+    <blockquote>
+      <informalexample>
+	<programlisting>sudo make install</programlisting>
+      </informalexample>
+    </blockquote>
+    <para>
+      This install <command>vera</command> but does not replace
+      <command>init</command>. To do that execute (as root):
+    </para>
+
+    <blockquote>
+      <informalexample>
+	<programlisting>vlad hookonce</programlisting>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      and reboot. This
       triggers only the next reboot into <command>vera</command> so that
-      if there's any issue then forcing another reboot should restore the
-      status quo.
+      if there's any issue then forcing another reboot will reboot with
+      <command>init</command>.
     </para>
 
     <para>
       After
-      rebooting run <command>vlad status</command> to see all containers
+      rebooting run
+    </para>
+
+    <blockquote>
+      <informalexample>
+	<programlisting>vlad status</programlisting>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      to see all containers
       that were started for converted <filename>/etc/inittab</filename>
       entries. Run
-      <quote><command>vlad hook</command></quote> to set
-      <command>vera</command> for all future reboots.
+    </para>
+
+    <blockquote>
+      <informalexample>
+	<programlisting>vlad hook</programlisting>
+      </informalexample>
+    </blockquote>
+    <para>
+      to have all future reboots use
+      <command>vera</command>.
     </para>
 
     <note>
@@ -112,6 +163,54 @@
 	</listitem>
       </itemizedlist>
     </note>
+
+    <para>
+      See the <citerefentry>
+      <refentrytitle>vlad</refentrytitle>
+      <manvolnum>8</manvolnum>
+      </citerefentry> manual page for more information.
+    </para>
+
+    <sect2 id="slackpkg">
+      <title>Slackware64 package</title>
+
+      <para>
+	Install the Slackware 15 package with <command>installpkg</command>
+	and follow the instructions above starting with the
+      </para>
+      <blockquote>
+	<informalexample>
+	  <programlisting>vlad hookonce</programlisting>
+	</informalexample>
+      </blockquote>
+      <para>
+	command.
+      </para>
+      <note>
+	<para>
+	  Before using <command>removepkg</command> to uninstall
+	  <command>vera</command> the following command must be executed:
+	</para>
+
+	<blockquote>
+	  <informalexample>
+	    <programlisting>vlad unhook</programlisting>
+	  </informalexample>
+	</blockquote>
+
+	<para>
+	  followed by a reboot and ANOTHER <quote>vlad unhook</quote>
+	  command.
+	</para>
+      </note>
+
+      <para>
+	See the <citerefentry>
+	<refentrytitle>vlad</refentrytitle>
+	<manvolnum>8</manvolnum>
+	</citerefentry> manual page for more information.
+      </para>
+    </sect2>
 
     <sect2 id="issues">
       <title>Known issues</title>

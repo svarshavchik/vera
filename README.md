@@ -32,3 +32,16 @@ all processes in each container, start and stop individual containers
 every attempt is made to make this as foolproof as possible
 
 * A manual page with complete documentation
+
+Download
+--------
+
+https://github.com/svarshavchik/vera/releases
+
+- Download the latest release tarball, see the INSTALL file in the tarball
+for build instructions
+
+- Instead of compiling and building, the package for Slackware 15 is also
+available, but see the INSTALL file as well for additional information
+
+- PGP keys: https://www.courier-mta.org/KEYS.bin

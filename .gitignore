@@ -1,6 +1,7 @@
 *.8
 *.a
 *.inc.H
+*.sig
 *.stamp
 *.tar.gz
 *.tar.xz
