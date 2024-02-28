@@ -276,7 +276,10 @@
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <arg choice='opt'>--stopped</arg>
-	  <arg choice='opt'>--dependencies</arg>
+	  <group choice='opt'>
+	    <arg choice='plain'>--dependencies</arg>
+	    <arg choice='plain'>--terse</arg>
+	  </group>
 	  <arg choice='plain'>status</arg>
 	  <arg choice='opt' rep='repeat'>unit</arg>
 	</cmdsynopsis>
@@ -488,6 +491,10 @@
 	    (which all other units it requires, its required by,
 	    and which ones must be started or stopped first, as calculated
 	    from the unit's specification, see blow).
+	    The <quote>--terse</quote> produces a compact status, one contain
+	    per line, in a parsable format.
+	  </para>
+	  <para>
 	    <quote>status</quote> reads unit specifications from their
 	    directories (see <xref linkend="units" />), the output may be
 	    incomplete if the running userid does not have permissions to
@@ -539,6 +546,106 @@
 	    is being started manually, by a <command>vlad start</command>
 	    command; otherwise it's started in order to start another unit.
 	  </para>
+
+	  <para>
+	    The terse option formats the units in a compact list, one unit
+	    per line. Each line contains a list of
+	    <quote>field=value</quote> tuples, with colons as separators:
+	  </para>
+	  <blockquote>
+	    <informalexample>
+	      <programlisting>
+# vlad status --terse
+name="system/boot":state=started:enabled=0:time=24
+name="system/inittab/c1":state=started:enabled=0:time=22:pids="1202 1223 1237 1220"
+name="system/inittab/c2":state=started:enabled=0:time=22:pids="1203"
+name="system/inittab/c3":state=started:enabled=0:time=22:pids="1204"
+
+# ...</programlisting>
+	    </informalexample>
+	  </blockquote>
+	  <variablelist>
+	    <varlistentry>
+	      <term><literal>name</literal></term>
+	      <listitem>
+		<para>
+		  The unit's name, quoted.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>state</literal></term>
+	      <listitem>
+		<para>
+		  The unit's state.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>enabled</literal></term>
+	      <listitem>
+		<para>
+		  Whether the unit is marked as enabled.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>elapsed</literal></term>
+	      <listitem>
+		<para>
+		  How long the unit's starting or stopping script is
+		  running, in seconds. This is shown only if a starting or
+		  a stopping script is currently running.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>time</literal></term>
+	      <listitem>
+		<para>
+		  How long the unit is running, in seconds. This is shown
+		  if the unit is in a started state.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>pids</literal></term>
+	      <listitem>
+		<para>
+		  A quoted list of space-delimited process ids in the unit's
+		  container, if there are any.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	  <para>
+	    This format is amenable to shell scripts:
+	  </para>
+	  <blockquote>
+	    <informalexample>
+	      <programlisting>
+# eval `vlad status --terse system/inittab/c1 | tr ':' '\012'`
+# echo $name
+system/inittab/c1
+# echo $state
+started
+echo $pids</programlisting>
+	    </informalexample>
+	  </blockquote>
+	  <note>
+	    <para>
+	      There's no output from <quote>vlad status</quote> if the given
+	      container does not exist or if it's stopped and the
+	      <option>--stopped</option> is not specified. Therefore any
+	      existing values of these shell variables remain unchanged.
+	    </para>
+
+	    <para>
+	      This is also true for variables corresponding to names of
+	      values that are not always included in the output (which
+	      also includes <quote>pids</quote>!). Caveat emptor.
+	    </para>
+	  </note>
 	</refsect2>
 	<refsect2 id="runlevels">
 	  <title>Runlevels</title>

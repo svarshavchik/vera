@@ -48,6 +48,7 @@
 
 int stopped_flag;
 int dependencies_flag;
+int terse_flag;
 int waitrunlevel_flag;
 int nowait_flag;
 int override_flag;
@@ -56,6 +57,7 @@ const char slashprocslash[] = "/proc/";
 const struct option options[]={
 	{"stopped", 0, &stopped_flag, 1},
 	{"dependencies", 0, &dependencies_flag, 1},
+	{"terse", 0, &terse_flag, 1},
 	{"wait", 0, &waitrunlevel_flag, 1},
 	{"nowait", 0, &nowait_flag, 1},
 	{"override", 0, &override_flag, 1},
@@ -736,7 +738,7 @@ void vera_init()
 	}
 	else
 	{
-		if (!initial)
+		if (initial)
 			std::cout << "vera: console size is "
 				  << console_winsize.ws_col
 				  << "x" << console_winsize.ws_row << "\n"
@@ -1359,6 +1361,158 @@ void dump_processes(const container_state_info::hier_pids &processes,
 	}
 }
 
+void dump_readable(const std::string &name,
+		   time_t real_now,
+		   const container_state_info &info)
+{
+	std::cout << name << ":\n";
+	std::cout << "    " << info.state;
+
+	if (!info.elapsed.empty())
+		std::cout << " (" << info.elapsed << ")";
+
+	if (info.enabled)
+		std::cout << ", enabled";
+
+	if (info.timestamp > 0)
+	{
+		auto minutes=info.timestamp / 60;
+
+		if (minutes < 1)
+		{
+			std::cout << _(" just now");
+		} else if (minutes < 60)
+		{
+			std::cout << " " << minutes
+				  << N_(" minute ago",
+					" minutes ago",
+					minutes);
+		}
+		else
+		{
+			auto real_start_time=real_now - info.timestamp;
+			auto tm=*localtime(&real_start_time);
+
+			if ( (minutes /= 60) < 24)
+			{
+				std::cout << std::put_time(
+					&tm, " %X ("
+				);
+
+				std::cout << minutes
+					  << N_(" hour ago",
+						" hours ago",
+						minutes);
+			} else if ( (minutes /= 24) < 7)
+			{
+				std::cout << std::put_time(
+					&tm, " %c ("
+				);
+
+				std::cout << minutes
+					  << N_(" day ago",
+						" days ago",
+						minutes);
+			}
+			else
+			{
+				std::cout << std::put_time(
+					&tm, " %c ("
+				);
+
+				minutes /= 7;
+
+				std::cout << minutes
+					  << N_(" week ago",
+						" weeks ago",
+						minutes);
+			}
+			std::cout << ")";
+		}
+	}
+	std::cout << "\n";
+
+	if (dependencies_flag)
+	{
+		for (const auto &[setptr, label]
+			     : std::array<std::tuple<
+			     std::unordered_set<std::string>
+			     container_state_info::*,
+			     const char *>,
+			     4>{{{&container_state_info
+					     ::dep_requires,
+					     _("Requires:")},
+				 {&container_state_info
+				  ::dep_required_by,
+				  _("Required By:")},
+				 {&container_state_info
+				  ::dep_starting_first,
+				  _("Starts after:")},
+				 {&container_state_info
+				  ::dep_stopping_first,
+				  _("Stops after:"),
+				 }
+			     }})
+		{
+			auto &set=info.*setptr;
+
+			std::cout << "    "
+				  << label << "\n";
+
+			std::set<std::string> sorted_deps{
+				set.begin(),
+				set.end()};
+
+			for (auto &dep:sorted_deps)
+			{
+				std::cout << "        "
+					  << dep << "\n";
+			}
+		}
+	}
+
+	dump_processes(info.processes, 0);
+}
+
+const char *dump_pids(const container_state_info::hier_pids &processes,
+		      const char *prefix)
+{
+	const char *ret="";
+
+	for (auto &[pid, procinfo] : processes)
+	{
+		std::cout << prefix << pid;
+
+		prefix=" ";
+		ret="\"";
+
+		dump_pids(procinfo.child_pids, prefix);
+	}
+
+	return ret;
+}
+
+void dump_terse(const std::string &name,
+		const container_state_info &info)
+{
+	std::cout << "name=\"" << name << "\":state=" << info.state
+		  << ":enabled="
+		  << (info.enabled ? 1:0);
+
+	if (!info.elapsed.empty())
+	{
+		std::cout << ":elapsed=" << info.elapsed;
+	}
+
+	if (info.timestamp > 0)
+	{
+		std::cout << ":time=" << info.timestamp;
+	}
+
+	std::cout << dump_pids(info.processes, ":pids=\"");
+	std::cout << "\n";
+}
+
 #if 0
 {
 #endif
@@ -1553,7 +1707,6 @@ void vlad(std::vector<std::string> args)
 				containers.insert(name);
 		}
 
-		auto now=log_current_time();
 		auto real_now=time(NULL);
 
 		// Go through the containers in sorted order.
@@ -1563,114 +1716,11 @@ void vlad(std::vector<std::string> args)
 
 			if (info.state == "stopped" && !stopped_flag)
 				continue;
-			std::cout << name << ":\n";
-			std::cout << "    " << info.state;
 
-			if (!info.elapsed.empty())
-				std::cout << " (" << info.elapsed << ")";
-
-			if (info.enabled)
-				std::cout << ", enabled";
-
-			if (info.timestamp && info.timestamp < now)
-			{
-				auto minutes=(now-info.timestamp) / 60;
-
-				if (minutes < 1)
-				{
-					std::cout << _(" just now");
-				} else if (minutes < 60)
-				{
-					std::cout << " " << minutes
-						  << N_(" minute ago",
-							" minutes ago",
-							minutes);
-				}
-				else
-				{
-					auto real_start_time=real_now -
-						(now-info.timestamp);
-					auto tm=*localtime(&real_start_time);
-
-					if ( (minutes /= 60) < 24)
-					{
-						std::cout << std::put_time(
-							&tm, " %X ("
-						);
-
-						std::cout << minutes
-							  << N_(" hour ago",
-								" hours ago",
-								minutes);
-					} else if ( (minutes /= 24) < 7)
-					{
-						std::cout << std::put_time(
-							&tm, " %c ("
-						);
-
-						std::cout << minutes
-							  << N_(" day ago",
-								" days ago",
-								minutes);
-					}
-					else
-					{
-						std::cout << std::put_time(
-							&tm, " %c ("
-						);
-
-						minutes /= 7;
-
-						std::cout << minutes
-							  << N_(" week ago",
-								" weeks ago",
-								minutes);
-					}
-					std::cout << ")";
-				}
-			}
-			std::cout << "\n";
-
-			if (dependencies_flag)
-			{
-				for (const auto &[setptr, label]
-					     : std::array<std::tuple<
-					     std::unordered_set<std::string>
-					     container_state_info::*,
-					     const char *>,
-					     4>{{{&container_state_info
-							     ::dep_requires,
-							     _("Requires:")},
-						 {&container_state_info
-						  ::dep_required_by,
-						  _("Required By:")},
-						 {&container_state_info
-						  ::dep_starting_first,
-						  _("Starts after:")},
-						 {&container_state_info
-						  ::dep_stopping_first,
-						  _("Stops after:"),
-						 }
-					     }})
-				{
-					auto &set=info.*setptr;
-
-					std::cout << "    "
-						  << label << "\n";
-
-					std::set<std::string> sorted_deps{
-						set.begin(),
-						set.end()};
-
-					for (auto &dep:sorted_deps)
-					{
-						std::cout << "        "
-							  << dep << "\n";
-					}
-				}
-			}
-
-			dump_processes(info.processes, 0);
+			if (terse_flag)
+				dump_terse(name, info);
+			else
+				dump_readable(name, real_now, info);
 		}
 		return;
 	}

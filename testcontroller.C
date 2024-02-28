@@ -671,6 +671,16 @@ void test_requires1()
 	}
 
 	logged_state_changes.clear();
+	test_advance(DEFAULT_STOPPING_TIMEOUT);
+	if (logged_state_changes != std::vector<std::string>{
+			"requires1b: force-removing",
+			"requires1b: sending SIGKILL",
+		})
+	{
+		throw "did not resend sigkill";
+	}
+
+	logged_state_changes.clear();
 	proc_container_stopped("requires1b");
 	if (logged_state_changes != std::vector<std::string>{
 			"requires1b: cgroup removed",
