@@ -299,12 +299,23 @@ struct convert_inittab {
 			const runlevels &runlevels)
 		: unit_directory{unit_directory}
 	{
+		// Converted entries in /etc/inittab go here
 		std::filesystem::create_directory(
 			unit_directory + "/system/inittab"
 		);
+
+		// Converted entries from /etc/rc.d/rc?.d go here
 		std::filesystem::create_directory(
 			unit_directory + "/system/rc"
 		);
+
+		// Scripts sniffed out of /etc/rc.d/rc.M go here
+		std::filesystem::create_directory(
+			unit_directory + "/system/rc.M"
+		);
+
+		// Create mapping from legacy init runlevels to descriptive
+		// runlevel names.
 
 		for (const auto &[name, runlevel] : runlevels)
 		{
@@ -317,10 +328,22 @@ struct convert_inittab {
 
 	//! Generate targets for starting converted /etc/rc.d units
 
-	void start_rc(const std::string &identifier,
-		      size_t linenum,
-		      const std::string &comment,
-		      all_runlevels_t &all_runlevels);
+	void start_rc(
+		//! Identifier from /etc/inittab, the first field
+		const std::string &identifier,
+
+		//! /etc/inittab line number, for error messages
+		size_t linenum,
+
+		//! What to write into the unit specification file.
+		const std::string &comment,
+
+		//! Which runlevels the /etc/rc.d entries are started for
+		all_runlevels_t &all_runlevels,
+
+		//! Additional command to run from the "started" unit
+
+		const char *extra_stopping_command_for_started);
 
 	//! Generate target for running /etc/rc.d/rc.local
 
@@ -347,6 +370,19 @@ struct convert_inittab {
 	{
 		add(entry, unit_directory + "/system/" + entry.identifier,
 		    "");
+	}
+
+	/*! Add a unit for starting entries executed by rc.M
+
+	** A unit for each script that /etc/rc.d/rc.M runs, if it's
+	** executable.
+	*/
+
+	void add_rcm(const inittab_entry &entry)
+	{
+		add(entry, unit_directory + "/system/rc.M/" + entry.identifier,
+		    "start /etc/rc.d/" + entry.identifier
+		    + " from /etc/rc.d/rc.M");
 	}
 
 	/*! Add a unit for starting /etc/rc.d/rc?.d entries */
@@ -454,6 +490,9 @@ void convert_inittab::cleanup()
 	{
 		auto filename=b->path().filename().native();
 
+		if (filename == "rc.M")
+			continue; // This is a directory, see below.
+
 		if (filename.substr(0, 3) != "rc.")
 			continue;
 
@@ -465,8 +504,24 @@ void convert_inittab::cleanup()
 		std::filesystem::remove(s);
 	}
 
+	// Anything in system/rc that was removed?
+
 	for (auto b=std::filesystem::directory_iterator{
 			unit_directory + "/system/rc/"
+		}; b != std::filesystem::directory_iterator{}; ++b)
+	{
+		std::string s=b->path();
+
+		if (all_units.count(s))
+			continue;
+
+		std::filesystem::remove(s);
+	}
+
+	// Anything in system/rc.M that was removed?
+
+	for (auto b=std::filesystem::directory_iterator{
+			unit_directory + "/system/rc.M/"
 		}; b != std::filesystem::directory_iterator{}; ++b)
 	{
 		std::string s=b->path();
@@ -481,7 +536,8 @@ void convert_inittab::cleanup()
 void convert_inittab::start_rc(const std::string &identifier,
 			       size_t linenum,
 			       const std::string &comment,
-			       all_runlevels_t &all_runlevels)
+			       all_runlevels_t &all_runlevels,
+			       const char *extra_stopping_command_for_started)
 {
 	// Generate a "start" unit after this one, for
 	// every runlevel that rc.K and rc.M is in, one
@@ -560,6 +616,8 @@ void convert_inittab::start_rc(const std::string &identifier,
 
 		run_rc_started.description=identifier +
 			": started rc.d scripts";
+		run_rc_started.stopping_command=
+			extra_stopping_command_for_started;
 		add_inittab(run_rc_started,
 			    comment + " (rc started)");
 	}
@@ -682,30 +740,30 @@ namespace {
 
 struct inittab_converter {
 
-	const std::string &system_dir;
+	const std::string &unit_dir;
 	const std::string &pkgdata_dir;
 	const runlevels &runlevels_config;
 	std::string rcdir;
 	std::string &initdefault;
 
-	convert_inittab generator{system_dir, runlevels_config};
+	convert_inittab generator{unit_dir, runlevels_config};
 
 	std::string s;
 	size_t linenum=0;
 
 	std::unordered_set<std::string> ondemand;
 
-	inittab_converter(const std::string &system_dir,
+	inittab_converter(const std::string &unit_dir,
 			  const std::string &pkgdata_dir,
 			  const runlevels &runlevels_config,
 			  std::string rcdir,
 			  std::string &initdefault)
-		: system_dir{system_dir},
+		: unit_dir{unit_dir},
 		  pkgdata_dir{pkgdata_dir},
 		  runlevels_config{runlevels_config},
 		  rcdir{std::move(rcdir)},
 		  initdefault{initdefault},
-		  generator{system_dir, runlevels_config}
+		  generator{unit_dir, runlevels_config}
 	{
 	}
 
@@ -878,7 +936,7 @@ struct inittab_converter {
 			generator.start_rc(new_entry_identifier,
 					   linenum,
 					   s,
-					   all_runlevels);
+					   all_runlevels, "");
 		}
 		inittab_entry new_entry{
 			generator.prev_commands,
@@ -896,9 +954,26 @@ struct inittab_converter {
 			new_entry.starting_command == "/etc/rc.d/rc.M";
 
 		if (is_local_after)
+		{
+			// We're going to initiate stopping of all containers
+			// for the extracted /etc/rc.d/rc.M-started
+			// units. They all go into system/rc.M. We want to
+			// wait running rc.K until they're stopped, so this
+			// stops_after all rc.M scripts
+			new_entry.stops_after.push_back("../rc.M");
+
+			// Use vera-rcb to replace all invocations of
+			// /etc/rc.d/rc.script with the equivalent
+			// "vlad start" command for the units in unit_dir/rc.M
+			new_entry.starting_command =
+				pkgdata_dir + "/vera-rcm "
+				+ unit_dir + " /etc/rc.d/rc.M | /bin/bash";
+
+			// Run rc.K to stop rc.M. Makes sense.
 			new_entry.stopping_command =
 				pkgdata_dir + "/vera-rck "
 				"/etc/rc.d/rc.K";
+		}
 		// rc.K and rc.M run initscripts after it finished its
 		// business.
 
@@ -922,10 +997,18 @@ struct inittab_converter {
 
 		if (is_sysvinit_after)
 		{
-			generator.start_rc(new_entry.identifier,
-					   linenum,
-					   s,
-					   all_runlevels);
+			// rc.M runs rc.sysvinit. And we want to
+			// stop the units started from rc.M before we
+			// stop rc.M. All those units require rc.M.target, so
+			// we just do a stop of system/rc.M.target
+			generator.start_rc(
+				new_entry.identifier,
+				linenum,
+				s,
+				all_runlevels,
+				is_local_after ?
+				"vlad --nowait stop system/rc.M.target":""
+			);
 		}
 
 		if (is_local_after)
@@ -937,8 +1020,144 @@ struct inittab_converter {
 		}
 	}
 
+	bool parse_rc_m();
 	bool finish();
 };
+
+/*! Parse /etc/rc.d/rc.M
+
+Look for -x /etc/rc.d/rc.script, followed by "/etc/rc.d/rc.script start".
+
+Each found rc.script gets converted into system/rc.M/rc.script unit. All of
+these units are required-by system/rc.M.target, so it gets started automatically
+and we'll do a stop of system/rc.M.target to stop all rc.script units.
+
+*/
+
+bool inittab_converter::parse_rc_m()
+{
+	std::ifstream rc_m{rcdir + "/rc.M"};
+
+	if (!rc_m.is_open())
+		return true;
+
+	prev_commands_t rc_M_target_dummy;
+	all_runlevels_t rc_M_target_none;
+
+	// Last converted rc.M-started script
+	std::string last_rc_M;
+
+	inittab_entry rc_M_target{
+		rc_M_target_dummy,
+		rc_M_target_none,
+		"rc.M.target",
+		""
+	};
+
+	rc_M_target.description =
+		"Dummy target that all rc.M/ units depend on";
+
+	std::string line;
+
+	// "-x <string>" found in /etc/rc.d/rc.M. If we then find a
+	// "<string> start" we make a note of it.
+
+	std::unordered_set<std::string> checkx;
+
+	while (std::getline(rc_m, line))
+	{
+		// Basic parsing into whitespace-delimited words
+		std::vector<std::string> words;
+
+		for (auto b=line.begin(), e=line.end(); b != e;)
+		{
+			if (*b == ' ')
+			{
+				++b;
+				continue;
+			}
+
+			auto p=b;
+
+			while (b != e && *b != ' ')
+			{
+				++b;
+			}
+			words.emplace_back(p, b);
+		}
+
+		// Now inspect each word.
+
+		for (auto b=words.begin(), e=words.end(); b != e;)
+		{
+			if (*b != "-x")
+			{
+				++b;
+
+				if (b == e || *b != "start")
+					continue;
+
+				// We have "something start".
+
+				// Does this "something" start with /etc/rc.d/?
+
+				if (b[-1].substr(0, 10) != "/etc/rc.d/")
+					continue;
+
+				// And we've seen a -x for it?
+
+				if (checkx.find(b[-1]) == checkx.end())
+					continue;
+
+				std::string script=b[-1].substr(10);
+
+				// Both -x /etc/rc.d/script and
+				// /etc/rc.d/script start were found
+
+				// We'll manually take care of stopping after.
+
+				prev_commands_t dummy;
+				all_runlevels_t none;
+
+				inittab_entry run_rc{
+					dummy,
+					none,
+					script,
+					"/etc/rc.d/"+ script + " start"
+				};
+
+				run_rc.stopping_command=
+					"/etc/rc.d/" + script + " stop";
+
+				run_rc.start_type="forking";
+				if (last_rc_M.empty())
+					run_rc.stops_before.push_back(
+						last_rc_M
+					);
+				last_rc_M=script;
+
+				rc_M_target.required_by.push_back(
+					"rc.M/" + script);
+				generator.add_rcm(run_rc);
+
+				continue;
+			}
+
+			// Look at the next word after -x
+
+			if (++b != e && b->substr(0, 10) == "/etc/rc.d/")
+			{
+				checkx.insert(*b);
+			}
+		}
+	}
+
+
+	std::sort(rc_M_target.required_by.begin(),
+		  rc_M_target.required_by.end());
+	generator.add_rc(rc_M_target);
+	return true;
+}
 
 bool inittab_converter::finish()
 {
@@ -1227,14 +1446,14 @@ bool inittab_converter::finish()
 
 bool inittab(std::string filename,
 	     std::string rcdir,
-	     const std::string &system_dir,
+	     const std::string &unit_dir,
 	     const std::string &pkgdata_dir,
 	     const runlevels &runlevels,
 	     std::string &initdefault)
 {
 	bool error=false;
 
-	inittab_converter converter{system_dir, pkgdata_dir, runlevels,
+	inittab_converter converter{unit_dir, pkgdata_dir, runlevels,
 		std::move(rcdir),
 		initdefault};
 
@@ -1275,5 +1494,5 @@ bool inittab(std::string filename,
 				  action,
 				  processed_command);
 		}
-	) && !error && converter.finish();
+	) && !error && converter.parse_rc_m() && converter.finish();
 }

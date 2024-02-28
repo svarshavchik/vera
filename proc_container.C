@@ -3597,7 +3597,7 @@ bool current_containers_infoObj::do_stop(
 	const current_container_lookup_t &containers
 )
 {
-	DEP_DEBUG("==== do_start ====");
+	DEP_DEBUG("==== do_stop ====");
 
 	return do_dependencies(
 		containers,

@@ -7,7 +7,7 @@
 #
 # Comment out call to telinit
 #
-# Also comment out "sleep 1"s, that serve no prupose any more
+# Also comment out "sleep 1"s, that serve no purpose any more
 
 RCK="$1"
 

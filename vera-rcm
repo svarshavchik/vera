@@ -1,0 +1,38 @@
+#! /usr/bin/perl
+#
+# Modify /etc/rc.d/rc.M on the fly.
+#
+# Replace all instances of "/etc/rc.d/rc.SOMETHING start" with
+# "vlad start system/rc.M/rc.SOMETHING", if this unit file exists.
+
+use strict;
+use warnings;
+
+use IO::File;
+
+my ($unitdir, $rc_m) = @ARGV;
+
+my $fh = IO::File->new($rc_m, "r");
+
+my $l;
+
+sub repl {
+    my ($word,$start) = @_;
+
+    if ($word =~ m{^/etc/rc.d/(.*)} &&
+	-f "$unitdir/system/rc.M/$1")
+    {
+	return "vlad start system/rc.M/$1";
+    }
+    return "$word$start";
+}
+
+while (defined($l = <$fh>))
+{
+    $l =~ s{
+       (/etc/rc.d/rc.\w+)(\s+start)
+       }[
+	repl($1,$2)
+       ]gex;
+    print $l;
+}

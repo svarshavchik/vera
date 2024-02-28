@@ -8,7 +8,8 @@ export LC_ALL=C
 sbin_PROGRAMS=vera vera-init
 noinst_SCRIPTS=vlad
 
-pkgdata_SCRIPTS=rc.sysvinit.vera rc.local.vera rc.local_shutdown.vera vera-rck
+pkgdata_SCRIPTS=rc.sysvinit.vera rc.local.vera rc.local_shutdown.vera \
+	vera-rcm vera-rck
 
 noinst_PROGRAMS=\
 	testcontroller						\
@@ -26,7 +27,8 @@ EXTRA_DIST= 							\
 	testinittab.sh						\
 	testinittab.txt						\
 	testprocloader.sh					\
-	vera-rck
+	vera-rck						\
+	vera-rcm
 
 BUILT_SOURCES=configdirs.h
 CLEANFILES=configdirs.h

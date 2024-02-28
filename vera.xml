@@ -216,7 +216,27 @@
       <title>Known issues</title>
 
       <para>
-	When using NetworkManager there's always a ten second delay in the
+	Shutdowns take a little bit more time than they did before.
+	<quote><filename>/etc/rc.d/rc.M</filename></quote> executes a number
+	of <quote><literal>/etc/rc.d/rc.script start</literal></quote> commands
+	but the corresponding
+	<quote><literal>/etc/rc.d/rc.script stop</literal></quote>
+	does not get executed. Instead,
+	<quote><filename>/etc/rc.d/rc.K</filename></quote> takes a shortcut
+	that <command>kilall</command>s all processes.
+      </para>
+
+      <para>
+	<quote><command>vera inittab</command></quote> converts each
+	<quote><command>rc.script</command></quote> to a unit,
+	and the unit formally runs
+	<quote><command>rc.script start</command></quote> and
+	<quote><command>rc.script stop</command></quote>.
+	Stopping each unit takes additional
+	time.
+	This also exposes a
+	<quote><command>rc.networkmanager</command></quote> issue.
+	When using NetworkManager there's a ten second delay in the
 	middle of every shutdown, with <command>vera</command> waiting for
 	one <command>dhcpcd</command> process to stop. This is a small glitch
 	in Slackware's initscripts. NetworkManager does not shutdown cleanly.
