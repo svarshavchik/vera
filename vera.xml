@@ -175,15 +175,17 @@
       <title>Slackware64 package</title>
 
       <para>
-	Install the Slackware 15 package with <command>installpkg</command>
+	The Slackware package installs vera with the default configuration
+	options. The package's installation script automatically
+	runs the <quote>inittab</quote> command that reads
+	<filename>/etc/inittab</filename> and
+	<filename>/etc/rc.d/rc?.d</filename> and converts them
+	to <command>vera</command>'s unit specifications. The script fails
+	if it doesn't understand them.
+	Install the Slackware 15 package with
+	<quote><command>installpkg</command></quote>
 	and follow the instructions above starting with the
-      </para>
-      <blockquote>
-	<informalexample>
-	  <programlisting>vlad hookonce</programlisting>
-	</informalexample>
-      </blockquote>
-      <para>
+	<quote><command>vlad hookonce</command></quote>
 	command.
       </para>
       <note>
@@ -213,17 +215,20 @@
     </sect2>
 
     <sect2 id="issues">
-      <title>Known issues</title>
+      <title>Known issues on Slackware 15</title>
 
       <para>
-	Shutdowns take a little bit more time than they did before.
-	<quote><filename>/etc/rc.d/rc.M</filename></quote> executes a number
-	of <quote><literal>/etc/rc.d/rc.script start</literal></quote> commands
-	but the corresponding
-	<quote><literal>/etc/rc.d/rc.script stop</literal></quote>
-	does not get executed. Instead,
-	<quote><filename>/etc/rc.d/rc.K</filename></quote> takes a shortcut
-	that <command>kilall</command>s all processes.
+	Shutdowns take a few more seconds to complete.
+	 <quote><filename>/etc/rc.d/rc.M</filename></quote> runs
+	 <quote><literal>/etc/rc.d/rc.script start</literal></quote> commands,
+	 but
+	 <quote><filename>/etc/rc.d/rc.K</filename></quote> runs only
+	 a handful of
+	 <quote><literal>/etc/rc.d/rc.script stop</literal></quote>s, and
+	 skips most of them.
+	 <quote><filename>/etc/rc.d/rc.K</filename></quote> takes the easy
+	 way out that simply
+	 <command>kilall</command>s all processes.
       </para>
 
       <para>
@@ -235,14 +240,21 @@
 	Stopping each unit takes additional
 	time.
 	This also exposes a
-	<quote><command>rc.networkmanager</command></quote> issue.
-	When using NetworkManager there's a ten second delay in the
+	<quote><command>rc.networkmanager</command></quote> issue
+	with its default DHCP configuration that uses
+	<command>dhcpcd</command>: there's a ten second delay in the
 	middle of every shutdown, with <command>vera</command> waiting for
-	one <command>dhcpcd</command> process to stop. This is a small glitch
-	in Slackware's initscripts. NetworkManager does not shutdown cleanly.
+	one <command>dhcpcd</command> process to stop. This appears to be
+	a <command>dhcpcd</command> glitch.
 	This gets covered up normally by <command>rc.K</command> terminating
 	all processes at once, but gets exposed when NetworkManager runs in
 	a container.
+      </para>
+
+      <para>
+	This does not happen with
+	<quote><literal>dhcp=dhclient</literal></quote> in
+	<filename>/etc/NetworkManager/conf.d/00-dhcp-client.conf</filename>.
       </para>
     </sect2>
   </sect1>

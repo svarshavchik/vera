@@ -18,7 +18,8 @@ struct group_create_info;
 /*! Movable POD for a proc_container_group.
 
 proc_container_group implements move semantics. This POD is the movable
-data
+data.
+
 */
 
 struct proc_container_group_data {

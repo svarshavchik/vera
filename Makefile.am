@@ -249,21 +249,31 @@ endif
 NVR=$(PACKAGE)-$(VERSION)-`uname -m`-1
 
 slackpkg: dist
-	rm -rf $(PACKAGE)-$(VERSION)
+	sudo rm -rf $(PACKAGE)-$(VERSION)
 	tar xf $(PACKAGE)-$(VERSION).tar.xz
 	cd $(PACKAGE)-$(VERSION) && \
 		./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \
 			--libdir=/lib --localstatedir=/run \
 			--localedir=/usr/share/locale && \
 		make -j `grep '^processor' /proc/cpuinfo | wc -l` && \
-                strip vera && strip vera-init && \
-		make install DESTDIR=inst && \
+                strip vera && strip vera-init
+	sudo $(MAKE) slackpkg-sudo
+	cp $(NVR).txz $(NVR).txz.tmp
+	mv -f $(NVR).txz.tmp $(NVR).txz
+
+slackpkg-sudo:
+	cd $(PACKAGE)-$(VERSION) && \
+		$(MAKE) install DESTDIR=inst && \
 		cd inst && \
                    find lib/vera/system/inittab \
-                        lib/vera/system/rc -type f -print | xargs rm -f && \
+                        lib/vera/system/rc \
+			lib/vera/system/rc.M* -type f -print | xargs rm -f && \
                    mkdir install && \
 			echo '#! /bin/sh' > install/doinst.sh && \
-                        echo '/sbin/vlad inittab' >> install/doinst.sh && \
+                        echo 'set -e; /sbin/vlad inittab' >> install/doinst.sh && \
+			echo 'echo "Now run \"vlad hook\" and reboot."' >>install/doinst.sh && \
+			echo 'echo "IMPORTANT: run \"vlad unhook\", reboot, then \"vlad unhook\" again"' >>install/doinst.sh && \
+			echo 'echo "before removing vera with removepkg."' >>install/doinst.sh && \
 			chmod +x install/doinst.sh && \
 			cp ../../slack-desc install && \
                    gzip usr/share/man/*/* && \

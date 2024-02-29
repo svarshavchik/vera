@@ -1,3 +1,8 @@
+2024-02-29  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Modify /etc/rc.d/rc.M on the fly, before running it, in order to
+	start every rc.script it runs in its own container.
+
 2024-02-27  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* --terse option. Minor bug fixes.
