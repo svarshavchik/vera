@@ -143,6 +143,16 @@ proc_container_runner create_runner(
 
 	const auto &[container, run_info]=*cc;
 
+#ifndef UNIT_TEST
+	auto newline=command.find_first_of("#;\n\r()");
+
+	const char *suffix="";
+
+	if (newline != command.npos)
+		suffix=" ...";
+
+	log_container_message(container, command.substr(0, newline) + suffix);
+#endif
 	int exec_pipe[2];
 
 	if (pipe2(exec_pipe, O_CLOEXEC) < 0)
