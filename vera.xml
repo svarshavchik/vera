@@ -171,6 +171,15 @@
       </citerefentry> manual page for more information.
     </para>
 
+    <note>
+      <para>
+	<command>vera</command> does not replace
+	the <quote><command>shutdown</command></quote> and
+	<quote><command>reboot</command></quote> commands from sysvinit.
+	They're still used with <command>vera</command>.
+      </para>
+    </note>
+
     <sect2 id="slackpkg">
       <title>Slackware64 package</title>
 
