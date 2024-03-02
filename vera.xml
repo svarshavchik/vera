@@ -1310,7 +1310,7 @@ Version: 1</literallayout>
 
 	  <para>
 	    The <quote>Stopping</quote> key in a unit specification file contains
-	    other key/value pairs that specify how thie unit gets stopped.
+	    other key/value pairs that specify how this unit gets stopped.
 	  </para>
 
 	  <variablelist>
@@ -1794,10 +1794,11 @@ Version: 1
 		then it gets enabled (by the <command>enable</command> command).
 		The resulting
 		<quote>required-by</quote>
-		of the<quote>system/graphical</quote> has the
+		of the <quote>system/graphical</quote> has the
 		following effect:
-		switching, or starting, that runlevel starts this unit (as part
-		of the runlevel).
+		switching, or starting, the
+		<quote>system/graphical</quote> runlevel starts this unit
+		(as part of the runlevel).
 	      </para>
 
 	      <para>
@@ -2204,19 +2205,19 @@ version: 1
 	</para>
 
 	<para>
-	  Installing <command>vera</command> (from a package or by
-	  <command>make install</command>) does not touch or replace the
-	  default system <command>init</command> daemon. Additional commands
-	  must be executed, and a coordinated reboot is required in order to
-	  roll the dice, and start <command>vera</command>.
-	</para>
-
-	<para>
 	  A single parameter to <command>vera</command> consisting of a
 	  single letter or digit gets interpreted as a reference to an
 	  <command>init</command> runlevel, an ondemand action, or an
 	  inittab update, and triggers the equivalent <command>vera</command>
 	  command.
+	</para>
+
+	<para>
+	  Installing <command>vera</command> (from a package or by
+	  <command>make install</command>) does not touch or replace the
+	  default system <command>init</command> daemon. Additional commands
+	  must be executed, and a coordinated reboot is required in order to
+	  roll the dice, and start <command>vera</command>.
 	</para>
 
 	<para>
@@ -2318,7 +2319,8 @@ version: 1
 
 	<para>
 	  The <command>inittab</command> command
-	  rereads <filename>/etc/inittab</filename>
+	  rereads <filename>/etc/inittab</filename>,
+	  <filename>/etc/rc.d/rc.M</filename>,
 	  and <filename>/etc/rc.d/rc?.d</filename> directories,
 	  the translates them to unit specification files in
 	  <filename>@INSTALLCONFIGDIR@</filename>. A brief overview
@@ -2396,7 +2398,27 @@ version: 1
 	</note>
 
 	<para>
-	  Additionally, entries in <filename>/etc/rc.d/rc?.d</filename>
+	  The <filename>/etc/rc.d/rc.M</filename> script's contents are
+	  search for every instance of
+	  <quote>-x /etc/rc.d/<replaceable>rc.script</replaceable></quote>
+	  followed by
+	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable>
+	  start</quote>.
+	  This creates a corresponding
+	  <filename>@INSTALLCONFIGDIR@/system/rc.M/<replaceable>rc.script</replaceable></filename>
+	  unit that runs
+	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> start</quote>
+	  and
+	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> stop</quote>.
+	  As part of converting <filename>/etc/inittab</filename> the
+	  converted <filename>/etc/inittab</filename> entry that runs
+	  <filename>/etc/rc.d/rc.M</filename> converts this script, on the fly,
+	  to start each corresponding unit, instead of running each script
+	  directly.
+	</para>
+
+	<para>
+	  Finally, entries in <filename>/etc/rc.d/rc?.d</filename>
 	  get translated to unit files as follows:
 	</para>
 
