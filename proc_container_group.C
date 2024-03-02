@@ -41,6 +41,11 @@ std::string proc_container_group_data::cgroups_dir()
 	return n;
 }
 
+std::string proc_container_group_data::cgroup_events()
+{
+	return cgroups_dir() + "/cgroup.events";
+}
+
 proc_container_group::~proc_container_group()
 {
 	// Clear the pollers first, before we close the file descriptors.
@@ -53,9 +58,6 @@ proc_container_group::~proc_container_group()
 
 	if (stdouterrpipe[1] >= 0)
 		close(stdouterrpipe[1]);
-
-	if (cgroup_eventsfd >= 0)
-		close(cgroup_eventsfd);
 }
 
 proc_container_group::proc_container_group(proc_container_group &&other)
@@ -149,18 +151,7 @@ bool proc_container_group::create(const group_create_info &create_info)
 		return false;
 	}
 
-	auto [fd, path]=cgroups_events_open(-1);
-
-	if (fd < 0)
-	{
-		// path ends with a colon
-		log_message(cgroups_dir() + ": " + strerror(errno));
-		return false;
-	}
-
-	cgroup_eventsfd=fd;
-
-	return install(path, create_info);
+	return install(cgroup_events(), create_info);
 }
 
 bool proc_container_group_data::install(
@@ -217,13 +208,23 @@ bool proc_container_group_data::install(
 		[all_containers=std::weak_ptr<current_containers_infoObj>{
 				create_info.all_containers
 			},
-			fd=cgroup_eventsfd,
+			cgroup_events_path,
 			name=container->name,
 			buffer=std::string{}]
 		(auto, auto)
 		mutable
 		{
-			auto populated=is_populated(fd, buffer);
+			bool populated=false;
+
+			int fd=open(cgroup_events_path.c_str(), O_RDONLY);
+
+			if (fd >= 0)
+			{
+				auto efd=std::make_shared<external_filedescObj>(
+					fd
+				);
+				populated=is_populated(fd, buffer);
+			}
 
 			auto l=all_containers.lock();
 
@@ -249,14 +250,13 @@ bool proc_container_group::forked()
 void proc_container_group::save_transfer_info(std::ostream &o)
 {
 	o << stdouterrpipe[0] << " " << stdouterrpipe[1] << " "
-	  << cgroup_eventsfd << "\n";
+	  << -1 << "\n";
 }
 
 void proc_container_group::prepare_to_transfer()
 {
 	prepare_to_transfer_fd(stdouterrpipe[0]);
 	prepare_to_transfer_fd(stdouterrpipe[1]);
-	prepare_to_transfer_fd(cgroup_eventsfd);
 
 	log_message(container->name + _(": container prepared to re-exec"));
 }
@@ -272,19 +272,24 @@ bool proc_container_group::restored(
 
 	std::istringstream is{std::move(s)};
 
+	int cgroup_eventsfd;
+
 	if (!(is >> stdouterrpipe[0] >> stdouterrpipe[1] >> cgroup_eventsfd))
 		return false;
 
+	// Up until 0.02 this was a file descriptor for cgroup.events. We
+	// are not keeping this file descriptor open, any more. We open
+	// cgroup.events as needed.
+	if (cgroup_eventsfd >= 0)
+		close(cgroup_eventsfd);
+
 	if (fcntl(stdouterrpipe[0], F_SETFD, FD_CLOEXEC) < 0 ||
-	    fcntl(stdouterrpipe[1], F_SETFD, FD_CLOEXEC) < 0 ||
-	    fcntl(cgroup_eventsfd, F_SETFD, FD_CLOEXEC) < 0)
+	    fcntl(stdouterrpipe[1], F_SETFD, FD_CLOEXEC) < 0)
 		return false;
 
 	container=create_info.cc->first;
 
-	auto [fd, path]=cgroups_events_open(cgroup_eventsfd);
-
-	if (!install(path, create_info))
+	if (!install(cgroup_events(), create_info))
 		return false;
 
 	log_message(container->name + _(": restored after re-exec"));
@@ -300,7 +305,16 @@ void proc_container_group::all_restored(const group_create_info &create_info)
 
 	std::string scratch_buffer;
 
-	auto populated=is_populated(cgroup_eventsfd, scratch_buffer);
+	bool populated=false;
+
+	auto fd=open(cgroup_events().c_str(), O_RDONLY);
+
+	if (fd >= 0)
+	{
+		auto efd=std::make_shared<external_filedescObj>(fd);
+
+		populated=is_populated(fd, scratch_buffer);
+	}
 
 	create_info.all_containers->populated(
 		create_info.cc->first->name,

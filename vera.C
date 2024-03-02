@@ -147,19 +147,6 @@ const char *proc_container_group_data::get_cgroupfs_base_path()
 	return "/sys/fs/cgroup/vera";
 }
 
-// Open the cgroup.events file
-
-std::tuple<int, std::string>
-proc_container_group_data::cgroups_events_open(int fd)
-{
-	auto path=cgroups_dir() + "/cgroup.events";
-
-	if (fd < 0)
-		fd=open(path.c_str(), O_RDONLY|O_CLOEXEC, 0644);
-
-	return {fd, path};
-}
-
 // Put this forked process into the cgroup
 
 bool proc_container_group_data::cgroups_register()

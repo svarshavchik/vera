@@ -1,3 +1,12 @@
+2024-03-02  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Don't create an open file descriptor for every container's
+	cgroup.eventsfd. Open it only when needed.
+
+2024-03-01  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 0.02
+
 2024-02-29  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Modify /etc/rc.d/rc.M on the fly, before running it, in order to

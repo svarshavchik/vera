@@ -52,15 +52,9 @@ struct proc_container_group_data {
 
 	bool cgroups_dir_create();
 
-	//! Return the path to the cgroup.events file, and open it.
+	//! Path to the cgroups.events file
 
-	//! Returns an existing passed-in file descriptor, and the path to
-	//! to cgroups.events file. Passing in a negative file descriptor
-	//! opens the cgroup.events file, and returns the opened descriptor.
-	std::tuple<int, std::string> cgroups_events_open(int);
-
-	//! cgroup.events file descriptor
-	int cgroup_eventsfd{-1};
+	std::string cgroup_events();
 
 	//! The cgroup_eventsfd poller
 

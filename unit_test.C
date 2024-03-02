@@ -66,25 +66,19 @@ bool proc_container_group_data::cgroups_dir_create()
 			return false;
 	}
 
+	close(open(cgroup_events().c_str(), O_RDWR|O_CREAT|O_TRUNC,0644));
+
 	log_container_message(container, "cgroup created");
 	return true;
-}
-
-std::tuple<int, std::string>
-proc_container_group_data::cgroups_events_open(int fd)
-{
-	auto path=cgroups_dir() + "/cgroup.events";
-
-	if (fd < 0)
-		fd=open(path.c_str(), O_RDWR|O_CREAT|O_CLOEXEC, 0644);
-
-	return {fd, path};
 }
 
 // The registration process consists of manually writing "populated 1"
 
 bool proc_container_group_data::cgroups_register()
 {
+	auto cgroup_eventsfd=open(cgroup_events().c_str(),
+			     O_WRONLY|O_CREAT|O_TRUNC);
+
 	if (cgroup_eventsfd < 0)
 	{
 		log_message("Internal error: cgroup_eventsfd not set");
@@ -93,6 +87,7 @@ bool proc_container_group_data::cgroups_register()
 
 	lseek(cgroup_eventsfd, 0, SEEK_SET);
 	write(cgroup_eventsfd, "populated 1\n", 12);
+	close(cgroup_eventsfd);
 	return true;
 }
 
@@ -100,7 +95,7 @@ bool proc_container_group::cgroups_try_rmdir()
 {
 	auto dir=cgroups_dir();
 
-	unlink((dir + "/cgroup.events").c_str());
+	unlink(cgroup_events().c_str());
 
 	if (rmdir(dir.c_str()) < 0)
 	{
