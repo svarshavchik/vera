@@ -158,6 +158,9 @@ bool proc_container_group_data::install(
 	const std::string &cgroup_events_path,
 	const group_create_info &create_info)
 {
+	// Attach a poller to stdouterrpipe to log every line
+	// received from the conatiner.
+
 	stdouterrpoller=polledfd{
 		stdouterrpipe[0],
 		[all_containers=std::weak_ptr<current_containers_infoObj>{
@@ -179,13 +182,24 @@ bool proc_container_group_data::install(
 
 				auto b=buffer.begin(), e=buffer.end();
 
-				while (b != e)
+				while (1)
 				{
+					if (b == e)
+					{
+						buffer.clear();
+						break;
+					}
+
 					auto p=std::find(b, e, '\n');
 
 					if (p == e)
+					{
+						buffer.erase(
+							buffer.begin(),
+							b
+						);
 						break;
-
+					}
 					std::string line{b, p};
 
 					b=++p;

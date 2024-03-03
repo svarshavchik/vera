@@ -101,13 +101,13 @@ struct inittab_entry {
 	inittab_entry(prev_commands_t &prev_commands,
 		      const all_runlevels_t &all_runlevels,
 		      std::string identifier,
-		      std::string starting_command)
+		      std::string starting_command,
+		      std::string description)
 		: prev_commands{prev_commands},
 		  all_runlevels{all_runlevels},
 		  identifier{std::move(identifier)},
 		  starting_command{std::move(starting_command)},
-		  description{this->identifier + ": "
-		+ this->starting_command}
+		  description{std::move(description)}
 	{
 		// If there's a previous command this one will start after it
 		// and stop before it.
@@ -133,12 +133,14 @@ struct inittab_entry {
 
 	inittab_entry(inittab_entry &prev_entry,
 		      std::string identifier,
-		      std::string starting_command)
+		      std::string starting_command,
+		      std::string description)
 		: inittab_entry{
 				prev_entry.prev_commands,
 				prev_entry.all_runlevels,
 				std::move(identifier),
-				std::move(starting_command)
+				std::move(starting_command),
+				std::move(description)
 			}
 	{
 		description=prev_entry.description;
@@ -559,7 +561,8 @@ void convert_inittab::start_rc(const std::string &identifier,
 			prev_commands,
 			just_one,
 			identifier + "-start-" + required_by,
-			""};
+			"",
+			identifier + ": start rc.d scripts"};
 
 		run_rc_start.start_type="forking";
 		run_rc_start.stop_type="target";
@@ -570,8 +573,6 @@ void convert_inittab::start_rc(const std::string &identifier,
 			"vlad --nowait start system/rc." + required_by;
 		run_rc_start.stop_type="target";
 
-		run_rc_start.description=identifier +
-			": start rc.d scripts";
 		run_rc_start.starts_before.push_back(
 			"/system/rc");
 		run_rc_start.stops_after.push_back(
@@ -600,7 +601,8 @@ void convert_inittab::start_rc(const std::string &identifier,
 			prev_commands,
 			just_one,
 			identifier + "-started-" + required_by,
-			""};
+			"",
+			identifier + ": started rc.d scripts"};
 
 		run_rc_started.stop_type="target";
 
@@ -638,7 +640,8 @@ void convert_inittab::start_local(const std::string &identifier,
 		all_runlevels,
 		identifier + "-run-local",
 		"test ! -x /etc/rc.d/rc.local.init ||"
-		" /etc/rc.d/rc.local.init start"
+		" /etc/rc.d/rc.local.init start",
+		identifier + ": started rc.local"
 	};
 
 	run_rc_local.stopping_command=
@@ -938,11 +941,15 @@ struct inittab_converter {
 					   s,
 					   all_runlevels, "");
 		}
+
+		std::string description=new_entry_identifier+": "
+			+ starting_command;
 		inittab_entry new_entry{
 			generator.prev_commands,
 			all_runlevels,
 			std::move(new_entry_identifier),
-			starting_command
+			starting_command,
+			std::move(description)
 		};
 
 		if (start_type)
@@ -1067,7 +1074,8 @@ bool inittab_converter::parse_rc_m()
 		rc_M_target_dummy,
 		rc_M_target_none,
 		"rc.M.target",
-		""
+		"",
+		"stop services started from rc.M"
 	};
 
 	rc_M_target.description =
@@ -1201,7 +1209,8 @@ fi
 					dummy,
 					none,
 					unit_name,
-					launch + " start"
+					launch + " start",
+					launch
 				};
 
 				run_rc.stopping_command=
@@ -1261,9 +1270,11 @@ bool inittab_converter::finish()
 			generator.prev_commands,
 			none,
 			"rc." + rc_runlevel,
-			""};
+			"",
+			"initscripts in system/rc that are required-by:"
+			" /system/rc." + rc_runlevel
+		};
 		run_rc.alternative_group="rc";
-		run_rc.description="initscripts in system/rc that are required-by: /system/rc." + rc_runlevel;
 		run_rc.stop_type="target";
 
 		generator.add_rc(run_rc);
@@ -1464,6 +1475,7 @@ bool inittab_converter::finish()
 			generator.prev_commands,
 			f.runlevels,
 			filename,
+			static_cast<std::string>(f.path),
 			static_cast<std::string>(f.path)
 		};
 

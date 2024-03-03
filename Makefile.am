@@ -247,7 +247,7 @@ endif
 
 # Make a Slackware package
 
-NVR=$(PACKAGE)-$(VERSION)-`uname -m`-1
+NVR:=$(PACKAGE)-$(VERSION)-$(shell uname -m)-1
 
 slackpkg: dist
 	sudo rm -rf $(PACKAGE)-$(VERSION)
