@@ -37,13 +37,14 @@ while (defined($l = <$fh>))
     # /etc/rc.d/rc.inet2 in /etc/rc.d/rc.M will run me again.
 
     $l =~ s{
-    ^\s*/etc/rc.d/rc.inet2[ \t]*$
+    ^\s*/etc/rc\.d/rc\.inet2[ \t]*$
     }[
 	"$0 $unitdir /etc/rc.d/rc.inet2 | /bin/bash"
     ]gex;
 
+    # And check if any other script has a unit.
     $l =~ s{
-       (\b(sh|\.)\s+)?(/etc/rc.d/rc.\w+)(\s+start)
+       (\b(sh|\.)\s+)?(/etc/rc\.d/rc\.\w+)(\s+start)
        }[
 	repl($1,$3,$4)
        ]gex;

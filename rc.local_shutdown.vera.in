@@ -16,5 +16,19 @@ else
     then
 	exit 0
     fi
+
+    # rc.K runs rc.local_shutdown
+    #
+    # Then rc.0 or rc.6 runs it again.
+    #
+    # When started by vera, rc.local_shutdown gets run as a stop script
+    # for rc.M, we can check INIT_VERSION here, and bail out, when this
+    # gets run again from rc.0 or rc.6
+
+    case $INIT_VERSION in
+	vera*)
+	    exit 0
+	    ;;
+    esac
     exec /etc/rc.d/rc.local_shutdown.init "$@"
 fi

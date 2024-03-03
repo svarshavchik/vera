@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/perl
 #
 # Modify /etc/rc.d/rc.K on the fly.
 #
@@ -9,6 +9,27 @@
 #
 # Also comment out "sleep 1"s, that serve no purpose any more
 
-RCK="$1"
+use strict;
+use warnings;
 
-sed 's/^killall/#/;s/^\/sbin\/telinit/#/;s/sleep 1/true/' <$RCK | exec /bin/bash
+use IO::File;
+
+my ($RCK) = @ARGV;
+
+my $fh = IO::File->new($RCK, "r");
+
+my $l;
+
+while (defined($l = <$fh>))
+{
+    # Don't run killall. We stopped the containers ourselves
+    $l =~ s/^killall/#/;
+
+    # The sleep is not needed
+    $l =~ s@sleep 1@true@;
+
+    # Don't run telinit. We're on top of it.
+    $l =~ s@^/sbin/telinit@#@;
+
+    print $l;
+}

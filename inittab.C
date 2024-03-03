@@ -972,7 +972,7 @@ struct inittab_converter {
 			// Run rc.K to stop rc.M. Makes sense.
 			new_entry.stopping_command =
 				pkgdata_dir + "/vera-rck "
-				"/etc/rc.d/rc.K";
+				"/etc/rc.d/rc.K | /bin/bash";
 		}
 		// rc.K and rc.M run initscripts after it finished its
 		// business.
@@ -991,7 +991,7 @@ struct inittab_converter {
 		else if (new_entry.starting_command == "/etc/rc.d/rc.K")
 			new_entry.starting_command =
 				pkgdata_dir + "/vera-rck "
-				+ new_entry.starting_command;
+				+ new_entry.starting_command + " | /bin/bash";
 
 		generator.add_inittab(new_entry, s);
 

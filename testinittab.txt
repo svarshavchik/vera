@@ -206,7 +206,7 @@ Loading installed units
 system/inittab/rc:start=forking:stop=manual
 system/inittab/rc:description=rc: /etc/rc.d/rc.M
 system/inittab/rc:starting:testinittab.dir/share/vera-rcm testinittab.dir/vera /etc/rc.d/rc.M | /bin/bash
-system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K
+system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/rc:sigterm:notify=all
 system/inittab/rc:required-by system/custom
 system/inittab/rc:required-by system/graphical
@@ -351,7 +351,7 @@ Loading: testinittab.dir/vera/system/inittab/su
 Loading installed units
 system/inittab/su:start=forking:stop=manual
 system/inittab/su:description=su: /etc/rc.d/rc.K
-system/inittab/su:starting:testinittab.dir/share/vera-rck /etc/rc.d/rc.K
+system/inittab/su:starting:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/su:sigterm:notify=parents
 system/inittab/su:required-by system/single-user
 # system/inittab/su-start-single-user

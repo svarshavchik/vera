@@ -23,6 +23,7 @@ noinst_PROGRAMS=\
 	testprocloader
 
 EXTRA_DIST= 							\
+	packaging/slackware/doinst.sh				\
 	slack-desc						\
 	testinittab.sh						\
 	testinittab.txt						\
@@ -269,11 +270,8 @@ slackpkg-sudo:
                         lib/vera/system/rc \
 			lib/vera/system/rc.M* -type f -print | xargs rm -f && \
                    mkdir install && \
-			echo '#! /bin/sh' > install/doinst.sh && \
-                        echo 'set -e; /sbin/vlad inittab' >> install/doinst.sh && \
-			echo 'echo "Now run \"vlad hook\" and reboot."' >>install/doinst.sh && \
-			echo 'echo "IMPORTANT: run \"vlad unhook\", reboot, then \"vlad unhook\" again"' >>install/doinst.sh && \
-			echo 'echo "before removing vera with removepkg."' >>install/doinst.sh && \
+			cp ../../packaging/slackware/doinst.sh \
+						install/doinst.sh && \
 			chmod +x install/doinst.sh && \
 			cp ../../slack-desc install && \
                    gzip usr/share/man/*/* && \

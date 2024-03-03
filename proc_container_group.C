@@ -277,7 +277,7 @@ bool proc_container_group::restored(
 	if (!(is >> stdouterrpipe[0] >> stdouterrpipe[1] >> cgroup_eventsfd))
 		return false;
 
-	// Up until 0.02 this was a file descriptor for cgroup.events. We
+	// COMPAT: until 0.02 this was a file descriptor for cgroup.events. We
 	// are not keeping this file descriptor open, any more. We open
 	// cgroup.events as needed.
 	if (cgroup_eventsfd >= 0)
