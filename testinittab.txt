@@ -485,7 +485,7 @@ system/rc.single-user:sigterm:notify=parents
 Loading: testinittab.dir/vera/system/rc/S80network.sh
 Loading installed units
 system/rc/S80network.sh:start=forking:stop=manual
-system/rc/S80network.sh:description=S80network.sh: testinittab.dir/etc/rc.d/network
+system/rc/S80network.sh:description=testinittab.dir/etc/rc.d/network
 system/rc/S80network.sh:starting:test ! -x testinittab.dir/etc/rc.d/network || sh testinittab.dir/etc/rc.d/network start
 system/rc/S80network.sh:stopping:test ! -x testinittab.dir/etc/rc.d/network || sh testinittab.dir/etc/rc.d/network stop
 system/rc/S80network.sh:sigterm:notify=all
@@ -494,7 +494,7 @@ system/rc/S80network.sh:required-by system/rc.multi-user
 Loading: testinittab.dir/vera/system/rc/S90http
 Loading installed units
 system/rc/S90http:start=forking:stop=manual
-system/rc/S90http:description=S90http: testinittab.dir/etc/rc.d/rc4.d/S90http
+system/rc/S90http:description=testinittab.dir/etc/rc.d/rc4.d/S90http
 system/rc/S90http:starting:test ! -x testinittab.dir/etc/rc.d/rc4.d/S90http || testinittab.dir/etc/rc.d/rc4.d/S90http start
 system/rc/S90http:stopping:test ! -x testinittab.dir/etc/rc.d/rc6.d/K90http || testinittab.dir/etc/rc.d/rc6.d/K90http stop
 system/rc/S90http:sigterm:notify=all
