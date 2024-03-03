@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 #
-# Modify /etc/rc.d/rc.M on the fly.
+# Modify /etc/rc.d/rc.M and /etc/rc.d/rc.inet2 on the fly.
 #
 # Replace all instances of "/etc/rc.d/rc.SOMETHING start" with
 # "vlad start system/rc.M/rc.SOMETHING", if this unit file exists.
@@ -17,22 +17,35 @@ my $fh = IO::File->new($rc_m, "r");
 my $l;
 
 sub repl {
-    my ($word,$start) = @_;
+    my ($pfix, $word,$start) = @_;
 
-    if ($word =~ m{^/etc/rc.d/(.*)} &&
+    my $unit = $word;
+
+    # ip_forward => ip-forward
+    $unit =~ s/_/-/g;
+
+    if ($unit =~ m{^/etc/rc.d/(.*)} &&
 	-f "$unitdir/system/rc.M/$1")
     {
 	return "vlad start system/rc.M/$1";
     }
-    return "$word$start";
+    return ($pfix // '') . "$word$start";
 }
 
 while (defined($l = <$fh>))
 {
+    # /etc/rc.d/rc.inet2 in /etc/rc.d/rc.M will run me again.
+
     $l =~ s{
-       (/etc/rc.d/rc.\w+)(\s+start)
+    ^\s*/etc/rc.d/rc.inet2[ \t]*$
+    }[
+	"$0 $unitdir /etc/rc.d/rc.inet2 | /bin/bash"
+    ]gex;
+
+    $l =~ s{
+       (\b(sh|\.)\s+)?(/etc/rc.d/rc.\w+)(\s+start)
        }[
-	repl($1,$2)
+	repl($1,$3,$4)
        ]gex;
     print $l;
 }

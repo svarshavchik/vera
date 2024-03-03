@@ -1021,6 +1021,22 @@ struct inittab_converter {
 	}
 
 	bool parse_rc_m();
+private:
+
+	//! What parse_rc_m_inet2 is getting called for
+	enum class etc_rc {
+		rc_M,		//!< \c /etc/rc.d/rc.M
+		rc_inet2	//!< \c /etc/rc.d/rc.inet2
+	};
+
+	void parse_rc_m_inet2(
+		std::istream &script,
+		etc_rc script_id,
+		std::string &last_rc_M_or_inet2,
+		inittab_entry &rc_M_target
+	);
+
+public:
 	bool finish();
 };
 
@@ -1045,7 +1061,7 @@ bool inittab_converter::parse_rc_m()
 	all_runlevels_t rc_M_target_none;
 
 	// Last converted rc.M-started script
-	std::string last_rc_M;
+	std::string last_rc_M_or_inet2;
 
 	inittab_entry rc_M_target{
 		rc_M_target_dummy,
@@ -1057,6 +1073,27 @@ bool inittab_converter::parse_rc_m()
 	rc_M_target.description =
 		"Dummy target that all rc.M/ units depend on";
 
+	parse_rc_m_inet2(
+		rc_m,
+		etc_rc::rc_M,
+		last_rc_M_or_inet2,
+		rc_M_target
+	);
+
+
+	std::sort(rc_M_target.required_by.begin(),
+		  rc_M_target.required_by.end());
+	generator.add_rc(rc_M_target);
+	return true;
+}
+
+void inittab_converter::parse_rc_m_inet2(
+	std::istream &script,
+	etc_rc script_id,
+	std::string &last_rc_M_or_inet2,
+	inittab_entry &rc_M_target
+)
+{
 	std::string line;
 
 	// "-x <string>" found in /etc/rc.d/rc.M. If we then find a
@@ -1064,7 +1101,7 @@ bool inittab_converter::parse_rc_m()
 
 	std::unordered_set<std::string> checkx;
 
-	while (std::getline(rc_m, line))
+	while (std::getline(script, line))
 	{
 		// Basic parsing into whitespace-delimited words
 		std::vector<std::string> words;
@@ -1084,6 +1121,30 @@ bool inittab_converter::parse_rc_m()
 				++b;
 			}
 			words.emplace_back(p, b);
+		}
+
+		/*
+if [ -x /etc/rc.d/rc.inet2 ]; then
+  /etc/rc.d/rc.inet2
+fi
+
+		*/
+
+		if (words.size() == 1 && script_id == etc_rc::rc_M &&
+		    words[0] == rcdir + "/rc.inet2" &&
+		    checkx.find(words[0]) != checkx.end())
+		{
+			std::ifstream rc_inet2{rcdir + "/rc.inet2"};
+
+			if (rc_inet2.is_open())
+			{
+				parse_rc_m_inet2(
+					rc_inet2,
+					etc_rc::rc_inet2,
+					last_rc_M_or_inet2,
+					rc_M_target
+				);
+			}
 		}
 
 		// Now inspect each word.
@@ -1119,25 +1180,42 @@ bool inittab_converter::parse_rc_m()
 				prev_commands_t dummy;
 				all_runlevels_t none;
 
+				std::string unit_name=script;
+
+				// ip_forward => ip-forward
+				std::replace(
+					unit_name.begin(),
+					unit_name.end(),
+					'_',
+					'-');
+
+				std::string launch="/etc/rc.d/" + script;
+
+				if (b-words.begin() >= 2 &&
+				    b[-2] == "sh")
+				{
+					launch = "sh " + launch;
+				}
+
 				inittab_entry run_rc{
 					dummy,
 					none,
-					script,
-					"/etc/rc.d/"+ script + " start"
+					unit_name,
+					launch + " start"
 				};
 
 				run_rc.stopping_command=
-					"/etc/rc.d/" + script + " stop";
+					launch + " stop";
 
 				run_rc.start_type="forking";
-				if (last_rc_M.empty())
+				if (!last_rc_M_or_inet2.empty())
 					run_rc.stops_before.push_back(
-						last_rc_M
+						last_rc_M_or_inet2
 					);
-				last_rc_M=script;
+				last_rc_M_or_inet2=unit_name;
 
 				rc_M_target.required_by.push_back(
-					"rc.M/" + script);
+					"rc.M/" + unit_name);
 				generator.add_rcm(run_rc);
 
 				continue;
@@ -1147,16 +1225,21 @@ bool inittab_converter::parse_rc_m()
 
 			if (++b != e && b->substr(0, 10) == "/etc/rc.d/")
 			{
+				/*
+
+				  /etc/rc.d/rc.M starts syslogd, but then
+				  there's also another attempt in
+				  /etc/rc.d/rc.inet2, let's ignore that one
+				*/
+
+				if (script_id == etc_rc::rc_inet2 &&
+				    *b == rcdir + "/rc.syslog")
+					continue;
+
 				checkx.insert(*b);
 			}
 		}
 	}
-
-
-	std::sort(rc_M_target.required_by.begin(),
-		  rc_M_target.required_by.end());
-	generator.add_rc(rc_M_target);
-	return true;
 }
 
 bool inittab_converter::finish()
