@@ -597,10 +597,10 @@
 	    <informalexample>
 	      <programlisting>
 # vlad status --terse
-name="system/boot":state=started:enabled=0:time=24
-name="system/inittab/c1":state=started:enabled=0:time=22:pids="1202 1223 1237 1220"
-name="system/inittab/c2":state=started:enabled=0:time=22:pids="1203"
-name="system/inittab/c3":state=started:enabled=0:time=22:pids="1204"
+name="system/boot":state="started":enabled=0:time=24
+name="system/inittab/c1":state="started":enabled=0:time=22:pids="1202 1223 1237 1220"
+name="system/inittab/c2":state="started":enabled=0:time=22:pids="1203"
+name="system/inittab/c3":state="started":enabled=0:time=22:pids="1204"
 
 # ...</programlisting>
 	    </informalexample>

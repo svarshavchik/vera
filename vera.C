@@ -1482,8 +1482,8 @@ const char *dump_pids(const container_state_info::hier_pids &processes,
 void dump_terse(const std::string &name,
 		const container_state_info &info)
 {
-	std::cout << "name=\"" << name << "\":state=" << info.state
-		  << ":enabled="
+	std::cout << "name=\"" << name << "\":state=\"" << info.state
+		  << "\":enabled="
 		  << (info.enabled ? 1:0);
 
 	if (!info.elapsed.empty())

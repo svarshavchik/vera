@@ -1,5 +1,8 @@
 2024-03-03  Sam Varshavchik  <mrsam@courier-mta.com>
 
+	* vera.C (dump_terse): "state" maybe affixed by "(manual)", so put
+	it in quotes.
+
 	* inittab.C: Improve converted unit descriptions
 
 	* proc_container_group.C: fix duplicated output to due unflushed
