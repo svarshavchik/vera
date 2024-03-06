@@ -116,13 +116,21 @@ std::tuple<external_filedesc, external_filedesc> create_fake_request();
 
 void request_status(const external_filedesc &efd);
 
-// Helper function used to receive the file descriptor.
+// Helper function used to receive the file descriptor for a plain file.
+
+// Parameter is the connection to the requester.
+//
+// Receives and returns the file descriptor.
+
+external_filedesc receive_fd(const external_filedesc &efd);
+
+// Helper function used to receive the file descriptor for a plain file.
 
 // Parameter is the connection to the requester.
 //
 // Receives and returns the file descriptor, verifying that it is IS_REG.
 
-external_filedesc request_recvfd(const external_filedesc &efd);
+external_filedesc request_regfd(const external_filedesc &efd);
 
 // Handshake: daemon: request a file descriptor
 

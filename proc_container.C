@@ -1920,7 +1920,7 @@ void proc_do_request(external_filedesc efd)
 	{
 		request_fd(efd);
 
-		auto tmp=request_recvfd(efd);
+		auto tmp=request_regfd(efd);
 
 		if (tmp)
 			proc_do_status_request(efd, tmp);

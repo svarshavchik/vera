@@ -1123,7 +1123,7 @@ void test_install()
 		request_send_fd(privsocketa, fileno(fp));
 
 		proc_do_status_request(privsocketb,
-				       request_recvfd(privsocketb));
+				       request_regfd(privsocketb));
 
 		privsocketb=nullptr;
 
@@ -1154,7 +1154,7 @@ void test_install()
 
 		request_send_fd(privsocketa, fileno(fp));
 
-		if (request_recvfd(privsocketb))
+		if (request_regfd(privsocketb))
 			throw "received special file descriptor unexpectedly";
 		fclose(fp);
 	}
@@ -3435,7 +3435,7 @@ void testparentsterm()
 		request_send_fd(privsocketa, fileno(fp));
 
 		proc_do_status_request(privsocketb,
-				       request_recvfd(privsocketb));
+				       request_regfd(privsocketb));
 
 		privsocketb=nullptr;
 

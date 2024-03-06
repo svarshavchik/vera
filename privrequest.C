@@ -165,7 +165,7 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
 	return ret;
 }
 
-external_filedesc request_recvfd(const external_filedesc &efd)
+external_filedesc receive_fd(const external_filedesc &efd)
 {
 	int fd;
 	struct msghdr msg{};
@@ -199,6 +199,15 @@ external_filedesc request_recvfd(const external_filedesc &efd)
 	memcpy(&fd, CMSG_DATA(cmsg), sizeof(fd));
 
 	auto ret=std::make_shared<external_filedescObj>(fd);
+
+	// Make sure it has FD_CLOEXEC set
+	fcntl(ret->fd, F_SETFD, FD_CLOEXEC);
+	return ret;
+}
+
+external_filedesc request_regfd(const external_filedesc &efd)
+{
+	auto ret=receive_fd(efd);
 
 	// This must be a regular file.
 

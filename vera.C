@@ -975,7 +975,7 @@ void do_pub_request(external_filedesc pubfd)
 	if (cmd == "status")
 	{
 		request_fd(pubfd);
-		auto tmp=request_recvfd(pubfd);
+		auto tmp=request_regfd(pubfd);
 
 		auto fd=try_connect_vera_priv();
 
