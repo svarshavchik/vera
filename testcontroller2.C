@@ -13,6 +13,8 @@
 #include "privrequest.H"
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -122,6 +124,13 @@ std::tuple<int, std::string> restart_or_reload(
 //
 // Execute a request, read its result.
 //
+// Invokes a callback to do the request.
+//
+// The callback receives, as a paramenter, an external_filedesc ref, that the
+// callback may pass as the stdoutcc parameter to the proc_do_request
+// overload that takes a read command, a connection file descriptor, and the
+// stdout cc file descriptor as a parameter.
+//
 // The callback gets invoked and it returns a tuple:
 //
 // - the first socket returned by create_fake_request. The callback
@@ -142,17 +151,25 @@ std::tuple<int, std::string> restart_or_reload(
 
 typedef std::tuple<external_filedesc,
 		   std::string (*)(const external_filedesc &),
-		   int (*)(const external_filedesc &)> do_test_or_restart_t;
+		   std::function<int (const external_filedesc &)>
+		   > do_test_or_restart_t;
 
-std::tuple<int, std::string> do_test_or_restart(
-	const std::function<do_test_or_restart_t()> &callback)
+std::tuple<int, std::string, std::string> do_test_or_restart(
+	const std::function<do_test_or_restart_t(external_filedesc &)>
+	&callback)
 {
-	auto [filedesc, statusfunc, waitfunc]=callback();
+	auto [stdouta, stdoutb]=create_fake_request();
+
+	auto [filedesc, statusfunc, waitfunc]=callback(stdoutb);
 
 	auto error=statusfunc(filedesc);
 
 	if (!error.empty())
-		return {1 << 8, std::move(error)};
+		return {1 << 8, std::move(error), ""};
+
+	stdoutb=nullptr;
+
+	std::string stdoutstr=read_stdoutcc(stdouta);
 
 	while (!filedesc->ready())
 	{
@@ -161,7 +178,7 @@ std::tuple<int, std::string> do_test_or_restart(
 
 	auto exitcode_received=waitfunc(filedesc);
 
-	return {exitcode_received, ""};
+	return {exitcode_received, "", std::move(stdoutstr)};
 }
 
 void test_restart()
@@ -170,8 +187,10 @@ void test_restart()
 
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	b->new_container->restarting_command="echo restarting; exit 10";
-	b->new_container->reloading_command="echo reloading; exit 9";
+	b->new_container->starting_command="echo starting-cmd; exit 0";
+	b->new_container->stopping_command="echo stopping-cmd; exit 0";
+	b->new_container->restarting_command="echo restarting-cmd; exit 10";
+	b->new_container->reloading_command="echo reloading-cmd; exit 9";
 
 	proc_containers_install({
 			b,
@@ -179,6 +198,7 @@ void test_restart()
 
 	auto ret=do_test_or_restart(
 		[]
+		(external_filedesc &stdoutcc)
 		{
 			auto [socketa, socketb] = create_fake_request();
 
@@ -189,14 +209,18 @@ void test_restart()
 				socketa, get_restart_status, wait_restart};
 		});
 
-	auto &[exitcode, message]=ret;
+	auto &[exitcode, message, output]=ret;
 
 	if (WEXITSTATUS(exitcode) != 1 ||
 	    message != "nonexistent: unknown unit")
 		throw "Unexpected result of nonexistent start";
 
+	if (output != "")
+		throw "Unexpected output of nonexistent start";
+
 	ret=do_test_or_restart(
 		[]
+		(external_filedesc &stdoutcc)
 		{
 			auto [socketa, socketb] = create_fake_request();
 
@@ -211,15 +235,43 @@ void test_restart()
 	    message != "restart: is not currently started")
 		throw "Unexpected result of non-started restart";
 
-	proc_container_start("restart");
+	{
+		auto [a, b] = create_fake_request();
+
+		auto [socketa, socketb] = create_fake_request();
+
+		socketa->write_all("restart\n");
+
+		auto [stdouta, stdoutb] = create_fake_request();
+
+		proc_do_request("start", socketb, stdoutb);
+
+		stdoutb=nullptr;
+
+		if (get_start_status(socketa) != "")
+			throw "Unexpected failure of start restarta";
+
+		socketb=nullptr;
+
+		if (read_stdoutcc(stdouta) !=
+		    "starting-cmd\n")
+		{
+			throw "Unexpected captured output of a restart";
+		}
+		while (!socketa->ready())
+			do_poll(1000);
+
+	}
 
 	ret=do_test_or_restart(
 		[]
+		(external_filedesc &stdoutcc)
 		{
 			auto [socketa, socketb] = create_fake_request();
 
-			send_restart(socketa, "restart");
-			proc_do_request(socketb);
+			socketa->write_all("restart\n");
+
+			proc_do_request("restart", socketb, stdoutcc);
 
 			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
@@ -228,8 +280,12 @@ void test_restart()
 	if (WEXITSTATUS(exitcode) != 10 || message != "")
 		throw "Unexpected result of a successful restart";
 
+	if (output != "restarting-cmd\n")
+		throw "Did not capture expected output of successful restart";
+
 	ret=do_test_or_restart(
 		[]
+		(external_filedesc &stdoutcc)
 		{
 			auto [socketa, socketb] = create_fake_request();
 
@@ -238,6 +294,7 @@ void test_restart()
 
 			auto ret2=do_test_or_restart(
 				[]
+				(external_filedesc &stdoutcc)
 				{
 					auto [socketa, socketb] =
 						create_fake_request();
@@ -250,7 +307,7 @@ void test_restart()
 						wait_restart};
 				});
 
-			auto &[exitcode, message] = ret2;
+			auto &[exitcode, message, output] = ret2;
 
 			if (WEXITSTATUS(exitcode) != 1 ||
 			    message != "restart: is already in the middle of "
@@ -261,11 +318,59 @@ void test_restart()
 			}
 
 			return do_test_or_restart_t{
+				socketa, get_reload_status,
+				wait_reload};
+		});
+
+	if (WEXITSTATUS(exitcode) != 9 || message != "")
+		throw "Unexpected result of a successful reload";
+
+	ret=do_test_or_restart(
+		[]
+		(external_filedesc &stdoutcc)
+		{
+			auto [socketa, socketb] = create_fake_request();
+
+			socketa->write_all("restart\n");
+
+			proc_do_request("reload", socketb, stdoutcc);
+
+			return do_test_or_restart_t{
 				socketa, get_reload_status, wait_reload};
 		});
 
 	if (WEXITSTATUS(exitcode) != 9 || message != "")
 		throw "Unexpected result of a successful reload";
+
+	if (output != "reloading-cmd\n")
+		throw "Did not capture expected output of a successful reload";
+
+	ret=do_test_or_restart(
+		[&]
+		(external_filedesc &stdoutcc)
+		{
+			auto [socketa, socketb] = create_fake_request();
+
+			socketa->write_all("restart\n");
+
+			proc_do_request("stop", socketb, stdoutcc);
+
+			populated(b->new_container, false);
+			return do_test_or_restart_t{
+				socketa, get_restart_status,
+				[]
+				(const external_filedesc &efd)
+				{
+					wait_stop(efd);
+					return 0;
+				}};
+		});
+
+	if (WEXITSTATUS(exitcode) != 0 || message != "")
+		throw "Unexpected result of a successful stop";
+
+	if (output != "stopping-cmd\n")
+		throw "Did not capture expected output of a successful stop";
 }
 
 void test_envvars()
@@ -303,6 +408,7 @@ void test_envvars()
 
 	auto ret=do_test_or_restart(
 		[]
+		(external_filedesc &stdoutcc)
 		{
 			auto [socketa, socketb] = create_fake_request();
 
@@ -314,7 +420,7 @@ void test_envvars()
 			};
 		});
 
-	auto &[exitcode, message]=ret;
+	auto &[exitcode, message, output]=ret;
 
 	if (WEXITSTATUS(exitcode) != 0 || message != "")
 		throw "Unexpected result of switch to networking";
@@ -332,6 +438,7 @@ void test_envvars()
 
 	ret=do_test_or_restart(
 		[]
+		(external_filedesc &stdoutcc)
 		{
 			auto [socketa, socketb] = create_fake_request();
 

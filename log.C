@@ -7,6 +7,7 @@
 #include "messages.H"
 #include "proc_container.H"
 #include "proc_container_timer.H"
+#include <string.h>
 #include <functional>
 #include <iostream>
 #include <sstream>
@@ -21,16 +22,11 @@ void log_state_change(const proc_container &pc,
 		[&]
 		(const auto &s) -> const char *
 		{
-#ifdef UNIT_TEST
-			logged_state_changes.push_back(
-				pc->name + ": "
-				+ static_cast<std::string>(s));
-#endif
 			return s;
 		}, pcs);
 
 #ifdef UNIT_TEST
-	std::cout << pc->name << ": " << o.str() << "\n";
+	log_container_message(pc, o.str());
 #else
 	log_message(o.str() + " " + (
 			    pc->description.empty() ? pc->name:pc->description
@@ -57,8 +53,7 @@ void log_container_failed_process(const proc_container &pc, int wstatus)
 void log_container_error(const proc_container &pc, const std::string &msg)
 {
 #ifdef UNIT_TEST
-	logged_state_changes.push_back(pc->name +": " + msg);
-	std::cout << pc->name << ": " << msg << "\n";
+	log_container_message(pc, msg);
 #else
 	(*log_to_syslog)(LOG_ERR, pc->name.c_str(), msg.c_str());
 #endif
@@ -67,8 +62,16 @@ void log_container_error(const proc_container &pc, const std::string &msg)
 void log_container_message(const proc_container &pc, const std::string &msg)
 {
 #ifdef UNIT_TEST
-	logged_state_changes.push_back(pc->name +": " + msg);
-	std::cout << pc->name << ": " << msg << "\n";
+	log_message(pc->name + ": " + msg);
+#else
+	(*log_to_syslog)(LOG_INFO, pc->name.c_str(), msg.c_str());
+#endif
+}
+
+void log_container_output(const proc_container &pc, const std::string &msg)
+{
+#ifdef UNIT_TEST
+	log_message(pc->name + ": " + msg);
 #else
 	(*log_to_syslog)(LOG_INFO, pc->name.c_str(), msg.c_str());
 #endif

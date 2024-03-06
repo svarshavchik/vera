@@ -51,6 +51,12 @@ proc_container_set current_proc_containers();
 
 void proc_do_request(external_filedesc);
 
+//! Process a command from a new connection, with a stdout CC to a filedesc
+
+void proc_do_request(std::string command,
+		     external_filedesc cmd,
+		     external_filedesc requester_stdout);
+
 //! Process the STATUS request, writing the result to this file descriptor
 
 //! First parameter is the requester's connection.

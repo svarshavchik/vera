@@ -551,7 +551,7 @@ struct signal_poller {
 				);
 
 				get_containers_info(NULL)->start(
-					SYSTEM_PREFIX SIGHUP_UNIT, efd
+					SYSTEM_PREFIX SIGHUP_UNIT, efd, {}
 				);
 			}
 			return;
@@ -567,7 +567,7 @@ struct signal_poller {
 				);
 
 				get_containers_info(NULL)->start(
-					SYSTEM_PREFIX SIGINT_UNIT, efd
+					SYSTEM_PREFIX SIGINT_UNIT, efd, {}
 				);
 			}
 			return;
@@ -583,7 +583,7 @@ struct signal_poller {
 				);
 
 				get_containers_info(NULL)->start(
-					SYSTEM_PREFIX SIGWINCH_UNIT, efd
+					SYSTEM_PREFIX SIGWINCH_UNIT, efd, {}
 				);
 			}
 			return;
@@ -613,26 +613,30 @@ struct signal_poller {
 				if (status == 'F')
 				{
 					c->start(
-						SYSTEM_PREFIX PWRFAIL_UNIT, efd
+						SYSTEM_PREFIX PWRFAIL_UNIT, efd,
+						{}
 					);
 				}
 				else
 				{
 					c->stop(
-						SYSTEM_PREFIX PWRFAIL_UNIT, efd
+						SYSTEM_PREFIX PWRFAIL_UNIT, efd,
+						{}
 					);
 				}
 
 				if (status == 'O')
 				{
 					c->start(
-						SYSTEM_PREFIX PWROK_UNIT, efd
+						SYSTEM_PREFIX PWROK_UNIT, efd,
+						{}
 					);
 				}
 				else
 				{
 					c->stop(
-						SYSTEM_PREFIX PWROK_UNIT, efd
+						SYSTEM_PREFIX PWROK_UNIT, efd,
+						{}
 					);
 				}
 
@@ -640,14 +644,14 @@ struct signal_poller {
 				{
 					c->start(
 						SYSTEM_PREFIX PWRFAILNOW_UNIT,
-						efd
+						efd, {}
 					);
 				}
 				else
 				{
 					c->stop(
 						SYSTEM_PREFIX PWRFAILNOW_UNIT,
-						efd
+						efd, {}
 					);
 				}
 			}
@@ -1847,13 +1851,36 @@ void proc_do_request(external_filedesc efd)
 
 	auto ln=efd->readln();
 
+	if (ln != "cc")
+	{
+		proc_do_request(std::move(ln), std::move(efd), {});
+		return;
+	}
+
+	request_fd(efd);
+
+	auto requester_stdout=receive_fd(efd);
+
+	if (!requester_stdout)
+		return;
+
+	auto cmd=efd->readln();
+
+	proc_do_request(std::move(cmd), std::move(efd),
+			std::move(requester_stdout));
+}
+
+void proc_do_request(std::string ln,
+		     external_filedesc efd,
+		     external_filedesc requester_stdout)
+{
 	if (ln == "start")
 	{
 		auto name=efd->readln();
 
 		get_containers_info(nullptr)->start(
 			name,
-			efd
+			efd, std::move(requester_stdout)
 		);
 		return;
 	}
@@ -1864,20 +1891,22 @@ void proc_do_request(external_filedesc efd)
 
 		get_containers_info(nullptr)->stop(
 			name,
-			efd
+			efd, std::move(requester_stdout)
 		);
 		return;
 	}
 
 	if (ln == "restart")
 	{
-		get_containers_info(nullptr)->restart(efd);
+		get_containers_info(nullptr)->restart(
+			efd, std::move(requester_stdout));
 		return;
 	}
 
 	if (ln == "reload")
 	{
-		get_containers_info(nullptr)->reload(efd);
+		get_containers_info(nullptr)->reload(
+			efd, std::move(requester_stdout));
 		return;
 	}
 
@@ -2178,7 +2207,8 @@ socket before it gets closed.
 
 void current_containers_infoObj::start(
 	const std::string &name,
-	external_filedesc requester)
+	external_filedesc requester,
+	external_filedesc requester_stdout)
 {
 	auto iter=containers.find(name);
 
@@ -2315,7 +2345,10 @@ void current_containers_infoObj::start(
 	// Save the connection that requested the container start in
 	// the state_starting.
 
-	run_info.state.emplace<state_starting>(false, requester);
+	run_info.state.emplace<state_starting>(
+		false, requester,
+		std::move(requester_stdout)
+	);
 
 	requester->write_all("\n");
 	log_state_change(pc, run_info.state);
@@ -2326,7 +2359,8 @@ void current_containers_infoObj::start(
 	{
 		auto &[pc, run_info] = *iter;
 
-		run_info.state.emplace<state_starting>(true, nullptr);
+		run_info.state.emplace<state_starting>(true, nullptr,
+						       nullptr);
 
 		log_state_change(pc, run_info.state);
 	}
@@ -2380,8 +2414,10 @@ struct current_containers_infoObj::stop_eligibility {
 };
 
 
-void current_containers_infoObj::stop(const std::string &name,
-				      external_filedesc requester)
+void current_containers_infoObj::stop(
+	const std::string &name,
+	external_filedesc requester,
+	external_filedesc requester_stdout)
 {
 	auto iter=containers.find(name);
 
@@ -2395,18 +2431,29 @@ void current_containers_infoObj::stop(const std::string &name,
 
 	if (requester)
 		requester->write_all("\n");
-	stop_with_all_requirements(iter, requester);
+	stop_with_all_requirements(
+		iter, requester,
+		std::move(requester_stdout));
 
 	find_start_or_stop_to_do(); // We should find something now.
 }
 
-void current_containers_infoObj::log(const std::string &name,
-				     const std::string &message)
+void current_containers_infoObj::log_output(const std::string &name)
 {
 	auto iter=containers.find(name);
 
-	if (iter != containers.end())
-		log_container_message(iter->first, message);
+	if (iter != containers.end() &&
+	    iter->second.group)
+	{
+		get_requester_stdout gro;
+
+		std::visit(gro, iter->second.state);
+
+		iter->second.group->log_output(
+			iter->first,
+			gro.requester_stdout
+		);
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -2422,7 +2469,8 @@ void current_containers_infoObj::log(const std::string &name,
 
 void current_containers_infoObj::stop_with_all_requirements(
 	current_container iter,
-	external_filedesc requester)
+	external_filedesc requester,
+	external_filedesc requester_stdout)
 {
 	auto pc=std::get<0>(*iter);
 
@@ -2665,6 +2713,9 @@ void current_containers_infoObj::stop_with_all_requirements(
 						state.requesters.push_back(
 							requester
 						);
+					state.requester_stdout = std::move(
+						requester_stdout
+					);
 				}
 			}, iter->second.state);
 
@@ -3144,7 +3195,7 @@ void current_containers_infoObj::do_start_runner(
 			cc->first,
 			_("attempting to start a container that's not in a "
 			  "pending start state"));
-		stop_with_all_requirements(cc, {});
+		stop_with_all_requirements(cc, {}, {});
 		return;
 	}
 
@@ -3194,7 +3245,7 @@ void current_containers_infoObj::do_start_runner(
 
 		if (failed)
 		{
-			stop_with_all_requirements(cc, {});
+			stop_with_all_requirements(cc, {}, {});
 			return;
 		}
 	}
@@ -3225,7 +3276,7 @@ void current_containers_infoObj::do_start_runner(
 					));
 				return;
 			}
-			stop_with_all_requirements(cc, {});
+			stop_with_all_requirements(cc, {}, {});
 			return;
 		}
 
@@ -3263,7 +3314,7 @@ void current_containers_infoObj::do_start_runner(
 					pc,
 					_("start process timed out")
 				);
-				me->stop_with_all_requirements(cc, {});
+				me->stop_with_all_requirements(cc, {}, {});
 			}
 		);
 
@@ -3369,7 +3420,7 @@ void current_containers_infoObj::starting_command_finished(
 		// if needed.
 		run_info.state.emplace<state_started>(for_dependency);
 
-		stop_with_all_requirements(cc, {});
+		stop_with_all_requirements(cc, {}, {});
 	}
 }
 
@@ -3571,6 +3622,62 @@ struct current_containers_infoObj::stop_or_terminate_helper {
 	}
 };
 
+/*! Emplace a proc_container_state to a stopping_state
+
+  If it's already in a stopping_state, then preserve the former stopping
+  state's requesters and monitor object.
+
+  An emplace_state_stopping is default-constructed. set() gets called with
+  the existing proc_container_state as its first parameter, and the
+  remaining variadic parameters followed to "emplace<state_stopping>".
+
+ */
+
+struct emplace_state_stopping {
+
+	//! The connections that requested this container to get stopped.
+	std::list<external_filedesc> requesters;
+
+	//! Requester's stdout cc
+
+	external_filedesc requester_stdout;
+
+	template<typename T> void operator()(T &)
+	{
+	}
+
+	void operator()(state_stopping &ss)
+	{
+		requesters=std::move(ss.requesters);
+		requester_stdout=std::move(ss.requester_stdout);
+	}
+
+	void initialize(proc_container_state &state)
+	{
+		std::visit(*this, state);
+	}
+
+	void finalize(state_stopping &ss)
+	{
+		ss.requesters=std::move(requesters);
+		ss.requester_stdout=std::move(requester_stdout);
+	}
+
+	template<typename ...Args> state_stopping &set(
+		proc_container_state &state, Args && ...args)
+	{
+		initialize(state);
+
+		auto &ss=state.emplace<state_stopping>(
+			std::forward<Args>(args)...
+		);
+
+		finalize(ss);
+
+		return ss;
+	}
+};
+
 void current_containers_infoObj::stop_or_terminate_helper::operator()(
 	state_started &) const
 {
@@ -3579,7 +3686,9 @@ void current_containers_infoObj::stop_or_terminate_helper::operator()(
 		[]
 		(proc_container_state &state) ->state_stopping &
 		{
-			return state.emplace<state_stopping>(
+			emplace_state_stopping sss;
+
+			return sss.set(state,
 				std::in_place_type_t<
 				stop_pending>{}
 			);
@@ -3728,7 +3837,10 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 				}
 			);
 
-			return state.emplace<state_stopping>(
+			emplace_state_stopping sss;
+
+			return sss.set(
+				state,
 				std::in_place_type_t<stop_running>{},
 				runner,
 				timer
@@ -3785,7 +3897,10 @@ void current_containers_infoObj::do_remove(const current_container &cc,
 		[&]
 		(proc_container_state &state) -> state_stopping &
 		{
-			return state.emplace<state_stopping>(
+			emplace_state_stopping sss;
+
+			return sss.set(
+				state,
 				std::in_place_type_t<stop_removing>{},
 				create_sigkill_timer(pc),
 				send_sigkill
@@ -3958,7 +4073,11 @@ void current_containers_infoObj::stopped(const std::string &s)
 
 	if (run_info.group)
 	{
-		if (run_info.group->cgroups_try_rmdir())
+		get_requester_stdout gro;
+
+		std::visit(gro, cc->second.state);
+
+		if (run_info.group->cgroups_try_rmdir(pc, gro.requester_stdout))
 		{
 			cc->second.group.reset();
 		}
@@ -4024,7 +4143,7 @@ void current_containers_infoObj::stopped(const std::string &s)
 
 		if (!std::holds_alternative<state_stopping>(run_info.state))
 		{
-			stop(pc->name, {});
+			stop(pc->name, {}, {});
 			return;
 		}
 	}
@@ -4047,25 +4166,30 @@ void current_containers_infoObj::stopped(const std::string &s)
 }
 
 void current_containers_infoObj::restart(
-	const external_filedesc &requester
+	const external_filedesc &requester,
+	external_filedesc requester_stdout
 )
 {
 	return reload_or_restart(requester,
+				 std::move(requester_stdout),
 				 &proc_containerObj::restarting_command,
 				 _(": is not restartable\n"));
 }
 
 void current_containers_infoObj::reload(
-	const external_filedesc &requester
+	const external_filedesc &requester,
+	external_filedesc requester_stdout
 )
 {
 	return reload_or_restart(requester,
+				 std::move(requester_stdout),
 				 &proc_containerObj::reloading_command,
 				 _(": is not reloadable\n"));
 }
 
 void current_containers_infoObj::reload_or_restart(
 	const external_filedesc &requester,
+	external_filedesc requester_stdout,
 	std::string proc_containerObj::*command,
 	const char *no_command_error)
 {
@@ -4122,6 +4246,7 @@ void current_containers_infoObj::reload_or_restart(
 			auto &started=std::get<state_started>(run_info.state);
 
 			started.reload_or_restart_runner=nullptr;
+			started.requester_stdout=nullptr;
 
 			std::ostringstream o;
 
@@ -4129,6 +4254,8 @@ void current_containers_infoObj::reload_or_restart(
 			o << exit_status << "\n";
 			requester->write_all(o.str());
 		});
+
+	started.requester_stdout=std::move(requester_stdout);
 }
 
 void proc_containerObj::compare_and_log(const proc_container &new_container)
@@ -4270,7 +4397,7 @@ proc_container current_containers_infoObj::alternate_runmode_process_switch(
 				return;
 
 			run_info.state.emplace<state_starting>(
-				true, nullptr
+				true, nullptr, nullptr
 			);
 			log_state_change(pc, run_info.state);
 		}

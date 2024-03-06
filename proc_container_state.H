@@ -26,8 +26,38 @@ struct state_stopped {
 	const proc_container_timer *timer() const { return nullptr; }
 };
 
+//! A process container state that's CCing the output from the container
+
+struct state_requester_stdout {
+
+	//! The requester's stdout pipe
+
+	external_filedesc requester_stdout;
+
+};
+
+/*! A visitor that retrieves the container's requester_stdout
+
+Returns a file descriptor to a pipe to the standard output of the command
+that started/stopped/restarted/reloaded a container.
+
+If the container's state is derived from state_requester_stdout, extract it.
+*/
+
+struct get_requester_stdout {
+
+	external_filedesc requester_stdout;
+
+	template<typename T> void operator()(T &t)
+	{
+		if constexpr (std::is_base_of_v<state_requester_stdout, T>) {
+			this->requester_stdout=t.requester_stdout;
+		}
+	}
+};
+
 //! A process container that's starting
-struct state_starting {
+struct state_starting : state_requester_stdout {
 
 	//! Starting this container because it is a dependency.
 
@@ -37,8 +67,11 @@ struct state_starting {
 
 	state_starting(
 		bool dependency,
-		external_filedesc requester
-	) : dependency{dependency}
+		external_filedesc requester,
+		external_filedesc requester_stdout
+	) : state_requester_stdout{
+			std::move(requester_stdout)
+		}, dependency{dependency}
 	{
 		if (requester)
 		{
@@ -63,7 +96,7 @@ struct state_starting {
 };
 
 //! A process container that's started
-struct state_started {
+struct state_started : state_requester_stdout {
 
 	bool dependency;
 
@@ -182,7 +215,7 @@ typedef std::variant<stop_pending, stop_running,
 		     stop_removing> stopping_phase;
 
 //! A process container that's stopping
-struct state_stopping {
+struct state_stopping : state_requester_stdout {
 
 	//! Its current phase
 	stopping_phase phase;

@@ -16,6 +16,7 @@ noinst_PROGRAMS=\
 	testcontroller2						\
 	testcontroller2fdleak					\
 	testcontroller3						\
+	testcontroller4						\
 	testdepcomputations 					\
 	testhook						\
 	testinittab						\
@@ -118,6 +119,9 @@ testcontroller2fdleak_SOURCES=testcontroller2fdleak.C
 testcontroller3_SOURCES=testcontroller3.C unit_test.C
 testcontroller3_LDADD=libvera.a @YAMLLIBS@
 
+testcontroller4_SOURCES=testcontroller4.C unit_test.C
+testcontroller4_LDADD=libvera.a @YAMLLIBS@ -lpthread
+
 testdepcomputations_SOURCES=testdepcomputations.C unit_test.C
 testdepcomputations_LDADD=libvera.a @YAMLLIBS@
 
@@ -181,6 +185,7 @@ check-am:
 	./testcontroller3 respawn2
 	./testcontroller3 respawn3 "$(VALGRIND)"
 	./testcontroller3 respawn4
+	./testcontroller4
 	$(VALGRIND) ./testcontroller3 testnoreexec
 	export VALGRIND='$(VALGRIND)'; \
 		export srcdir=$(srcdir); \

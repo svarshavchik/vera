@@ -91,8 +91,11 @@ bool proc_container_group_data::cgroups_register()
 	return true;
 }
 
-bool proc_container_group::cgroups_try_rmdir()
+bool proc_container_group::cgroups_try_rmdir(
+	const proc_container &pc,
+	const external_filedesc &requester_stdout)
 {
+	log_output(pc, requester_stdout);
 	auto dir=cgroups_dir();
 
 	unlink(cgroup_events().c_str());
@@ -108,6 +111,39 @@ bool proc_container_group::cgroups_try_rmdir()
 	);
 
 	return true;
+}
+
+std::string read_stdoutcc(const external_filedesc &stdoutcc)
+{
+	std::string s;
+
+	char buffer[8192];
+	ssize_t l;
+
+	fcntl(stdoutcc->fd, F_SETFL, O_NONBLOCK);
+
+	for (;;)
+	{
+		l=read(stdoutcc->fd, buffer, sizeof(buffer));
+
+		if (l == 0)
+			break;
+
+		if (l == -1)
+		{
+			if (errno == EAGAIN)
+			{
+				do_poll(1000);
+				continue;
+			}
+
+			throw "read from stdoutcc failed unexpectedly.";
+		}
+
+		s.insert(s.end(), buffer, buffer+l);
+	}
+
+	return s;
 }
 
 void populated(const proc_container &container, bool isit)

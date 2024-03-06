@@ -239,9 +239,6 @@ global_inotify &get_inotify();
 
 struct global_inotify : global_inotify_base {
 
-private:
-	polledfd this_is_the_polled_fd;
-
 public:
 
 	//! All currently active descriptors
@@ -257,6 +254,16 @@ public:
 	//! Waiting rms
 
 	std::unordered_set<int> pending_rms;
+
+private:
+
+	/*! The inotify file descriptor
+
+	  This is declared last, so it gets destroyed first, before all the
+	  maps are, because polledfd's destructor may end up accessing them.
+	*/
+
+	polledfd this_is_the_polled_fd;
 
 public:
 

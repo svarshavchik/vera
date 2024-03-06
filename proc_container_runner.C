@@ -54,6 +54,17 @@ void proc_container_runnerObj::invoke(int wstatus) const
 	if (info.cc == me->containers.end())
 		return;
 
+	// Process any buffered output that's stuck.
+	if (info.cc->second.group)
+	{
+		get_requester_stdout gro;
+
+		std::visit(gro, info.cc->second.state);
+
+		info.cc->second.group->log_output(info.cc->first,
+						  gro.requester_stdout);
+	}
+
 	done(info, wstatus);
 	me->find_start_or_stop_to_do();
 }

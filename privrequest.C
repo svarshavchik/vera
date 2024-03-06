@@ -11,6 +11,7 @@
 #include <sstream>
 #include <fstream>
 #include <fcntl.h>
+#include <stdio.h>
 #include <locale>
 #include <algorithm>
 #include <string_view>
@@ -216,6 +217,9 @@ external_filedesc request_regfd(const external_filedesc &efd)
 	if (fstat(ret->fd, &stat_buf) < 0 ||
 	    !S_ISREG(stat_buf.st_mode))
 		return nullptr;
+
+	// Make sure it has FD_CLOEXEC set
+	fcntl(ret->fd, F_SETFD, FD_CLOEXEC);
 
 	return ret;
 }
@@ -584,6 +588,20 @@ std::tuple<external_filedesc, external_filedesc> create_fake_request()
 	}
 
 	return efd;
+}
+
+// Have output from started/stopped/restarting/reloading units go to my
+// standard output.
+
+external_filedesc create_stdoutcc(const external_filedesc &efd)
+{
+	auto [a, b]=create_fake_request();
+
+	efd->write_all("cc\n");
+	request_fd_wait(efd);
+	request_send_fd(efd, b->fd);
+
+	return a;
 }
 
 void send_setenv(const external_filedesc &fd,

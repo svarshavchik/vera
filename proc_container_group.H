@@ -10,6 +10,7 @@
 #include "privrequest.H"
 #include <tuple>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <signal.h>
 
@@ -86,6 +87,12 @@ struct proc_container_group_data {
 		//! Scratch buffer used for reading.
 		std::string &scratch_buffer
 	);
+
+	void log_output(const proc_container &pc,
+			const external_filedesc &requester_stdout);
+
+private:
+	std::string buffer;
 };
 
 /*!
@@ -128,7 +135,8 @@ public:
 	proc_container_group &operator=(proc_container_group &&);
 
 	//! Try to rmdir my cgroups directory.
-	bool cgroups_try_rmdir();
+	bool cgroups_try_rmdir(const proc_container &pc,
+			       const external_filedesc &requester_stdout);
 
 	//! Send a signal to all processes in the group
 
@@ -166,6 +174,7 @@ public:
 
 	using proc_container_group_data::populated;
 
+	using proc_container_group_data::log_output;
 	///////////////////////////////////////////////////////////////////
 	//
 	// Saving and restoring state for a re-exec.

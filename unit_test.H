@@ -23,6 +23,8 @@ extern std::vector<std::string> logged_runners;
 extern pid_t next_pid;
 extern bool all_forks_fail;
 
+std::string read_stdoutcc(const external_filedesc &stdoutcc);
+
 void populated(const proc_container &container, bool isit);
 
 std::string populated_sh(const proc_container &container, bool isit=false);

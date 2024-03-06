@@ -21,6 +21,8 @@ void log_container_error(const proc_container &, const std::string &);
 
 void log_container_message(const proc_container &, const std::string &);
 
+void log_container_output(const proc_container &, const std::string &);
+
 void log_message(const std::string &);
 
 time_t log_current_time();

@@ -185,8 +185,12 @@ bool proc_container_group_data::cgroups_dir_create()
 
 // Try to remove the cgroup
 
-bool proc_container_group::cgroups_try_rmdir()
+bool proc_container_group::cgroups_try_rmdir(
+	const proc_container &pc,
+	const external_filedesc &requester_stdout)
 {
+	log_output(pc, requester_stdout); // Flush out any output.
+
 	auto dir=cgroups_dir();
 
 	if (rmdir(dir.c_str()) < 0)
@@ -702,6 +706,8 @@ void sigusr1()
 
 void vera_init()
 {
+	bool is_pid_1=getpid() == 1;
+
 	update_current_time();
 
 	bool initial;
@@ -765,7 +771,7 @@ void vera_init()
 	{
 		log_message("starting");
 
-		if (getpid() == 1)
+		if (is_pid_1)
 		{
 			// Disable ctrlaltdel
 
@@ -834,7 +840,7 @@ void vera_init()
 			}),
 		container_install::initial);
 
-	if (initial)
+	if (initial && is_pid_1)
 	{
 		// Create a fake request to switch to the default runlevel
 		//
@@ -1282,6 +1288,11 @@ static void vlad_start(const std::string &unit)
 {
 	auto fd=connect_vera_priv();
 
+	external_filedesc stdoutcc;
+
+	if (!nowait_flag)
+		stdoutcc=create_stdoutcc(fd);
+
 	send_start(fd, unit);
 
 	auto ret=get_start_status(fd);
@@ -1294,6 +1305,8 @@ static void vlad_start(const std::string &unit)
 
 	if (nowait_flag)
 		return;
+
+	forward_carbon_copy(stdoutcc, 1);
 
 	if (!get_start_result(fd))
 	{
@@ -1517,6 +1530,11 @@ void vlad(std::vector<std::string> args)
 	{
 		auto fd=connect_vera_priv();
 
+		external_filedesc stdoutcc;
+
+		if (!nowait_flag)
+			stdoutcc=create_stdoutcc(fd);
+
 		send_stop(fd, args[1]);
 
 		auto ret=get_stop_status(fd);
@@ -1530,6 +1548,8 @@ void vlad(std::vector<std::string> args)
 		if (nowait_flag)
 			return;
 
+		forward_carbon_copy(stdoutcc, 1);
+
 		wait_stop(fd);
 		return;
 	}
@@ -1537,6 +1557,11 @@ void vlad(std::vector<std::string> args)
 	if (args.size() == 2 && args[0] == "restart")
 	{
 		auto fd=connect_vera_priv();
+
+		external_filedesc stdoutcc;
+
+		if (!nowait_flag)
+			stdoutcc=create_stdoutcc(fd);
 
 		send_restart(fd, args[1]);
 
@@ -1550,6 +1575,8 @@ void vlad(std::vector<std::string> args)
 
 		if (nowait_flag)
 			return;
+
+		forward_carbon_copy(stdoutcc, 1);
 
 		int rc=wait_restart(fd);
 
@@ -1578,6 +1605,11 @@ void vlad(std::vector<std::string> args)
 	{
 		auto fd=connect_vera_priv();
 
+		external_filedesc stdoutcc;
+
+		if (!nowait_flag)
+			stdoutcc=create_stdoutcc(fd);
+
 		send_reload(fd, args[1]);
 
 		auto ret=get_reload_status(fd);
@@ -1590,6 +1622,8 @@ void vlad(std::vector<std::string> args)
 
 		if (nowait_flag)
 			return;
+
+		forward_carbon_copy(stdoutcc, 1);
 
 		int rc=wait_reload(fd);
 

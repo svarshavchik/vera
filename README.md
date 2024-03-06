@@ -19,8 +19,8 @@ containers)
 * Container units' specification files use a basic, simple, documented
 YAML syntax
 
-* Includes a script for wrapping /etc/inittab and /etc/rc.d/rc?.d
-entries in vera's container units
+* Includes a script for migrating /etc/inittab and /etc/rc.d/rc?.d
+entries to vera's container units
 
 * A fully fleshed out mechanism for defining dependencies between containers,
 which can be started at the same time, dependencies permitting
@@ -44,4 +44,4 @@ for build instructions
 - Instead of compiling and building, the package for Slackware 15 is also
 available, but see the INSTALL file as well for additional information
 
-- PGP keys: https://www.courier-mta.org/KEYS.bin
+- PGP verification keys: https://www.courier-mta.org/KEYS.bin

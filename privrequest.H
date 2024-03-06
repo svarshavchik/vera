@@ -144,6 +144,8 @@ void request_fd_wait(const external_filedesc &efd);
 
 void request_send_fd(const external_filedesc &efd, int statusfd);
 
+external_filedesc create_stdoutcc(const external_filedesc &efd);
+
 struct container_state_info {
 	std::string state;
 

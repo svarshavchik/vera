@@ -447,16 +447,20 @@ public:
 	void status(const external_filedesc &efd);
 
 	void start(const std::string &name,
-		   external_filedesc requester);
+		   external_filedesc requester,
+		   external_filedesc requester_stdout);
 
-	void restart(const external_filedesc &requester);
+	void restart(const external_filedesc &requester,
+		     external_filedesc requester_stdout);
 
-	void reload(const external_filedesc &requester);
+	void reload(const external_filedesc &requester,
+		    external_filedesc requester_stdout);
 
 
 private:
 	void reload_or_restart(
 		const external_filedesc &requester,
+		external_filedesc requester_stdout,
 		std::string proc_containerObj::*command,
 		const char *no_command_error);
 
@@ -464,12 +468,14 @@ private:
 	struct stop_eligibility;
 public:
 	void stop(const std::string &name,
-		   external_filedesc requester);
+		  external_filedesc requester,
+		  external_filedesc requester_stdout);
 
 private:
 	void stop_with_all_requirements(
 		current_container iter,
-		external_filedesc requester
+		external_filedesc requester,
+		external_filedesc requester_stdout
 	);
 
 public:
@@ -492,7 +498,7 @@ public:
 
 	//! The pipe attached its processes's standard output and error
 	//! winds up here.
-	void log(const std::string &name, const std::string &message);
+	void log_output(const std::string &name);
 
 	//! Reexec ourselves
 

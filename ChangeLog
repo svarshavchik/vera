@@ -1,3 +1,10 @@
+2024-03-05  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 0.90
+
+	* When running start/stop/reload/restart, copy the output
+	from the container to the requester's shell's standard output.
+
 2024-03-03  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* vera.C (dump_terse): "state" maybe affixed by "(manual)", so put

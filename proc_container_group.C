@@ -166,52 +166,14 @@ bool proc_container_group_data::install(
 		[all_containers=std::weak_ptr<current_containers_infoObj>{
 				create_info.all_containers
 			},
-			name=container->name,
-			buffer=std::string{}]
+			name=container->name]
 		(int fd)
 		mutable
 		{
-			char buf[256];
+			auto l=all_containers.lock();
 
-			ssize_t n;
-
-			while ((n=read(fd, buf, sizeof(buf))) > 0)
-			{
-				buffer.insert(buffer.end(),
-					      buf, buf+n);
-
-				auto b=buffer.begin(), e=buffer.end();
-
-				while (1)
-				{
-					if (b == e)
-					{
-						buffer.clear();
-						break;
-					}
-
-					auto p=std::find(b, e, '\n');
-
-					if (p == e)
-					{
-						buffer.erase(
-							buffer.begin(),
-							b
-						);
-						break;
-					}
-					std::string line{b, p};
-
-					b=++p;
-
-					auto l=all_containers.lock();
-
-					if (!l)
-						continue;
-
-					l->log(name, line);
-				}
-			}
+			if (l)
+				l->log_output(name);
 		}};
 
 	std::string scratch_buffer;
@@ -249,6 +211,50 @@ bool proc_container_group_data::install(
 		}};
 
 	return cgroup_eventsfdhandler;
+}
+
+void proc_container_group_data::log_output(
+	const proc_container &pc,
+	const external_filedesc &requester_stdout)
+{
+	char buf[256];
+
+	ssize_t l;
+
+	while ((l=read(stdouterrpipe[0], buf, sizeof(buf))) > 0)
+	{
+		buffer.insert(buffer.end(), buf, buf+l);
+
+		if (requester_stdout)
+			requester_stdout->write_all({buf, buf+l});
+
+		auto b=buffer.begin(), e=buffer.end();
+
+		while (1)
+		{
+			if (b == e)
+			{
+				buffer.clear();
+				break;
+			}
+
+			auto p=std::find(b, e, '\n');
+
+			if (p == e)
+			{
+				buffer.erase(
+					buffer.begin(),
+					b
+				);
+				break;
+			}
+			std::string line{b, p};
+
+			b=++p;
+
+			log_container_output(pc, line);
+		}
+	}
 }
 
 bool proc_container_group::forked()
