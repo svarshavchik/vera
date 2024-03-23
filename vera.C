@@ -17,6 +17,7 @@
 #include "privrequest.H"
 #include "inittab.H"
 #include "hook.H"
+#include "switchlog.H"
 #include "verac.h"
 
 #include <unistd.h>
@@ -43,6 +44,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <charconv>
 
 #define PUB_PROCESS_SIGNATURE "[public process]"
 
@@ -556,17 +558,39 @@ void log_to_stdout(int level, const char *program,
 	std::cout << program << ": " << message << "\n" << std::flush;
 }
 
+static std::optional<std::ofstream> current_switchlog;
+
 void switchlog_start()
 {
+	current_switchlog.reset();
+	current_switchlog.emplace();
+	current_switchlog->imbue(std::locale{"C"});
+
+	switchlog_create(
+		SWITCHLOGDIR,
+		*current_switchlog
+	);
+
+	if (!current_switchlog->is_open())
+		current_switchlog.reset();
 }
 
 std::ostream *get_current_switchlog()
 {
-	return nullptr;
+	if (!current_switchlog)
+		return nullptr;
+
+	return &*current_switchlog;
 }
 
 void switchlog_stop()
 {
+	if (!current_switchlog)
+		return;
+
+	current_switchlog->close();
+	current_switchlog.reset();
+	switchlog_save(SWITCHLOGDIR, log_message);
 }
 
 void proc_container_group::cgroups_sendsig(pid_t p, int sig)
@@ -812,6 +836,25 @@ void vera_init()
 			{
 				log_message(warning_message);
 			});
+
+		{
+			unsigned switchlogdays=7;
+
+			auto iter=environconfigvars.find("SWITCHLOGDAYS");
+
+			if (iter != environconfigvars.end())
+			{
+				const char *p=iter->second.c_str();
+
+				std::from_chars(p, p+iter->second.size(),
+						switchlogdays);
+			}
+			switchlog_purge(
+				SWITCHLOGDIR,
+				switchlogdays,
+				log_message);
+		}
+
 	}
 
 	// Garbage collection on the configuration directory.
@@ -1947,6 +1990,38 @@ void vlad(std::vector<std::string> args)
 
 		vlad_switch(args[0]);
 	}
+
+	if (args.size() == 1 && args[0] == "logs")
+	{
+		auto logs=enumerate_switchlogs(SWITCHLOGDIR);
+
+		size_t n=logs.size();
+
+		for (auto &l:logs)
+		{
+			struct tm timestamp;
+
+			localtime_r(&l.log_end, &timestamp);
+
+			auto name=l.switchname;
+
+			if (name.substr(0, sizeof(RUNLEVEL_PREFIX)-1) ==
+			    RUNLEVEL_PREFIX)
+			{
+				// Should be the case
+				name=name.substr(sizeof(RUNLEVEL_PREFIX)-1);
+			}
+			std::cout << std::setw(8) << n-- << " "
+				  << std::put_time(&timestamp,
+						   "%Y-%m-%d %H:%M:%S")
+				  << " "
+				  << name
+				  << "\n";
+		}
+		std::cout << std::flush;
+		exit(0);
+	}
+
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);
 }

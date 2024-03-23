@@ -6,6 +6,10 @@
 #define switchlog_h
 
 #include <iostream>
+#include <fstream>
+#include <functional>
+#include <filesystem>
+#include <vector>
 #include "log.H"
 
 //! Start logging a runlevel switch
@@ -26,6 +30,38 @@ std::ostream *get_current_switchlog();
 //! Stop logging a runlevel switch, if we're logging it.
 void switchlog_stop();
 
-#define FORMAT_TIMESPEC(tv) \
-	(tv).tv_sec << "." << std::setw(9) << std::setfill('0') << (tv).tv_nsec
+//! Clean up and purge the switchlog directory
+
+void switchlog_purge(const char *directory,
+		     unsigned ndays,
+		     std::function<void (std::string)> log_error);
+
+//! Create a new switchlog
+void switchlog_create(const char *directory, std::ofstream &o);
+
+//! Save the switchlog
+void switchlog_save(const char *directory,
+		     std::function<void (std::string)> log_error);
+
+//! Switchlogs returned from switch_enumerate()
+
+struct enumerated_switchlog {
+
+	//! Pathname to the switchlog
+	std::filesystem::path filename;
+
+	//! What the switchlog is doing (extracted from the 1st line)
+	std::string switchname;
+
+	//! Timestamp when the log finished
+	time_t log_end;
+};
+
+/*! Enumerate available switchlogs
+
+  Returns a sorted list, sorted by the log_end timestamp.
+*/
+
+std::vector<enumerated_switchlog> enumerate_switchlogs(const char *directory);
+
 #endif

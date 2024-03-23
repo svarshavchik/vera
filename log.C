@@ -27,17 +27,7 @@ void log_state_change(const proc_container &pc,
 			}, pcs)
 	};
 
-	auto switchlog=get_current_switchlog();
-
-	if (switchlog)
-	{
-		auto &current_time=log_current_timespec();
-
-		(*switchlog) << FORMAT_TIMESPEC(current_time)
-			     << "\t" << new_container_state
-			     << "\t" << pc->name
-			     << "\n" << std::flush;
-	}
+	log_state_change_to_switchlog(pc->name, new_container_state);
 
 #ifdef UNIT_TEST
 	log_container_message(pc, std::string{new_container_state.begin(),

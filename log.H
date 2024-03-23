@@ -16,6 +16,15 @@
 void log_state_change(const proc_container &,
 		      const proc_container_state &);
 
+/*! Record a change to a container's state in the switch log
+
+  If there's a switchlog open, the container's state change gets logged
+  to the switch log.
+*/
+
+void log_state_change_to_switchlog(const std::string &name,
+				   const std::string_view &new_container_state);
+
 //! Container's starting process failed
 void log_container_failed_process(const proc_container &, int);
 

@@ -1340,11 +1340,11 @@ void test_runlevels()
 		throw "Unexpected state changes switching to runlevel1";
 
 	if (completed_switchlog !=
-	    "1.000000000	switch	system/runlevel graphical\n"
-	    "1.000000000	start pending	runlevel1prog\n"
-	    "1.000000000	start pending	runlevel12prog\n"
-	    "1.000000000	started	runlevel12prog\n"
-	    "1.000000000	started	runlevel1prog\n")
+	    "1.000	switch	system/runlevel graphical\n"
+	    "1.000	start pending	runlevel1prog\n"
+	    "1.000	start pending	runlevel12prog\n"
+	    "1.000	started	runlevel12prog\n"
+	    "1.000	started	runlevel1prog\n")
 	{
 		throw "Unexpected switchlog (1): " + completed_switchlog;
 	}
@@ -2168,17 +2168,17 @@ void testgroup()
 		throw "Unexpected list of active units after start(2)";
 
 	if (completed_switchlog !=
-	    "1.000000000	switch	system/runlevel graphical\n"
-	    "1.000000000	start pending	final\n"
-	    "1.000000000	start pending	group/1\n"
-	    "1.000000000	start pending	group/2\n"
-	    "1.000000000	start pending	beforegroup\n"
-	    "1.000000000	started	final\n"
-	    "1.000000000	starting	group/2\n"
-	    "1.000000000	starting	group/1\n"
-	    "1.000000000	started	group/2\n"
-	    "1.000000000	started	group/1\n"
-	    "1.000000000	started	beforegroup\n")
+	    "1.000	switch	system/runlevel graphical\n"
+	    "1.000	start pending	final\n"
+	    "1.000	start pending	group/1\n"
+	    "1.000	start pending	group/2\n"
+	    "1.000	start pending	beforegroup\n"
+	    "1.000	started	final\n"
+	    "1.000	starting	group/2\n"
+	    "1.000	starting	group/1\n"
+	    "1.000	started	group/2\n"
+	    "1.000	started	group/1\n"
+	    "1.000	started	beforegroup\n")
 	{
 		throw "Unexpected switchlog (2): " + completed_switchlog;
 	}
@@ -2224,12 +2224,12 @@ void testfailcgroupcreate()
 	}
 
 	if (completed_switchlog !=
-	    "1.000000000	switch	system/runlevel graphical\n"
-	    "1.000000000	start pending	b\n"
-	    "1.000000000	start pending	a\n"
-	    "1.000000000	started	b\n"
-	    "1.000000000	removing	a\n"
-	    "1.000000000	stopped	a\n")
+	    "1.000	switch	system/runlevel graphical\n"
+	    "1.000	start pending	b\n"
+	    "1.000	start pending	a\n"
+	    "1.000	started	b\n"
+	    "1.000	removing	a\n"
+	    "1.000	stopped	a\n")
 	{
 		throw "Unexpected switchlog (3): " + completed_switchlog;
 	}
