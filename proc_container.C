@@ -12,6 +12,7 @@
 #include "messages.H"
 #include "log.H"
 #include "poller.H"
+#include "switchlog.H"
 #include "verac.h"
 #include <stdio.h>
 #include <unordered_map>
@@ -1681,7 +1682,7 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 	o.imbue(std::locale{"C"});
 
-	time_t current_time=log_current_time();
+	time_t current_time=log_current_timespec().tv_sec;
 
 	for (auto &[pc, run_info] : containers)
 	{
@@ -1917,6 +1918,7 @@ void proc_do_request(std::string ln,
 
 		get_containers_info(nullptr)->verbose_logging.enabled=false;
 		showing_verbose_progress_off();
+		switchlog_stop();
 		setenv("RUNLEVEL", runlevel.c_str(), 1);
 		execl("/bin/sh", "/bin/sh", "-c", command.c_str(), nullptr);
 		efd->write_all(command + ": " + strerror(errno));
@@ -2794,10 +2796,19 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			continue;
 		}
 
+		// When a new runlevel was requested we only checked if
+		// a switch is in progress. We could've been in a middle of
+		// an ad-hoc container stop or start. Now, there's nothing
+		// starting or stopping and we can verify if there's a new
+		// alternate runmode switch that was requested.
+
 		for (auto &[name, alternative] : alternate_runmodes)
 		{
 			auto new_alt=
-				alternate_runmode_process_switch(alternative);
+				alternate_runmode_process_switch(
+					name,
+					alternative
+				);
 
 			if (new_alt && name == system_runlevel)
 			{
@@ -2815,6 +2826,11 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 				did_something=true;
 				break;
 			}
+		}
+
+		if (!did_something)
+		{
+			switchlog_stop();
 		}
 	}
 
@@ -3490,7 +3506,7 @@ void current_containers_infoObj::respawn(
 
 	state.respawn_prepare_timer=nullptr;
 
-	auto now=log_current_time();
+	auto now=log_current_timespec().tv_sec;
 
 	// Determine if we need to wait more time because the container
 	// is stopping too fast.
@@ -4347,6 +4363,7 @@ void current_containers_infoObj::alternate_runmodes_t::request_switch(
 }
 
 proc_container current_containers_infoObj::alternate_runmode_process_switch(
+	const std::string &name,
 	alternate_runmodes_t &alt
 )
 {
@@ -4383,6 +4400,12 @@ proc_container current_containers_infoObj::alternate_runmode_process_switch(
 
 	verbose_logging.enabled=true;
 	log_message(_("Starting ") + alt.upcoming->name);
+
+	// We want to call switch_log start before doing any work, so it picks
+	// up all the containers that are starting.
+
+	if (name == system_runlevel)
+		switchlog_start(alt.upcoming->name);
 
 	all_required_dependencies(
 		alt.upcoming,
