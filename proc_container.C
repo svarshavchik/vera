@@ -1681,7 +1681,7 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 	o.imbue(std::locale{"C"});
 
-	time_t current_time=log_current_time();
+	time_t current_time=log_current_timespec().tv_sec;
 
 	for (auto &[pc, run_info] : containers)
 	{
@@ -3490,7 +3490,7 @@ void current_containers_infoObj::respawn(
 
 	state.respawn_prepare_timer=nullptr;
 
-	auto now=log_current_time();
+	auto now=log_current_timespec().tv_sec;
 
 	// Determine if we need to wait more time because the container
 	// is stopping too fast.

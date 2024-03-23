@@ -101,7 +101,7 @@ struct state_started : state_requester_stdout {
 	bool dependency;
 
 	//! When this container started.
-	time_t start_time=log_current_time();
+	time_t start_time=log_current_timespec().tv_sec;
 
 	state_started(bool dependency) : dependency{dependency} {}
 

@@ -59,7 +59,7 @@ proc_container_timer create_timer(
 				  )> &done
 )
 {
-	time_t time_start=log_current_time();
+	time_t time_start=log_current_timespec().tv_sec;
 	time_t time_end=time_start+timeout;
 
 	auto timer=std::make_shared<proc_container_timerObj>(

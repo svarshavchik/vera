@@ -445,7 +445,7 @@ struct showing_verbose_progress_t {
 			  << "/" << (n+1);
 		}
 
-		auto current_time=log_current_time();
+		auto current_time=log_current_timespec().tv_sec;
 
 		if (current_time < container_info.time_start)
 			// Sanity check
@@ -507,7 +507,7 @@ struct showing_verbose_progress_t {
 	  next_index_to_update gets increment on the next second.
 	*/
 
-	time_t index_timestamp=log_current_time();
+	time_t index_timestamp=log_current_timespec().tv_sec;
 };
 
 #if 0
@@ -884,7 +884,7 @@ void vera_init()
 				{
 					showing_verbose_progress->update(
 						inprogress,
-						log_current_time()
+						log_current_timespec().tv_sec
 					);
 				}
 			}
