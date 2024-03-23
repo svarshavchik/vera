@@ -296,7 +296,7 @@ release:
 	scp slackware:src/vera/$(PACKAGE)-$(VERSION)-*.txz .
 	gpg --detach-sign --default-key mrsam@courier-mta.com $(PACKAGE)-$(VERSION).tar.xz
 	gpg --detach-sign --default-key mrsam@courier-mta.com $(PACKAGE)-$(VERSION)-*.txz
-	git tag $(RELEASETAG)
+	-git tag $(RELEASETAG)
 	git push --tags -f
 	git push --tags -f github
 	gh release create $(RELEASETAG) \
