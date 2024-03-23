@@ -13,6 +13,7 @@
 extern std::vector<std::string> logged_state_changes;
 extern struct timespec fake_time;
 extern std::vector<std::tuple<pid_t, int>> sent_sigs;
+extern std::string completed_switchlog;
 
 #define UNIT_TEST
 #include "log.C"
@@ -84,6 +85,8 @@ void test_reset(bool keep_cgroupfs=false)
 	next_pid=1;
 	all_forks_fail=false;
 	fake_time.tv_sec=1;
+	switchlog_stop();
+	completed_switchlog.clear();
 
 	if (!keep_cgroupfs)
 	{

@@ -251,6 +251,7 @@ private:
 	//! See if an alternate runlevel can be started now.
 
 	proc_container alternate_runmode_process_switch(
+		const std::string &alternative_name,
 		alternate_runmodes_t &alt
 	);
 

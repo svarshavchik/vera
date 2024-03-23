@@ -76,6 +76,8 @@ libvera_a_SOURCES=						\
 	proc_loader.C						\
 	proc_loader.H						\
 	proc_loader2.C						\
+	switchlog.C						\
+	switchlog.H						\
 	unit_test.H						\
 	verac_connect_sun_socket.c				\
 	verac_check_hook.c					\

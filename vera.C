@@ -556,6 +556,19 @@ void log_to_stdout(int level, const char *program,
 	std::cout << program << ": " << message << "\n" << std::flush;
 }
 
+void switchlog_start()
+{
+}
+
+std::ostream *get_current_switchlog()
+{
+	return nullptr;
+}
+
+void switchlog_stop()
+{
+}
+
 void proc_container_group::cgroups_sendsig(pid_t p, int sig)
 {
 	kill (p, sig);

@@ -7,30 +7,55 @@
 #include "messages.H"
 #include "proc_container.H"
 #include "proc_container_timer.H"
+#include "switchlog.H"
 #include <string.h>
 #include <functional>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <syslog.h>
 
 void log_state_change(const proc_container &pc,
 		      const proc_container_state &pcs)
 {
-	std::ostringstream o;
+	std::string_view new_container_state{
+		std::visit(
+			[&]
+			(const auto &s) -> const char *
+			{
+				return s;
+			}, pcs)
+	};
 
-	o << std::visit(
-		[&]
-		(const auto &s) -> const char *
-		{
-			return s;
-		}, pcs);
+	auto switchlog=get_current_switchlog();
+
+	if (switchlog)
+	{
+		auto &current_time=log_current_timespec();
+
+		(*switchlog) << FORMAT_TIMESPEC(current_time)
+			     << "\t" << new_container_state
+			     << "\t" << pc->name
+			     << "\n" << std::flush;
+	}
 
 #ifdef UNIT_TEST
-	log_container_message(pc, o.str());
+	log_container_message(pc, std::string{new_container_state.begin(),
+					      new_container_state.end()});
 #else
-	log_message(o.str() + " " + (
-			    pc->description.empty() ? pc->name:pc->description
-		    ));
+	auto &descr_for_logging =
+		pc->description.empty() ? pc->name:pc->description;
+
+	std::string logged_message;
+
+	logged_message.reserve(new_container_state.size()+1+
+			       descr_for_logging.size());
+
+	logged_message += new_container_state;
+	logged_message += " ";
+	logged_message += descr_for_logging;
+
+	log_message(logged_message);
 #endif
 }
 

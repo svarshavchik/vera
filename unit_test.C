@@ -22,11 +22,15 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <locale>
 
 std::vector<std::string> logged_state_changes;
 struct timespec fake_time;
 std::vector<std::string> logged_runners;
 std::vector<std::tuple<pid_t, int>> sent_sigs;
+
+std::optional<std::stringstream> current_switchlog;
+std::string completed_switchlog;
 
 pid_t next_pid=1;
 bool all_forks_fail=false;
@@ -374,4 +378,27 @@ void create_fake_proc(
 		if (!o)
 			throw "Cannot create " + piddir + "/stat";
 	}
+}
+
+void switchlog_start()
+{
+	current_switchlog.emplace();
+	current_switchlog->imbue(std::locale{"C"});
+}
+
+void switchlog_stop()
+{
+	if (current_switchlog)
+	{
+		completed_switchlog=current_switchlog->str();
+		current_switchlog.reset();
+	}
+}
+
+std::ostream *get_current_switchlog()
+{
+	if (current_switchlog)
+		return &*current_switchlog;
+
+	return nullptr;
 }
