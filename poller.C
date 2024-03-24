@@ -206,7 +206,7 @@ namespace {
 #endif
 
 struct global_inotify_base {
-	int fd;
+	static int fd;
 
 	global_inotify_base();
 
@@ -217,6 +217,7 @@ struct global_inotify_base {
 	global_inotify_base &operator=(const global_inotify_base &)=delete;
 };
 
+int global_inotify_base::fd{-1};
 
 global_inotify_base::global_inotify_base()
 {
