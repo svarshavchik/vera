@@ -39,57 +39,58 @@ extern void showing_verbose_progress_off();
 #undef DEP_DEBUG
 #define DEP_DEBUG(x) do {}while(0)
 
-state_stopped::operator const char *() const
+const STATE_LABEL &state_stopped::get_label() const
 {
-	return "stopped";
+	return STATE_STOPPED::label;
 }
 
-state_starting::operator const char *() const
+const STATE_LABEL &state_starting::get_label() const
 {
 	if (starting_runner)
 	{
-		return dependency ? "starting"
-			: "starting (manual)";
+		return dependency ? STATE_STARTING::label:
+			STATE_STARTING_MANUAL::label;
 	}
 
-	return dependency ? "start pending"
-		: "start pending (manual)";
+	return dependency ? STATE_START_PENDING::label :
+		STATE_START_PENDING_MANUAL::label;
 }
 
-state_started::operator const char *() const
+const STATE_LABEL &state_started::get_label() const
 {
 	return respawn_prepare_timer
-		? dependency ? "respawning":"respawning (manual)"
-		: dependency ? "started" : "started (manual)";
+		? dependency ? STATE_RESPAWNING::label:
+		STATE_RESPAWNING_MANUAL::label
+		: dependency ? STATE_STARTED::label:STATE_STARTED_MANUAL::label;
 }
 
-state_stopping::operator const char *() const
+const STATE_LABEL &state_stopping::get_label() const
 {
-	return std::visit(
+	return *std::visit(
 		[&]
-		(const auto &phase) -> const char *
+		(const auto &phase)
 		{
-			return phase;
+			return &phase.get_label();
 		}, phase);
 }
 
 
-stop_pending::operator const char *() const
+const STATE_LABEL &stop_pending::get_label() const
 {
-	return "stop pending";
+	return STATE_STOP_PENDING::label;
 }
 
-stop_running::operator const char *() const
+const STATE_LABEL &stop_running::get_label() const
 {
-	return "stopping";
+	return STATE_STOPPING::label;
 }
 
-stop_removing::operator const char *() const
+const STATE_LABEL &stop_removing::get_label() const
 {
 	if (sigkill_sent)
-		return "force-removing";
+		return STATE_FORCE_REMOVING::label;
 
-	return "removing";
+	return STATE_REMOVING::label;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1703,7 +1704,7 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 			[&]
 			(const auto &s)
 			{
-				status=s;
+				status=s.get_label().label;
 
 				timerptr=s.timer();
 			}, run_info.state);
@@ -2847,7 +2848,7 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 				[&state]
 				(const auto &s)
 				{
-					state=s;
+					state=s.get_label().label;
 					return s.timer();
 				}, b->second.state);
 

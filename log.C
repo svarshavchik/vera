@@ -21,9 +21,9 @@ void log_state_change(const proc_container &pc,
 	std::string_view new_container_state{
 		std::visit(
 			[&]
-			(const auto &s) -> const char *
+			(const auto &s)
 			{
-				return s;
+				return s.get_label().label;
 			}, pcs)
 	};
 
@@ -156,10 +156,10 @@ std::string get_state_and_elapsed_for(
 
 	std::string s=std::visit(
 		[&timer]
-		(const auto &state) -> const char *
+		(const auto &state)
 		{
 			timer=state.timer();
-			return state;
+			return state.get_label().label;
 		}, state);
 
 	if (timer && *timer

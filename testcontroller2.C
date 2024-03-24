@@ -40,10 +40,10 @@ void test_failedexec()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting " RUNLEVEL_PREFIX "graphical",
-			"failedexec: start pending",
+			"failedexec: " + STATE_START_PENDING::label.label_str(),
 			"failedexec: cgroup created",
 			"failedexec: /no/such/path/failedexec: No such file or directory",
-			"failedexec: removing",
+			"failedexec: " + STATE_REMOVING::label.label_str(),
 			"failedexec: sending SIGTERM",
 		})
 		throw "Did not see expected state changes";
@@ -79,9 +79,9 @@ void test_capture()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"Starting " RUNLEVEL_PREFIX "graphical",
-			"capture: start pending",
+			"capture: " + STATE_START_PENDING::label.label_str(),
 			"capture: cgroup created",
-			"capture: started",
+			"capture: " + STATE_STARTED::label.label_str(),
 			"capture: foo",
 			"capture: bar",
 		})
@@ -93,9 +93,9 @@ void test_capture()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"capture: cgroup removed",
-			"capture: stop pending",
-			"capture: removing",
-			"capture: stopped"
+			"capture: " + STATE_STOP_PENDING::label.label_str(),
+			"capture: " + STATE_REMOVING::label.label_str(),
+			"capture: " + STATE_STOPPED::label.label_str()
 		})
 		throw "Did not see expected state changes";
 }

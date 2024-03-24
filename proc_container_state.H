@@ -10,6 +10,7 @@
 #include <variant>
 #include <type_traits>
 #include <functional>
+#include <string>
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "external_filedesc.H"
@@ -20,7 +21,7 @@
 struct state_stopped {
 
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	//! There are no timers here.
 	const proc_container_timer *timer() const { return nullptr; }
@@ -86,7 +87,7 @@ struct state_starting : state_requester_stdout {
 	proc_container_timer starting_runner_timeout;
 
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	//! Return the starting_runner_timeout
 	const proc_container_timer *timer() const
@@ -106,7 +107,7 @@ struct state_started : state_requester_stdout {
 	state_started(bool dependency) : dependency{dependency} {}
 
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	//! Currently running reload or restart command
 
@@ -158,7 +159,7 @@ struct state_started : state_requester_stdout {
 struct stop_pending {
 
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	const proc_container_timer *timer() const { return nullptr; }
 };
@@ -174,7 +175,7 @@ struct stop_running {
 	proc_container_timer stopping_runner_timeout;
 
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	//! Return the stopping_runner_timeout
 	const proc_container_timer *timer() const
@@ -196,7 +197,7 @@ struct stop_removing {
 	bool sigkill_sent;
 
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	//! Return the sigkill_timer.
 	const proc_container_timer *timer() const { return &sigkill_timer; }
@@ -237,7 +238,7 @@ struct state_stopping : state_requester_stdout {
 	{
 	}
 	//! Human readable label.
-	operator const char *() const;
+	const STATE_LABEL &get_label() const;
 
 	//! No timers here
 	const proc_container_timer *timer() const

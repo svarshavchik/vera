@@ -224,8 +224,8 @@ void respawn3_reexec()
 	logged_state_changes.clear();
 	proc_container_stop("respawn3");
 	if (logged_state_changes != std::vector<std::string>{
-			"respawn3: stop pending",
-			"respawn3: removing",
+			"respawn3: " + STATE_STOP_PENDING::label.label_str(),
+			"respawn3: " + STATE_REMOVING::label.label_str(),
 			"respawn3: sending SIGTERM",
 		})
 		throw "unexpected state changes beginning stop after reexec";
@@ -235,7 +235,7 @@ void respawn3_reexec()
 	do_poll(0);
 	if (logged_state_changes != std::vector<std::string>{
 			"respawn3: cgroup removed",
-			"respawn3: stopped",
+			"respawn3: " + STATE_STOPPED::label.label_str(),
 		})
 		throw "unexpected state changes stopping after reexec";
 }

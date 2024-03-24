@@ -69,6 +69,7 @@ libvera_a_SOURCES=						\
 	proc_container_runner.H					\
 	proc_container_runnerfwd.H				\
 	proc_container_run_info.H				\
+	proc_container_state.C					\
 	proc_container_state.H					\
 	proc_container_statefwd.H				\
 	proc_container_timer.C					\
