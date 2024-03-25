@@ -10,7 +10,9 @@
 #include <functional>
 #include <filesystem>
 #include <vector>
+#include <functional>
 #include "log.H"
+#include "proc_container_statefwd.H"
 
 //! Start logging a runlevel switch
 void switchlog_start(const std::string &new_runlevel);
@@ -63,5 +65,33 @@ struct enumerated_switchlog {
 */
 
 std::vector<enumerated_switchlog> enumerate_switchlogs(const char *directory);
+
+//! Analyzed switchlog
+
+struct analyzed_switchlog {
+
+	//! A log entry for a single container
+	struct container {
+
+		//! Container's name
+		std::string name;
+
+		//! This is going to be either STATE_STARTED or STATE_STOPPED
+		const char *label;
+
+		//! How long this container waited to start or stop
+		elapsed_time waiting;
+
+		//! How long it took this container to start or stop
+		elapsed_time elapsed;
+	};
+
+	//! The analyzed switch log
+	std::vector<container> log;
+};
+
+/*! Analyze a switchlog */
+
+analyzed_switchlog switchlog_analyze(const enumerated_switchlog &log);
 
 #endif

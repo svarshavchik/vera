@@ -1018,6 +1018,7 @@ void pager()
 	if (!p)
 		p=PAGER;
 
+	setenv("LESS", "-F", 0);
 	execlp(PAGER, PAGER, nullptr);
 	perror(PAGER);
 	exit(1);
@@ -1574,6 +1575,21 @@ void dump_terse(const std::string &name,
 #endif
 }
 
+static auto get_requested_log(const std::string &lognum_str)
+{
+	auto logs=enumerate_switchlogs(SWITCHLOGDIR);
+
+	int lognum=1;
+
+	std::istringstream i{lognum_str};
+
+	if (!(i >> lognum) ||
+	    lognum < 1 || static_cast<size_t>(lognum) > logs.size())
+		throw std::runtime_error{"Requested log not found"};
+
+	return switchlog_analyze(logs.at(logs.size()-lognum));
+}
+
 void vlad(std::vector<std::string> args)
 {
 	if (args.size() == 2 && args[0] == "start")
@@ -1997,6 +2013,8 @@ void vlad(std::vector<std::string> args)
 
 		size_t n=logs.size();
 
+		pager();
+
 		for (auto &l:logs)
 		{
 			struct tm timestamp;
@@ -2022,6 +2040,65 @@ void vlad(std::vector<std::string> args)
 		exit(0);
 	}
 
+	if (args.size() >= 1 && args[0] == "log")
+	{
+		auto log=get_requested_log(args.size() == 1
+					   ? std::string{"1"}:args[1]);
+
+		pager();
+
+		std::cout.imbue(std::locale{"C"});
+
+		auto longest_elapsed=std::max_element(
+			log.log.begin(),
+			log.log.end(),
+			[]
+			(const auto &a, const auto &b)
+			{
+				return a.elapsed < b.elapsed;
+			});
+
+		for (auto &entry : log.log)
+		{
+			std::cout << (&entry == &*longest_elapsed
+				      ? "* ":"  ")
+				  << std::setw(3)
+				  << std::right << entry.elapsed.seconds
+				  << '.' << std::setw(3)
+				  << std::setfill('0')
+				  << entry.elapsed.milliseconds
+				  << std::setfill(' ')
+				  << std::left
+				  << "s ";
+
+			if (entry.waiting.seconds ||
+			    entry.waiting.milliseconds)
+			{
+				std::cout << "+"
+					  << std::setw(3)
+					  << std::right
+					  << entry.waiting.seconds
+					  << "."
+					  << std::setw(3)
+					  << std::right
+					  << std::setfill('0')
+					  << entry.waiting.milliseconds
+					  << std::setfill(' ')
+					  << std::left
+					  << "s" << _(" waiting");
+			}
+			else
+			{
+				//            +###.###s
+				std::cout << "          "
+					// Tag in the pot file
+					  << _("waiting:       ")+8;
+			}
+			std::cout << " " << entry.name
+				  << " " << entry.label << "\n";
+		}
+		exit(0);
+	}
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);
 }

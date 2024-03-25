@@ -100,7 +100,7 @@ configdirs.h: config.status Makefile
 	echo '#define LOCALEDIR "$(localedir)"' >> configdirs.h.tmp
 	echo '#define PKGDATADIR "$(pkgdatadir)"' >>configdirs.h.tmp
 	echo '#define SBINDIR "$(sbindir)"' >>configdirs.h.tmp
-	echo '#define SWITCHLOGDIR "$(localstatedir)/vera.log"' >>configdirs.h.tmp
+	echo '#define SWITCHLOGDIR "$(SWITCHLOGDIR)"' >>configdirs.h.tmp
 	mv configdirs.h.tmp configdirs.h
 
 vera_SOURCES=vera.C
@@ -153,8 +153,9 @@ install-exec-hook:
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system
 	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
-	$(MKDIR_P) $(DESTDIR)$(localstatedir)/vera.log
-	chmod 700 $(DESTDIR)$(localstatedir)/vera.log
+	$(MKDIR_P) $(DESTDIR)$(localstatedir)
+	$(MKDIR_P) $(DESTDIR)$(SWITCHLOGDIR)
+	chmod 700 $(DESTDIR)$(SWITCHLOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOCALCONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(OVERRIDECONFIGDIR)
 	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)
@@ -175,7 +176,7 @@ uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system
 	rm -rf $(DESTDIR)$(localstatedir)/vera.priv
 	rm -rf $(DESTDIR)$(localstatedir)/vera.pub
-	rm -rf $(DESTDIR)$(localstatedir)/vera.log
+	rm -rf $(DESTDIR)$(SWITCHLOGDIR)
 	rm -rf $(DESTDIR)$(sysconfdir)/vera
 
 uninstall-local:

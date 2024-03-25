@@ -9,6 +9,7 @@
 #include <string>
 #include <tuple>
 #include <optional>
+#include <compare>
 
 struct state_stopped;
 struct state_starting;
@@ -36,6 +37,52 @@ typedef std::variant<state_stopped,
 struct elapsed_time {
 	unsigned seconds{0};
 	unsigned milliseconds{0};
+
+	//! Calculate the difference in time. We expect time to be monotonical.
+
+	elapsed_time operator-(const elapsed_time &o) const
+	{
+		elapsed_time diff;
+
+		if (seconds > o.seconds ||
+		    (seconds == o.seconds && milliseconds > o.milliseconds))
+		{
+			diff.seconds=seconds - o.seconds;
+
+			auto ms_diff = milliseconds;
+
+			if (ms_diff < o.milliseconds)
+			{
+				ms_diff += 1000;
+				diff.seconds--;
+			}
+			diff.milliseconds=ms_diff-o.milliseconds;
+		}
+
+		return diff;
+	}
+
+	bool operator==(const elapsed_time &o) const
+	{
+		return seconds == o.seconds && milliseconds == o.milliseconds;
+	}
+
+	auto operator<=>(const elapsed_time &o) const
+	{
+		if (seconds < o.seconds)
+		{
+			return std::strong_ordering::less;
+		}
+		else if (seconds == o.seconds)
+		{
+			if (milliseconds == o.milliseconds)
+				return std::strong_ordering::equal;
+
+			if (milliseconds < o.milliseconds)
+				return std::strong_ordering::less;
+		}
+		return std::strong_ordering::greater;
+	}
 };
 
 /*! Create a timeline from switchlog entries

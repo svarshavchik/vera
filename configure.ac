@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([vera],[0.90],[mrsam@courier-mta.com])
+AC_INIT([vera],[0.91],[mrsam@courier-mta.com])
 AC_CONFIG_SRCDIR([testcontroller.C])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign dist-xz -Wno-portability])
@@ -102,6 +102,9 @@ AC_SUBST(LOCALCONFIGDIR)
 
 OVERRIDECONFIGDIR="$CONFIGDIR/override"
 AC_SUBST(OVERRIDECONFIGDIR)
+
+SWITCHLOGDIR="${localstatedir}/vera.log"
+AC_SUBST(SWITCHLOGDIR)
 
 AM_CONDITIONAL(HAVE_DOCS, [test -f ${srcdir}/vera.xml])
 AC_CONFIG_FILES([
