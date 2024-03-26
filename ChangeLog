@@ -1,5 +1,7 @@
 2024-03-25  Sam Varshavchik  <mrsam@courier-mta.com>
 
+	* Release 0.91
+
 	* Log runlevel switches, including startup/shutdown.
 
 2024-03-05  Sam Varshavchik  <mrsam@courier-mta.com>

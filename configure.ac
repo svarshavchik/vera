@@ -103,7 +103,11 @@ AC_SUBST(LOCALCONFIGDIR)
 OVERRIDECONFIGDIR="$CONFIGDIR/override"
 AC_SUBST(OVERRIDECONFIGDIR)
 
-SWITCHLOGDIR="${localstatedir}/vera.log"
+AC_ARG_WITH([switchlogdir],
+	[AS_HELP_STRING([--with-switchlogdir=dir],
+		[specify non-default switch log directory])],
+	[SWITCHLOGDIR="$withval"],SWITCHLOGDIR="${localstatedir}/vera.log")
+
 AC_SUBST(SWITCHLOGDIR)
 
 AM_CONDITIONAL(HAVE_DOCS, [test -f ${srcdir}/vera.xml])

@@ -29,7 +29,7 @@
 
     <blockquote>
       <informalexample>
-	<programlisting>./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \&#10;    --libdir=/lib --localstatedir=/run \&#10;    --localedir=/usr/share/locale</programlisting>
+	<programlisting>./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \&#10;    --libdir=/lib --localstatedir=/run \&#10;    --with-switchlogdir=/var/log/vera\&#10;    --localedir=/usr/share/locale</programlisting>
       </informalexample>
     </blockquote>
 
@@ -2542,7 +2542,7 @@ version: 1
 	  <listitem>
 	    <para>
 	      The log number. The logs are numbered from
-	      the newest to the oldest, so log #1 is almost the most recent
+	      the newest to the oldest, so log #1 is always the most recent
 	      log.
 	    </para>
 	  </listitem>

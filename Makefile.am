@@ -272,6 +272,7 @@ slackpkg: dist
 	cd $(PACKAGE)-$(VERSION) && \
 		./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \
 			--libdir=/lib --localstatedir=/run \
+			--with-switchlogdir=/var/log/vera \
 			--localedir=/usr/share/locale && \
 		make -j `grep '^processor' /proc/cpuinfo | wc -l` && \
                 strip vera && strip vera-init
@@ -294,7 +295,7 @@ slackpkg-sudo:
                    gzip usr/share/man/*/* && \
                    mkdir -p var/lib/pkgtools/douninst.sh && \
                    echo '#! /bin/sh' >uninst.sh && \
-                   echo 'rm -rf /lib/vera /etc/vera' >>uninst.sh && \
+                   echo 'rm -rf /lib/vera /etc/vera /var/log/vera' >>uninst.sh && \
                    mv uninst.sh \
                         var/lib/pkgtools/douninst.sh/$(NVR) && \
                    /sbin/makepkg -c y -l y \

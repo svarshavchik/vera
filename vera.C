@@ -2094,8 +2094,8 @@ void vlad(std::vector<std::string> args)
 					// Tag in the pot file
 					  << _("waiting:       ")+8;
 			}
-			std::cout << " " << entry.name
-				  << " " << entry.label << "\n";
+			std::cout << " " << entry.label
+				  << " " << entry.name << "\n";
 		}
 		exit(0);
 	}
