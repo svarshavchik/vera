@@ -1339,14 +1339,15 @@ void test_runlevels()
 		})
 		throw "Unexpected state changes switching to runlevel1";
 
-	if (completed_switchlog !=
-	    "1.000	switch	system/runlevel graphical\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	runlevel1prog\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	runlevel12prog\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	runlevel12prog\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	runlevel1prog\n")
+	if (completed_switchlog != std::vector<std::string>{
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	runlevel12prog",
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	runlevel1prog",
+			"1.000	" + STATE_STARTED::label.label_str() + "	runlevel12prog",
+			"1.000	" + STATE_STARTED::label.label_str() + "	runlevel1prog",
+			"1.000	switch	system/runlevel graphical"
+		})
 	{
-		throw "Unexpected switchlog (1): " + completed_switchlog;
+		throw "Unexpected switchlog (1)";
 	}
 
 	logged_state_changes.clear();
@@ -2167,20 +2168,21 @@ void testgroup()
 	if (proc_container_inprogress().size())
 		throw "Unexpected list of active units after start(2)";
 
-	if (completed_switchlog !=
-	    "1.000	switch	system/runlevel graphical\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	final\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	group/1\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	group/2\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	beforegroup\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	final\n"
-	    "1.000	" + STATE_STARTING::label.label_str() + "	group/2\n"
-	    "1.000	" + STATE_STARTING::label.label_str() + "	group/1\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	group/2\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	group/1\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	beforegroup\n")
+	if (completed_switchlog != std::vector<std::string>{
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	beforegroup",
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	final",
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	group/1",
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	group/2",
+			"1.000	" + STATE_STARTED::label.label_str() + "	beforegroup",
+			"1.000	" + STATE_STARTED::label.label_str() + "	final",
+			"1.000	" + STATE_STARTED::label.label_str() + "	group/1",
+			"1.000	" + STATE_STARTED::label.label_str() + "	group/2",
+			"1.000	" + STATE_STARTING::label.label_str() + "	group/1",
+			"1.000	" + STATE_STARTING::label.label_str() + "	group/2",
+			"1.000	switch	system/runlevel graphical"
+		})
 	{
-		throw "Unexpected switchlog (2): " + completed_switchlog;
+		throw "Unexpected switchlog (2)";
 	}
 }
 
@@ -2223,15 +2225,16 @@ void testfailcgroupcreate()
 		throw "Unexpected state changes.";
 	}
 
-	if (completed_switchlog !=
-	    "1.000	switch	system/runlevel graphical\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	b\n"
-	    "1.000	" + STATE_START_PENDING::label.label_str() + "	a\n"
-	    "1.000	" + STATE_STARTED::label.label_str() + "	b\n"
-	    "1.000	" + STATE_REMOVING::label.label_str() + "	a\n"
-	    "1.000	" + STATE_STOPPED::label.label_str() + "	a\n")
+	if (completed_switchlog != std::vector<std::string>{
+			"1.000	" + STATE_REMOVING::label.label_str() + "	a",
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	a",
+			"1.000	" + STATE_START_PENDING::label.label_str() + "	b",
+			"1.000	" + STATE_STARTED::label.label_str() + "	b",
+			"1.000	" + STATE_STOPPED::label.label_str() + "	a",
+			"1.000	switch	system/runlevel graphical"
+		})
 	{
-		throw "Unexpected switchlog (3): " + completed_switchlog;
+		throw "Unexpected switchlog (3)";
 	}
 }
 

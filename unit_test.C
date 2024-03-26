@@ -30,7 +30,7 @@ std::vector<std::string> logged_runners;
 std::vector<std::tuple<pid_t, int>> sent_sigs;
 
 std::optional<std::stringstream> current_switchlog;
-std::string completed_switchlog;
+std::vector<std::string> completed_switchlog;
 
 pid_t next_pid=1;
 bool all_forks_fail=false;
@@ -390,7 +390,17 @@ void switchlog_stop()
 {
 	if (current_switchlog)
 	{
-		completed_switchlog=current_switchlog->str();
+		current_switchlog->seekg(0);
+
+		completed_switchlog.clear();
+
+		std::string l;
+
+		while (!std::getline(*current_switchlog, l).eof())
+			completed_switchlog.push_back(std::move(l));
+
+		std::sort(completed_switchlog.begin(),
+			  completed_switchlog.end());
 		current_switchlog.reset();
 	}
 }
