@@ -484,7 +484,9 @@ void sort_pids(std::unordered_map<pid_t,
 
 		auto p=processes.find(b->second.ppid);
 
-		while (p != processes.end())
+		size_t failsafe=processes.size();
+
+		while (p != processes.end() && --failsafe)
 		{
 			b=p;
 			p=processes.find(b->second.ppid);

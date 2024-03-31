@@ -21,6 +21,8 @@ static void do_run_sysinit(const char *original_line,
 	if (strcmp(action, "sysinit"))
 		return;
 
+	printf("vera: running %s\n", command);
+
 	while ((p=fork()) == -1)
 	{
 		perror("fork");

@@ -1410,7 +1410,47 @@ void dump_processes(const container_state_info::hier_pids &processes,
 
 		for (auto &word:procinfo.parent_pid.cmdline)
 		{
-			std::cout << " " << word;
+			std::cout << " ";
+
+			for (auto b=word.begin(), e=word.end(); b != e;)
+			{
+				auto p=b;
+
+				b=std::find_if(b, e, [](unsigned char c)
+				{
+					return c <= ' ' ||
+						c == '"' ||
+						c == '$' ||
+						c == '`' ||
+						c == '?' ||
+						c == '*' ||
+						c == '|' ||
+						c == '&' ||
+						c == ';' ||
+						c == '\\' ||
+						c == '(' ||
+						c == ')' ||
+						c == '<' ||
+						c == '>' ||
+						c == '\'';
+				});
+
+				if (b != p)
+					std::cout << std::string_view{p, b};
+				else if ((unsigned char)*b < ' ')
+				{
+					unsigned char c=*b++;
+
+					std::cout << "\\"
+						  << (char)('0'+(c / 64))
+						  << (char)('0'+( (c/8) % 8))
+						  << (char)('0'+(c % 8));
+				}
+				else
+				{
+					std::cout << "\\" << *b++;
+				}
+			}
 		}
 		std::cout << "\n";
 
