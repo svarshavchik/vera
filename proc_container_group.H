@@ -45,9 +45,13 @@ struct proc_container_group_data {
 
 	static const char *get_cgroupfs_base_path();
 
-	//! Return the cgroups directory.
+	//! Return the cgroups directory for this container.
 
-	std::string cgroups_dir();
+	std::string cgroups_dir() const;
+
+	//! Return ths cgroups directory for the given container
+
+	static std::string cgroups_dir(std::string name);
 
 	//! Create a cgroups directory.
 
@@ -161,9 +165,13 @@ public:
 
 	static void cgroups_sendsig(pid_t p, int sig);
 
-	//! Return a list of processes in the group
+	//! Return a list of processes in this container group
 
-	std::vector<pid_t> cgroups_getpids();
+	std::vector<pid_t> cgroups_getpids() const;
+
+	//! Return a list of processes in the given container group
+
+	static std::vector<pid_t> cgroups_getpids(const std::string &name);
 
 	//! Record an updated container definition.
 

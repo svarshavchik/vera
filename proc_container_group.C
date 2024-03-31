@@ -17,13 +17,16 @@
 #include <fcntl.h>
 #include <iostream>
 
-std::string proc_container_group_data::cgroups_dir()
+std::string proc_container_group_data::cgroups_dir() const
+{
+	return cgroups_dir(container->name);
+}
+
+std::string proc_container_group_data::cgroups_dir(std::string name)
 {
 	std::string n;
 
 	std::string_view base{get_cgroupfs_base_path()};
-
-	auto name=container->name;
 
 	for (auto &c:name)
 		if (c == '/')
@@ -357,8 +360,8 @@ struct proc_container_group::cgroup_procs_file {
 
 	std::ifstream i;
 
-	cgroup_procs_file(proc_container_group *me)
-		: i{me->cgroups_dir() + "/cgroup.procs"}
+	cgroup_procs_file(const std::string &container_name)
+		: i{cgroups_dir(container_name) + "/cgroup.procs"}
 	{
 		if (i)
 			i.imbue(std::locale{"C"});
@@ -369,7 +372,7 @@ struct proc_container_group::cgroup_procs_file {
 
 void proc_container_group::cgroups_sendsig_all(int sig)
 {
-	cgroup_procs_file cp(this);
+	cgroup_procs_file cp{container->name};
 
 	if (!cp.i)
 		return;
@@ -387,15 +390,10 @@ void proc_container_group::cgroups_sendsig_all(int sig)
 
 void proc_container_group::cgroups_sendsig_parents(int sig)
 {
-	cgroup_procs_file cp(this);
-
-	if (!cp.i)
-		return;
-
 	std::unordered_map<pid_t,
 			   container_state_info::pid_info> processes;
 
-	get_pid_status(cp.i, processes);
+	get_pid_status(container->name, processes);
 
 	container_state_info::hier_pids pids;
 
@@ -426,11 +424,18 @@ void proc_container_group::cgroups_sendsig_parents(
 
 // Return all processes in a container.
 
-std::vector<pid_t> proc_container_group::cgroups_getpids()
+std::vector<pid_t> proc_container_group::cgroups_getpids() const
+{
+	return cgroups_getpids(container->name);
+}
+
+std::vector<pid_t> proc_container_group::cgroups_getpids(
+	const std::string &name
+)
 {
 	std::vector<pid_t> pids;
 
-	cgroup_procs_file cp(this);
+	cgroup_procs_file cp{name};
 
 	if (cp.i)
 	{

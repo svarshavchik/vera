@@ -5,6 +5,7 @@
 #include "config.h"
 #include "privrequest.H"
 #include "proc_loader.H"
+#include "proc_container_group.H"
 #include "messages.H"
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -371,16 +372,9 @@ std::unordered_map<std::string, container_state_info> get_status(
 			{
 				info.dep_stopping_first.emplace(++p, e);
 			}
-			if (keyword == "pids" && p != e)
-			{
-				std::istringstream i{{++p, e}};
-
-				i.imbue(std::locale{"C"});
-
-				get_pid_status(i, processes);
-			}
 		}
 
+		get_pid_status(name, processes);
 #if 0
 		if (name == "name2")
 		{
@@ -403,13 +397,11 @@ std::unordered_map<std::string, container_state_info> get_status(
 	return m;
 }
 
-void get_pid_status(std::istream &i,
+void get_pid_status(const std::string &container_name,
 		    std::unordered_map<pid_t,
 		    container_state_info::pid_info> &processes)
 {
-	pid_t p;
-
-	while (i >> p)
+	for (auto p:proc_container_group::cgroups_getpids(container_name))
 	{
 		auto &pid_info=processes[p];
 

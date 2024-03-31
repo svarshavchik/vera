@@ -144,7 +144,7 @@
 
     <note>
       <para>
-	Do not update <command>init</command> after installing
+	Do not update <command>sysvinit</command> after installing
 	<command>vera</command>. If you would like to go back to
 	<command>init</command>, or to update:
       </para>
@@ -200,7 +200,9 @@
       <note>
 	<para>
 	  Before using <command>removepkg</command> to uninstall
-	  <command>vera</command> the following command must be executed:
+	  <command>vera</command>, or before updating
+	  <command>sysvinit</command> or <command>vera</command>
+	  packages, the following command must be executed:
 	</para>
 
 	<blockquote>
@@ -2326,7 +2328,9 @@ version: 1
 	  </para>
 
 	  <para>
-	    Do not update the <command>init</command> package unless
+	    Do not update the <command>sysvinit</command>
+	    and <command>vera</command>
+	    packages unless
 	    <command>vera</command> is fully unhooked.
 	  </para>
 	</note>
@@ -2831,12 +2835,12 @@ version: 1
 	</para>
 
 	<para>
-	  Updating <command>init</command> after hooking into and starting
+	  Updating <command>sysvinit</command> after hooking into and starting
 	  <command>vera</command> results in a mostly bricked system that
 	  will not shutdown properly, but will probably reboot into the
 	  original <command>init</command> if all filesystems are fully
 	  synced before forcing the reboot. Do not update
-	  <command>init</command> before fully
+	  <command>sysvinit</command> before fully
 	  unhooking <command>vera</command> (twice) and rebooting back into
 	  <command>init</command>
 	  (see <xref linkend="management" /> for more information).

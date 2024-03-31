@@ -1768,21 +1768,6 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 						  << "\n";
 				}
 			}, run_info.state);
-
-		if (run_info.group)
-		{
-			auto pids=run_info.group->cgroups_getpids();
-
-			if (!pids.empty())
-			{
-				o << "pids:";
-				for (auto p:pids)
-				{
-					o << " " << p;
-				}
-				o << "\n";
-			}
-		}
 		o << "\n";
 	}
 

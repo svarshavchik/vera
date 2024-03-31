@@ -52,7 +52,7 @@ const char *check_hookfile(const char *hookfile,
 {
 	int flag;
 
-	flag=hooked(hookfile, init_path);
+	flag=getenv(reexec_envar) ? 1:hooked(hookfile, init_path);
 
 	if (!flag)
 	{

@@ -227,12 +227,12 @@ extern const char slashprocslash[];
 
 /*! Populate container_state_info::pid_info
 
-This reads an input stream containing pids, then reads /proc and populates
+This reads the pids in the container, then reads /proc and populates
 a pid_info map.
 
  */
 
-void get_pid_status(std::istream &i,
+void get_pid_status(const std::string &container_name,
 		    std::unordered_map<pid_t,
 		    container_state_info::pid_info> &processes);
 
