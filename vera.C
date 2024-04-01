@@ -1316,17 +1316,141 @@ external_filedesc connect_vera_priv()
 	return fd;
 }
 
+bool do_chmod_override(std::string configname,
+		       const std::string &overridename,
+		       std::string_view override_type,
+		       const std::function<void (const std::string &)> &error)
+{
+	std::ifstream i{overridename};
+
+	if (i.is_open())
+		configname=overridename;
+
+	if (!i.is_open())
+	{
+		i.open(configname);
+	}
+
+	if (!i.is_open())
+		return false; // Shouldn't happen.
+
+	yaml_parser_info info{i};
+
+	if (!info.initialized)
+	{
+		error(configname +
+		      _(": YAML parser initialization failure"));
+
+		exit(1);
+	}
+
+	parsed_yaml parsed{info, configname, error};
+
+	if (!parsed.initialized)
+	{
+		if (parsed.empty)
+			return false;
+		exit(1);
+	}
+
+	auto n=yaml_document_get_root_node(&parsed.doc);
+	if (!n)
+		return false;
+
+	std::string rc_script;
+
+	if (!parsed.parse_map(
+		    n,
+		    false,
+		    configname,
+		    [&](const std::string &key, auto n,
+			auto &error)
+		    {
+			    if (key == x_chmod_script_header)
+			    {
+				    auto s=parsed.parse_scalar(
+					    n,
+					    x_chmod_script_header,
+					    error);
+
+				    if (s)
+				    {
+					    rc_script=*s;
+				    }
+			    }
+			    return true;
+		    },
+		    error))
+	{
+		exit(1);
+	}
+
+	if (rc_script.empty())
+		return false;
+
+	struct stat stat_buf;
+
+	if (stat(rc_script.c_str(), &stat_buf))
+	{
+		error(rc_script + ": " + strerror(errno));
+		exit(1);
+	}
+
+	int mode=stat_buf.st_mode & 0777;
+
+	if (override_type == "enabled")
+	{
+		mode |= S_IXUSR;
+
+		if (mode & S_IRGRP)
+			mode |= S_IXGRP;
+
+		if (mode & S_IROTH)
+			mode |= S_IXOTH;
+	}
+	else if (override_type == "none")
+	{
+		mode &= ~(S_IXUSR|S_IXGRP|S_IXOTH);
+	}
+	else
+	{
+		error(rc_script + _(": unsupported operation"));
+		exit(1);
+	}
+
+	if (chmod(rc_script.c_str(), mode) < 0)
+	{
+		error(rc_script + ": " + strerror(errno));
+		exit(1);
+	}
+
+	std::cout << rc_script << ": permissions updated." << std::endl;
+	return true;
+}
+
 void do_override(const std::string &name, const char *type)
 {
 	struct stat stat_buf;
 
-	if (stat((INSTALLCONFIGDIR "/" + name).c_str(), &stat_buf) ||
+	std::string configname{INSTALLCONFIGDIR "/" + name};
+
+	if (stat(configname.c_str(), &stat_buf) ||
 	    !S_ISREG(stat_buf.st_mode))
 	{
 		std::cerr << name << " is not an existing unit,"
 			  << std::endl;
 		exit(1);
 	}
+
+	if (do_chmod_override(configname,
+			      LOCALCONFIGDIR "/" + name,
+			      type,
+			      [&]
+			      (const std::string &s)
+			      {
+				      std::cerr << s << "\n";
+			      }))
+		exit(0);
 
 	int exit_code=0;
 

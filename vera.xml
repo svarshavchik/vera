@@ -535,6 +535,38 @@
 	    see <xref linkend="dependencies" /> for more information.
 	  </para>
 	</note>
+
+	<note>
+	  <para>
+	    The <command>enable</command>, <command>disable</command> and
+	    <command>mask</command> commands work differently with
+	    units that get created by the <quote>inittab</quote> command
+	    (see <xref linkend="management" />) for
+	    <filename>/etc/rc.d</filename> scripts.
+	    The sysvinit package checks the scripts' permissions and only runs
+	    executable scripts.
+	  </para>
+
+	  <para>
+	    <quote>inittab</quote> creates a
+	    <filename>system/rc.M/<replaceable>name</replaceable></filename>
+	    unit for these.
+	    The <quote>mask</quote> command is disabled for these units.
+	    The <quote>enable</quote>
+	    and <quote>disable</quote> commands modify the corresponding
+	    script's executable permissions.
+	  </para>
+
+	  <para>
+	    These units are not directly enabled in any particular runlevel.
+	    The <filename>/etc/rc.d/rc.M</filename> script checks each
+	    script's permissions and (the on-the-fly modified script) starts
+	    the corresponding unit if it's executable, and the different
+	    behavior of <command>enable</command> and <command>disable</command>
+	    ends up having the same result as with regular units.
+	  </para>
+	</note>
+
 	<refsect2 id="status">
 	  <title>The <quote>status</quote> command</title>
 
@@ -547,8 +579,8 @@
 	    <quote>--dependencies</quote> lists all units' dependencies
 	    (which all other units it requires, its required by,
 	    and which ones must be started or stopped first, as calculated
-	    from the unit's specification, see blow).
-	    The <quote>--terse</quote> produces a compact status, one contain
+	    from the unit's specification, see below).
+	    The <quote>--terse</quote> produces a compact status, one container
 	    per line, in a parsable format.
 	  </para>
 	  <para>
@@ -1272,7 +1304,7 @@ Version: 1</literallayout>
 
 		<note>
 		  <para>
-		    <quote>respawn</quote> require a starting command.
+		    <quote>respawn</quote> requires a starting command.
 		    For other starting types:
 		    an unspecified starting command has the same results as if
 		    the unit's starting command immediately terminated with
@@ -1658,7 +1690,7 @@ version: 1
 	    <quote>notify: parents</quote> is the default if the unit
 	    specification file does not have a stopping command.
 	    <quote>notify: all</quote> is the default if the unit
-	    specification file hasx an explicit stopping command,
+	    specification file has an explicit stopping command,
 	    <acronym>SIGTERM</acronym> gets sent to all processes after
 	    the stopping command finishes.
 	  </para>
@@ -2854,6 +2886,13 @@ version: 1
 	  <command>status</command>. Use
 	  <quote><command>kill -usr1 1</command></quote>
 	  to restart it.
+	</para>
+
+	<para>
+	  <filename>system/rc.M</filename> units always claim they're
+	  manually started, even though they get started automatically.
+	  This is an artifact of how <command>vera</command>'s
+	  <command>inittab</command> command works.
 	</para>
       </refsect1>
     </refentry>

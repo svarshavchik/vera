@@ -1,3 +1,11 @@
+2024-04-01  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 0.92
+
+	* Transparent integration with /etc/rc.d/rc.M. The "enable" and
+	"disable" commands for containers that correspond to /etc/rc.d/rc.*
+	scripts automatically update the scripts' execute permissions.
+
 2024-03-31  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* "status" command: move more pid-related logic to the requesting

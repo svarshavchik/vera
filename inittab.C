@@ -76,6 +76,13 @@ struct inittab_entry {
 
 	std::string alternative_group;
 
+	/*! Extra headers.
+
+	  This is used to link an inittab entry to an rc.d script
+
+	 */
+
+	std::unordered_map<std::string, std::string> x;
 	/* Unit's starting type */
 	const char *start_type="oneshot";
 
@@ -254,6 +261,14 @@ yaml_write_map inittab_entry::create() const
 
 	for (auto &rl:all_runlevels)
 		prev_commands[rl]=identifier;
+
+	for (auto &[name, value] : x)
+	{
+		unit.emplace_back(
+			std::make_shared<yaml_write_scalar>(name),
+			std::make_shared<yaml_write_scalar>(value)
+		);
+	}
 
 	unit.emplace_back(
 		std::make_shared<yaml_write_scalar>("Version"),
@@ -1199,12 +1214,6 @@ fi
 
 				std::string launch="/etc/rc.d/" + script;
 
-				if (b-words.begin() >= 2 &&
-				    b[-2] == "sh")
-				{
-					launch = "sh " + launch;
-				}
-
 				inittab_entry run_rc{
 					dummy,
 					none,
@@ -1212,6 +1221,13 @@ fi
 					launch + " start",
 					launch
 				};
+				run_rc.x.emplace(x_chmod_script_header, launch);
+
+				if (b-words.begin() >= 2 &&
+				    b[-2] == "sh")
+				{
+					launch = "sh " + launch;
+				}
 
 				run_rc.stopping_command=
 					launch + " stop";

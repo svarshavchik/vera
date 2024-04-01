@@ -8,6 +8,8 @@
 #include "proc_container.H"
 #include <iostream>
 
+#define x_chmod_script_header "x-chmod-script"
+
 //! C++ wrapper for parse_inittab() C code.
 
 //! Parses the inittab file, and invokes the passed in closure for each line.
