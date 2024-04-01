@@ -809,7 +809,7 @@ int main(int argc, char **argv)
 			regular_tests(test);
 		}
 
-		test_reset();
+		test_finished();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

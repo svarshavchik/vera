@@ -93,6 +93,9 @@ void test_reset(bool keep_cgroupfs=false)
 		std::filesystem::remove_all(
 			proc_container_group_data::get_cgroupfs_base_path()
 		);
+		std::filesystem::create_directory(
+			proc_container_group_data::get_cgroupfs_base_path()
+		);
 	}
 
 	std::filesystem::remove_all(slashprocslash);
@@ -104,6 +107,15 @@ void test_reset(bool keep_cgroupfs=false)
 	{
 		throw "unexpected call to reexec.";
 	};
+}
+
+void test_finished()
+{
+	test_reset();
+
+	std::filesystem::remove_all(
+		proc_container_group_data::get_cgroupfs_base_path()
+	);
 }
 
 void test_advance(time_t interval)

@@ -788,7 +788,7 @@ void vera_init()
 	if (stat(cgroups_proc.c_str(), &st))
 	{
 		if (mount("cgroup2", cgroups.c_str(), "cgroup2",
-			  MS_NOEXEC|MS_NOSUID|MS_NOEXEC, nullptr))
+			  MS_NOEXEC|MS_NOSUID, nullptr))
 		{
 			perror(cgroups.c_str());
 			exit(1);

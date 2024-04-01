@@ -163,7 +163,7 @@ int main(int argc, char **argv)
 		test="test_forward_carbon_copy2";
 
 		test_forward_carbon_copy2();
-		test_reset();
+		test_finished();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";

@@ -96,6 +96,9 @@ struct proc_container_group_data {
 			const external_filedesc &requester_stdout);
 
 private:
+
+	//! Buffer used by log_output to collect captured output.
+
 	std::string buffer;
 };
 

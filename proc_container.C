@@ -4060,6 +4060,18 @@ void current_containers_infoObj::populated(const std::string &s,
 		return;
 
 	stopped(cc->first->name);
+
+	if (is_restored)
+	{
+		log_container_message(
+			cc->first, "stopped during a reexec"
+		);
+
+		// Will call find_start_or_stop_todo when we return to
+		// install().
+		return;
+	}
+
 	find_start_or_stop_to_do();
 }
 

@@ -405,7 +405,7 @@ int main(int argc, char **argv)
 			test_reset();
 			test="noreexec3";
 			noreexec3();
-			test_reset();
+			test_finished();
 			return 0;
 		}
 		throw "unknown invocation";

@@ -102,6 +102,7 @@ bool proc_container_group::cgroups_try_rmdir(
 	log_output(pc, requester_stdout);
 	auto dir=cgroups_dir();
 
+	unlink((dir + "/cgroup.procs").c_str());
 	unlink(cgroup_events().c_str());
 
 	if (rmdir(dir.c_str()) < 0)
@@ -160,7 +161,7 @@ void populated(const proc_container &container, bool isit)
 
 	dir += "/cgroup.events";
 
-	int fd=open(dir.c_str(), O_WRONLY);
+	int fd=open(dir.c_str(), O_WRONLY|O_CREAT, 0666);
 
 	write(fd, (isit ? "populated 1\n":"populated 0\n"), 12);
 	close(fd);

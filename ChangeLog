@@ -3,6 +3,8 @@
 	* "status" command: move more pid-related logic to the requesting
 	process, out of pid 1. Various fixes.
 
+	* Fix race condition if a container happens to stop during a re-exec.
+
 2024-03-25  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Release 0.91

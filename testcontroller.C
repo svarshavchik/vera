@@ -2196,12 +2196,15 @@ void testfailcgroupcreate()
 
 	auto b=std::make_shared<proc_new_containerObj>("b");
 
+	std::filesystem::remove_all(
+		proc_container_group_data::get_cgroupfs_base_path()
+	);
+	symlink("non/existent/path",
+		proc_container_group_data::get_cgroupfs_base_path());
+
 	proc_containers_install({
 			a, b
 		}, container_install::update);
-
-	symlink("non/existent/path",
-		proc_container_group_data::get_cgroupfs_base_path());
 
 	if (!proc_container_runlevel("default").empty())
 		throw "Unexpected error starting default runlevel";
@@ -3633,6 +3636,63 @@ void testenv()
 	}
 }
 
+void testreexec_stopped()
+{
+	reexec_handler=[]{ throw 0; };
+
+	auto a=std::make_shared<proc_new_containerObj>("a");
+	a->new_container->starting_command="start";
+
+	proc_containers_install({a}, container_install::update);
+
+	proc_container_start("a");
+	create_fake_cgroup(a->new_container, {});
+	populated(a->new_container, true);
+	runner_finished(1, 0);
+
+	{
+		auto [a, b]=create_fake_request();
+
+		request_reexec(a);
+		proc_do_request(b);
+	}
+
+	while (!poller_is_transferrable())
+		do_poll(0);
+
+	bool caught=false;
+
+	try {
+		proc_check_reexec();
+	} catch (int)
+	{
+		caught=true;
+	}
+
+	if (!caught)
+	{
+		throw "Did not reexec for some reason.";
+	}
+
+	populated(a->new_container, false);
+
+	logged_state_changes.clear();
+	proc_containers_install({a}, container_install::initial);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"re-exec: a",
+			"a: container was started",
+			"a: restored preserved state: started",
+			"a: restored after re-exec",
+			"a: cgroup removed",
+			"a: stopped during a reexec",
+			"a: not active after re-exec",
+		})
+	{
+		throw "Unexpected state changes during reexec";
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3826,6 +3886,10 @@ int main(int argc, char **argv)
 		testenv();
 
 		test_reset();
+		test="testreexec_stopped";
+		testreexec_stopped();
+
+		test_finished();
 	} catch (const char *e)
 	{
 		std::cout << test << ": " << e << "\n";
