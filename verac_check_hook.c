@@ -65,6 +65,9 @@ const char *check_hookfile(const char *hookfile,
 	if (!getenv(reexec_envar))
 		(*run_sysinit_cb)("/etc/inittab");
 
+	// Now that root is remounted read-write we can remove a one-time
+	// only hook.
+
 	if (flag < 0)
 	{
 		if (unlink(hookfile) < 0)
@@ -73,7 +76,9 @@ const char *check_hookfile(const char *hookfile,
 		}
 		else
 		{
-			printf("vera: one-time only hook removed\r\n");
+			printf("vera: one-time only hook removed\n");
+			sync();
+			sync();
 		}
 	}
 	return vera_path;

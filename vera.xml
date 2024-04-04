@@ -2449,7 +2449,7 @@ version: 1
 
 	<para>
 	  The <filename>/etc/rc.d/rc.M</filename> script's contents are
-	  search for every instance of
+	  searched for every instance of
 	  <quote>-x /etc/rc.d/<replaceable>rc.script</replaceable></quote>
 	  followed by
 	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable>
@@ -2460,9 +2460,8 @@ version: 1
 	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> start</quote>
 	  and
 	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> stop</quote>.
-	  As part of converting <filename>/etc/inittab</filename> the
-	  converted <filename>/etc/inittab</filename> entry that runs
-	  <filename>/etc/rc.d/rc.M</filename> converts this script, on the fly,
+	  The entry for <filename>/etc/rc.d/rc.M</filename> executes it via
+	  a wrapper that converts it, on the fly,
 	  to start each corresponding unit, instead of running each script
 	  directly.
 	</para>
@@ -2553,7 +2552,8 @@ version: 1
 	  <command>vera</command> logs all runlevel switches, this includes
 	  system startup and shutdown.
 	  The logs are retained for a set number of days, the oldest
-	  log files get automatically removed. The number of days of log
+	  log files get automatically removed at system startup. The number
+	  of days of log
 	  retention is controlled by the <envar>SWITCHLOGDAYS</envar>
 	  environment variable.
 	  <quote><command>vlad setenv SWITCHLOGDAYS 5</command></quote> sets
@@ -2561,11 +2561,20 @@ version: 1
 	  kept (dates without logs don't count toward the limit).
 	</para>
 
+	<note>
+	  <para>
+	    There will be an extra day of logs at times. Logs get purged
+	    at system boot before a new log gets created, possibly for a brand
+	    new day.
+	  </para>
+	</note>
+
 	<blockquote>
 	  <informalexample>
 	    <programlisting><![CDATA[
-       2 2024-03-23 20:52:48 multi-user
-       1 2024-03-23 20:53:18 reboot]]></programlisting>
+       # vlad logs
+       2 2024-03-23 20:52:48 reboot
+       1 2024-03-23 20:53:18 multi-user]]></programlisting>
 	  </informalexample>
 	</blockquote>
 

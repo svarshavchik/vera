@@ -1,6 +1,11 @@
-2024-04-01  Sam Varshavchik  <mrsam@courier-mta.com>
+2024-04-03  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Release 0.92
+
+	* verac_check_hook.c (check_hookfile): Sync the filesystems
+	before running sysinit.
+
+2024-04-01  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Transparent integration with /etc/rc.d/rc.M. The "enable" and
 	"disable" commands for containers that correspond to /etc/rc.d/rc.*
