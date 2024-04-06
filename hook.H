@@ -41,4 +41,14 @@ void unhook(std::string etc_sysinit_dir, //!< "/etc/rc.d"
 	    std::string hookfile //!< /etc/vera/hook
 );
 
+/*! Reinstall /sbin/init hook
+
+  An upgrade overwrites vera-init. Relink it as /sbin/init
+*/
+
+bool rehook_sbin_init(
+	std::string sbindir, //!< Directory with init
+	std::string vera_init //!< Pathname to vera-init
+);
+
 #endif

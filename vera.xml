@@ -374,6 +374,7 @@
 	    <arg choice='plain'>hookonce</arg>
 	    <arg choice='plain'>unhook</arg>
 	    <arg choice='plain'>inittab</arg>
+	    <arg choice='plain'>rehook</arg>
 	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
@@ -2532,6 +2533,23 @@ version: 1
 	    </para>
 	  </listitem>
 	</itemizedlist>
+
+	<para>
+	  If everything was converted successfully,
+	  <command>inittab</command> makes sure that, if
+	  <command>vera</command> is hooked, the replacement
+	  <filename>/sbin/init</filename> is hard-linked to the current
+	  <filename>vera-init</filename> executable.
+	  Updating (via <command>make install</command> or a built package)
+	  installs a new <command>vera-init</command> binary.
+	  The <command>inittab</command> command runs automatically during
+	  the update and this updates the hard link.
+	</para>
+
+	<para>
+	  The <command>rehook</command> command runs just the last part that
+	  reinstalls the <filename>/sbin/init</filename> hard link.
+	</para>
 
 	<para>
 	  The <command>setenv</command> and <command>unsetenv</command>

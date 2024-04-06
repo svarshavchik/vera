@@ -111,12 +111,26 @@ struct hooked_file {
 
 typedef std::array<hooked_file, 4> hooks_t;
 
+hooked_file init_hook(const std::string &sbindir,
+		      const std::string &vera_init)
+{
+	return {
+		sbindir + "/init",
+		sbindir + "/init.tmp",
+		sbindir + "/init.init",
+		vera_init,
+		true,
+	};
+}
+
 hooks_t define_hooks(std::string etc_sysinit_dir,
 		     std::string sbindir,
 		     std::string vera_init,
 		     std::string pkgdatadir)
 {
 	return {
+		// Note that these are also hardcoded in uninst.sh
+
 		{
 			{
 				etc_sysinit_dir + "/rc.sysvinit",
@@ -139,13 +153,7 @@ hooks_t define_hooks(std::string etc_sysinit_dir,
 				pkgdatadir + "/rc.local_shutdown.vera",
 				false,
 			},
-			{
-				sbindir + "/init",
-				sbindir + "/init.tmp",
-				sbindir + "/init.init",
-				vera_init,
-				true,
-			},
+			init_hook(sbindir, vera_init)
 		}
 	};
 }
@@ -282,6 +290,35 @@ bool hook(std::string etc_sysinit_dir,
 
 	sethookfile(hookfile, once);
 	return true;
+}
+
+bool rehook_sbin_init(std::string sbindir, std::string vera_init)
+{
+	auto ih=init_hook(sbindir, vera_init);
+
+	if (!std::filesystem::exists(ih.backup))
+		return false;
+
+	std::error_code ec;
+
+	if (std::filesystem::equivalent(ih.filename, ih.replacement) || ec)
+		return true;
+
+	std::filesystem::remove(ih.filenametmp, ec);
+
+	std::filesystem::create_hard_link(ih.replacement, ih.filenametmp, ec);
+
+	if (!ec)
+	{
+		std::filesystem::rename(ih.filenametmp, ih.filename, ec);
+
+		if (!ec)
+		{
+			std::cout << "Re-hooked " << ih.filename << std::endl;
+			return true;
+		}
+	}
+	return false;
 }
 
 void unhook(std::string etc_sysinit_dir,

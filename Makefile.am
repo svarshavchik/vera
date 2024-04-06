@@ -26,6 +26,7 @@ noinst_PROGRAMS=\
 
 EXTRA_DIST= 							\
 	packaging/slackware/doinst.sh				\
+	packaging/slackware/uninst.sh				\
 	slack-desc						\
 	testinittab.sh						\
 	testinittab.txt						\
@@ -171,6 +172,7 @@ install-data-local:
 			-p $(DESTDIR)${pkgdatadir} \
 			-o $(DESTDIR)$(OVERRIDECONFIGDIR) \
 			-r $(DESTDIR)$(RUNLEVELCONFIG) >/dev/null
+	$(DESTDIR)$(sbindir)/vlad rehook || true
 
 uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system
@@ -294,10 +296,9 @@ slackpkg-sudo:
 			cp ../../slack-desc install && \
                    gzip usr/share/man/*/* && \
                    mkdir -p var/lib/pkgtools/douninst.sh && \
-                   echo '#! /bin/sh' >uninst.sh && \
-                   echo 'rm -rf /lib/vera /etc/vera /var/log/vera' >>uninst.sh && \
-                   mv uninst.sh \
+		   cp ../../packaging/slackware/uninst.sh \
                         var/lib/pkgtools/douninst.sh/$(NVR) && \
+                        chmod +x var/lib/pkgtools/douninst.sh/$(NVR) && \
                    /sbin/makepkg -c y -l y \
      ../../$(NVR).txz
 	rm -rf $(PACKAGE)-$(VERSION)

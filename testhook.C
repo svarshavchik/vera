@@ -287,6 +287,36 @@ static void testsysinit()
 		throw std::runtime_error{"sysinit execution failed"};
 }
 
+void testrehook()
+{
+	std::error_code ec;
+
+	std::filesystem::remove_all("testhook.sbin/init", ec);
+	std::filesystem::remove_all("testhook.sbin/init.init", ec);
+	std::filesystem::remove_all("testhook.sbin/vera-init", ec);
+
+	std::ofstream{"testhook.sbin/init"};
+	std::ofstream{"testhook.sbin/vera-init"};
+
+	if (rehook_sbin_init("testhook.sbin", "testhook.sbin/vera-init"))
+		throw std::runtime_error(
+			"rehook_sbin_init unexpectedly worked"
+		);
+
+	std::ofstream{"testhook.sbin/init.init"};
+
+	if (!rehook_sbin_init("testhook.sbin", "testhook.sbin/vera-init"))
+		throw std::runtime_error(
+			"rehook_sbin_init unexpectedly failed"
+		);
+
+	if (!std::filesystem::equivalent("testhook.sbin/init",
+					 "testhook.sbin/vera-init"))
+		throw std::runtime_error(
+			"rehook_sbin_init lied about succeeding"
+		);
+}
+
 int main(int argc, char **argv)
 {
 	umask(022);
@@ -306,6 +336,7 @@ int main(int argc, char **argv)
 			throw std::runtime_error("Cannot create directories");
 
 		testhook();
+		testrehook();
 
 		std::filesystem::remove_all("testhook.etcrc", ec);
 		std::filesystem::remove_all("testhook.pkgdata", ec);

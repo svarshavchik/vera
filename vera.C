@@ -1754,6 +1754,12 @@ static auto get_requested_log(const std::string &lognum_str)
 	return switchlog_analyze(logs.at(logs.size()-lognum));
 }
 
+static bool rehook()
+{
+	return rehook_sbin_init("/sbin",
+				SBINDIR "/vera-init");
+}
+
 void vlad(std::vector<std::string> args)
 {
 	if (args.size() == 2 && args[0] == "start")
@@ -2092,7 +2098,16 @@ void vlad(std::vector<std::string> args)
 		{
 			exit(1);
 		}
-
+		rehook();
+		return;
+	}
+	if (args.size() == 1 && args[0] == "rehook")
+	{
+		if (!rehook())
+		{
+			std::cerr << _("vera is not hooked.") << std::endl;
+			exit(1);
+		}
 		return;
 	}
 	if (args.size() >= 2 && args[0] == "validate")

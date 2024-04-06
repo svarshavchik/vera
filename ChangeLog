@@ -1,6 +1,12 @@
-2024-04-03  Sam Varshavchik  <mrsam@courier-mta.com>
+2024-04-06  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Release 0.92
+
+	* hook.C: Packaging improvements. Going forward the vera Slackware
+	package can be upgraded without manually reverting to sysvinit,
+	first.
+
+2024-04-03  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* verac_check_hook.c (check_hookfile): Sync the filesystems
 	before running sysinit.
