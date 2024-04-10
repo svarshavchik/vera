@@ -4284,21 +4284,25 @@ void proc_containerObj::compare_and_log(const proc_container &new_container)
 	compare(&proc_containerObj::respawn_attempts, new_container,
 		": respawn attempts updated");
 	compare(&proc_containerObj::respawn_limit, new_container,
-		": respawn limit");
+		": respawn limit updated");
 	compare(&proc_containerObj::stop_type, new_container,
-		": stop type");
+		": stop type updated");
+	compare(&proc_containerObj::alternative_group, new_container,
+		": alternative group updated");
 	compare(&proc_containerObj::starting_command, new_container,
-		": starting command");
+		": starting command updated");
 	compare(&proc_containerObj::starting_timeout, new_container,
-		": starting timeout");
+		": starting timeout updated");
 	compare(&proc_containerObj::stopping_command, new_container,
-		": stopping command");
+		": stopping command updated");
 	compare(&proc_containerObj::stopping_timeout, new_container,
-		": stopping timeout");
+		": stopping timeout updated");
+	compare(&proc_containerObj::sigterm_notify, new_container,
+		": sigterm notify updated");
 	compare(&proc_containerObj::restarting_command, new_container,
-		": restarting command");
+		": restarting command updated");
 	compare(&proc_containerObj::reloading_command, new_container,
-		": reloading command");
+		": reloading command updated");
 }
 
 void current_containers_infoObj::compare_and_log(

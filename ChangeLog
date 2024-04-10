@@ -1,3 +1,8 @@
+2024-04-10  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* proc_container.C (proc_containerObj::compare_and_log): improve
+	logging of updated containers.
+
 2024-04-06  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Release 0.92
