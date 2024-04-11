@@ -1,3 +1,7 @@
+2024-04-11  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 0.93
+
 2024-04-10  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* inittab.C (inittab): Add a system/network-online target stub.

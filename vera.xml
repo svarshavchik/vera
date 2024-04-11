@@ -98,7 +98,7 @@
       </informalexample>
     </blockquote>
     <para>
-      This install <command>vera</command> but does not replace
+      This installs <command>vera</command> but does not replace
       <command>init</command>. To do that execute (as root):
     </para>
 
@@ -166,7 +166,7 @@
 
     <para>
       See the <citerefentry>
-      <refentrytitle>vlad</refentrytitle>
+      <refentrytitle>vera</refentrytitle>
       <manvolnum>8</manvolnum>
       </citerefentry> manual page for more information.
     </para>
@@ -219,7 +219,7 @@
 
       <para>
 	See the <citerefentry>
-	<refentrytitle>vlad</refentrytitle>
+	<refentrytitle>vera</refentrytitle>
 	<manvolnum>8</manvolnum>
 	</citerefentry> manual page for more information.
       </para>
@@ -379,6 +379,18 @@
 	  for more information on obtaining basic statistics on processes
 	  started by <command>vera</command>.
 	</para>
+
+	<para>
+	  See
+	  <link linkend="vera.extras.8">
+	    <citerefentry>
+              <refentrytitle>vera.extras</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	  </link>
+	  for more information on additional features that
+	  <command>vera</command> adds to a base Slackware system.
+	</para>
       </refsect1>
 
       <refsect1 id="management">
@@ -474,7 +486,7 @@
 	<para>
 	  The installed replacements check if <command>vera-up</command>,
 	  if so they do nothing because the <command>inittab</command>
-	  command (see <xref linkend="management" />) installs units that
+	  command installs units that
 	  run these scripts.
 	  Otherwise, if not <command>vera-up</command> and
 	  <command>init</command>
@@ -488,8 +500,7 @@
 	  <command>vera-init</command>, checks that
 	  <filename>@CONFIGDIR@/hook</filename> exists on the next reboot, and
 	  starts <command>vera</command> instead of the replaced
-	  <command>init</command>. See <xref linkend="internal" /> for more
-	  information.
+	  <command>init</command>.
 	</para>
 
 	<para>
