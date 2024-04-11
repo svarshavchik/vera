@@ -1,5 +1,9 @@
 2024-04-10  Sam Varshavchik  <mrsam@courier-mta.com>
 
+	* inittab.C (inittab): Add a system/network-online target stub.
+	Include system/networkmanager-wait-online in the package. Increase
+	/etc/rc.d/rc.M's starting timeout to five minutes.
+
 	* proc_container.C (proc_containerObj::compare_and_log): improve
 	logging of updated containers.
 

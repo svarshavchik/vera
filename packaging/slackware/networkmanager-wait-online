@@ -1,0 +1,10 @@
+# Wait for network manager to activate all connections
+
+name: networkmanager-wait-online
+description: wait for network connectivity
+enabled: network-online
+starting:
+  type: forking
+  command: /usr/bin/nm-online -t 120 || /bin/true
+  timeout: 150
+version: 1

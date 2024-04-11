@@ -27,6 +27,7 @@ noinst_PROGRAMS=\
 EXTRA_DIST= 							\
 	packaging/slackware/doinst.sh				\
 	packaging/slackware/uninst.sh				\
+	packaging/slackware/networkmanager-wait-online		\
 	slack-desc						\
 	testinittab.sh						\
 	testinittab.txt						\
@@ -167,6 +168,8 @@ install-data-local:
 		$(DESTDIR)$(RUNLEVELCONFIG) \
 		$(DESTDIR)$(INSTALLCONFIGDIR)/system \
 		$(DESTDIR)$(ENVIRONCONFIG) && \
+		$(INSTALL_DATA) $(srcdir)/packaging/slackware/networkmanager-wait-online \
+			$(DESTDIR)$(INSTALLCONFIGDIR)/system && \
 		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
 			-p $(DESTDIR)${pkgdatadir} \
@@ -206,21 +209,43 @@ check-am:
 	./testhook
 	./testswitchlog
 
-man8_MANS=vera.8 vlad.8
+man8_MANS=vera.8 vlad.8 vera.extras.8 vera.logs.8 vera.runlevels.8 vera.units.8
 
-EXTRA_DIST += init.8 vlad.8 vera.8.in
+EXTRA_DIST += init.8 vlad.8 vera.8.in \
+	vera.extras.8.in \
+	vera.logs.8.in \
+	vera.runlevels.8.in \
+	vera.units.8.in
+
+MANEXPAND = \
+	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~;   \
+	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~;                \
+	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~;          \
+	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~;                \
+	     s~@''ENVIRONCONFIG@''~$(ENVIRONCONFIG)~;                  \
+	     s~@''CONFIGDIR@''~$(CONFIGDIR)~'
 
 vera.8: vera.8.in Makefile
-	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~;   # \
-	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~;                # \
-	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~;          # \
-	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~;                # \
-	     s~@''ENVIRONCONFIG@''~$(ENVIRONCONFIG)~;                  # \
-	     s~@''CONFIGDIR@''~$(CONFIGDIR)~'    	                 \
-					<$(srcdir)/vera.8.in >vera.8.tmp
+	$(MANEXPAND) <$(srcdir)/vera.8.in >vera.8.tmp
 	mv -f vera.8.tmp vera.8
 
-CLEANFILES += vera.8
+vera.extras.8: vera.extras.8.in Makefile
+	$(MANEXPAND) <$(srcdir)/vera.extras.8.in >vera.extras.8.tmp
+	mv -f vera.extras.8.tmp vera.extras.8
+
+vera.logs.8: vera.logs.8.in Makefile
+	$(MANEXPAND) <$(srcdir)/vera.logs.8.in >vera.logs.8.tmp
+	mv -f vera.logs.8.tmp vera.logs.8
+
+vera.runlevels.8: vera.runlevels.8.in Makefile
+	$(MANEXPAND) <$(srcdir)/vera.runlevels.8.in >vera.runlevels.8.tmp
+	mv -f vera.runlevels.8.tmp vera.runlevels.8
+
+vera.units.8: vera.units.8.in Makefile
+	$(MANEXPAND) <$(srcdir)/vera.units.8.in >vera.units.8.tmp
+	mv -f vera.units.8.tmp vera.units.8
+
+CLEANFILES += vera.8 vera.extras.8 vera.logs.8 vera.runlevels.8 vera.units.8
 
 EXTRA_DIST += INSTALL
 BUILT_SOURCES += INSTALL
@@ -232,6 +257,18 @@ init.8: vera.man.stamp
 vera.8.in: vera.man.stamp
 	touch vera.8.in
 
+vera.extras.8.in: vera.man.stamp
+	touch vera.extras.8.in
+
+vera.logs.8.in: vera.man.stamp
+	touch vera.logs.8.in
+
+vera.runlevels.8.in: vera.man.stamp
+	touch vera.runlevels.8.in
+
+vera.units.8.in: vera.man.stamp
+	touch vera.units.8.in
+
 vlad.8: vera.man.stamp
 	touch vlad.8
 
@@ -240,11 +277,17 @@ vera.man.stamp: vera.xml
 	mkdir -p veraman.tmp
 	xsltproc  --nonet -o veraman.tmp/ http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $(srcdir)/vera.xml
 	mv veraman.tmp/vera.8 veraman.tmp/vera.8.in
+	mv veraman.tmp/vera.extras.8 veraman.tmp/vera.extras.8.in
+	mv veraman.tmp/vera.logs.8 veraman.tmp/vera.logs.8.in
+	mv veraman.tmp/vera.runlevels.8 veraman.tmp/vera.runlevels.8.in
+	mv veraman.tmp/vera.units.8 veraman.tmp/vera.units.8.in
 	mv veraman.tmp/* .
 	rm -rf veraman.tmp
 	touch vera.man.stamp
 
-CLEANFILES += init.8 vera.8.in vlad.8 vera.man.stamp
+CLEANFILES += init.8 vera.8.in \
+	vera.extras.8 vera.logs.8 vera.runlevels.8.in vera.units.8.in \
+	vlad.8 vera.man.stamp
 
 INSTALL: vera.html.stamp
 	touch INSTALL

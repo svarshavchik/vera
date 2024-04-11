@@ -66,6 +66,9 @@ struct inittab_entry {
 
 	std::string starting_command;
 
+	/*! Non-defautl starting timeout */
+	std::string starting_timeout;
+
 	/*! Stopping command, if we know it */
 	std::string stopping_command;
 
@@ -91,6 +94,9 @@ struct inittab_entry {
 
 	// Unit or units where this inittab/namespace entry starts in.
 	std::vector<std::string> required_by;
+
+	// Unit or units where this inittab/namespace entry requires
+	std::vector<std::string> this_requires;
 
 	// Additional dependencies
 	std::vector<std::string> starts_before, starts_after,
@@ -190,6 +196,15 @@ yaml_write_map inittab_entry::create() const
 			)
 		);
 	}
+	if (!this_requires.empty())
+	{
+		unit.emplace_back(
+			std::make_shared<yaml_write_scalar>("requires"),
+			std::make_shared<yaml_write_seq>(
+				this_requires.begin(), this_requires.end()
+			)
+		);
+	}
 
 	yaml_map_t starting, stopping;
 
@@ -208,6 +223,14 @@ yaml_write_map inittab_entry::create() const
 		starting.emplace_back(
 			std::make_shared<yaml_write_scalar>("command"),
 			std::make_shared<yaml_write_scalar>(starting_command)
+		);
+	}
+
+	if (!starting_timeout.empty())
+	{
+		starting.emplace_back(
+			std::make_shared<yaml_write_scalar>("timeout"),
+			std::make_shared<yaml_write_scalar>(starting_timeout)
 		);
 	}
 
@@ -409,6 +432,18 @@ struct convert_inittab {
 		add(entry, unit_directory + "/system/rc/" + entry.identifier,
 		    "start " + entry.identifier);
 	}
+
+	/*! Add an ad-hoc system unit */
+
+	void add_adhoc_system(
+		const inittab_entry &entry,
+		const std::string &comment
+	)
+	{
+		add(entry, unit_directory + "/system/" + entry.identifier,
+		    comment);
+	}
+
 private:
 
 	//! Keep track of all created unit files.
@@ -977,6 +1012,8 @@ struct inittab_converter {
 
 		if (is_local_after)
 		{
+			new_entry.starting_timeout="300";
+
 			// We're going to initiate stopping of all containers
 			// for the extracted /etc/rc.d/rc.M-started
 			// units. They all go into system/rc.M. We want to
@@ -1241,6 +1278,14 @@ fi
 
 				rc_M_target.required_by.push_back(
 					"rc.M/" + unit_name);
+
+				if (script_id == etc_rc::rc_inet2)
+				{
+					run_rc.this_requires.push_back(
+						"../network-online"
+					);
+				}
+
 				generator.add_rcm(run_rc);
 
 				continue;
@@ -1567,6 +1612,25 @@ bool inittab(std::string filename,
 	inittab_converter converter{unit_dir, pkgdata_dir, runlevels,
 		std::move(rcdir),
 		initdefault};
+
+	{
+		prev_commands_t stub1;
+		all_runlevels_t stub2;
+
+		inittab_entry wait_online{
+			stub1, stub2,
+			"network-online",
+			"",
+			"network online"
+		};
+
+		wait_online.stop_type="target";
+
+		converter.generator.add_adhoc_system(
+			wait_online,
+			"required by all rc.inet2-started scripts"
+		);
+	}
 
 	return parse_inittab(
 		filename.c_str(),

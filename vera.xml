@@ -288,83 +288,6 @@
       </refnamediv>
 
       <refsynopsisdiv>
-	<blockquote>
-	  <para>
-	    Controlling individual units:
-	  </para>
-	</blockquote>
-
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='opt'>--nowait</arg>
-	  <group choice='req'>
-	    <arg choice='plain'>start</arg>
-	    <arg choice='plain'>stop</arg>
-	    <arg choice='plain'>restart</arg>
-	    <arg choice='plain'>reload</arg>
-	  </group>
-	  <arg choice='plain'><replaceable>unit</replaceable></arg>
-	</cmdsynopsis>
-
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <group choice='req'>
-	    <arg choice='plain'>mask</arg>
-	    <arg choice='plain'>disable</arg>
-	    <arg choice='plain'>enable</arg>
-	  </group>
-	  <arg choice='plain'><replaceable>unit</replaceable></arg>
-	</cmdsynopsis>
-
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='opt'>--stopped</arg>
-	  <group choice='opt'>
-	    <arg choice='plain'>--dependencies</arg>
-	    <arg choice='plain'>--terse</arg>
-	  </group>
-	  <arg choice='plain'>status</arg>
-	  <arg choice='opt' rep='repeat'>unit</arg>
-	</cmdsynopsis>
-
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='plain'>validate</arg>
-	  <arg choice='req'>filename</arg>
-	  <arg choice='opt'>path</arg>
-	</cmdsynopsis>
-
-	<blockquote>
-	  <para>
-	    Controlling runlevels:
-	  </para>
-	</blockquote>
-
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='opt'>--wait</arg>
-	  <arg choice='plain'>switch</arg>
-	  <arg choice='plain'><replaceable>runlevel</replaceable></arg>
-	</cmdsynopsis>
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='opt'>--override</arg>
-	  <arg choice='plain'>default</arg>
-	  <arg choice='plain'><replaceable>runlevel</replaceable></arg>
-	</cmdsynopsis>
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <group choice='req'>
-	    <arg choice='plain'>current</arg>
-	    <arg choice='plain'>default</arg>
-	  </group>
-	</cmdsynopsis>
-
-	<blockquote>
-	  <para>
-	    <command>vera</command> management:
-	  </para>
-	</blockquote>
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <group choice='req'>
@@ -375,37 +298,16 @@
 	    <arg choice='plain'>unhook</arg>
 	    <arg choice='plain'>inittab</arg>
 	    <arg choice='plain'>rehook</arg>
-	    <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
 	  </group>
 	</cmdsynopsis>
+
 	<cmdsynopsis>
 	  <command>vlad</command>
-	  <arg choice='plain'>setenv</arg>
-	  <arg choice='req'><replaceable>name</replaceable></arg>
-	  <arg choice='req'><replaceable>value</replaceable></arg>
-	</cmdsynopsis>
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='plain'>unsetenv</arg>
-	  <arg choice='req'><replaceable>name</replaceable></arg>
+	  <arg rep='repeat'>parameter</arg>
 	</cmdsynopsis>
 	<blockquote>
 	  <para>
-	    Logging
-	  </para>
-	</blockquote>
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='plain'>logs</arg>
-	</cmdsynopsis>
-	<cmdsynopsis>
-	  <command>vlad</command>
-	  <arg choice='plain'>log</arg>
-	  <arg choice='opt'>number</arg>
-	</cmdsynopsis>
-	<blockquote>
-	  <para>
-	    Internal commands
+	    Internal commands:
 	  </para>
 	</blockquote>
 	<cmdsynopsis>
@@ -435,43 +337,904 @@
 	</para>
 
 	<para>
-	  This manual page is divided into the following sections:
+	  Installing <command>vera</command> does not automatically replace
+	  the default <command>init</command>
+	  supervisor. This manual page describes the process
+	  for converting an existing system from <command>init</command> to
+	  <command>vera</command>, and restoring a converted system back to
+	  <command>init</command>. This manual page also describes some common
+	  and less common management commands.
+	</para>
+
+	<para>
+	  See
+	  <link linkend="vera.runlevels.8">
+	    <citerefentry>
+              <refentrytitle>vera.runlevels</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link> for a description of how <command>vera</command> manages
+	    runlevels, starts, and stops individual units or processes.
+	</para>
+
+	<para>
+	  See
+	  <link linkend="vera.units.8">
+	    <citerefentry>
+              <refentrytitle>vera.units</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link> for more information on adding custom units and
+	    processes to <command>vera</command>.
+	</para>
+
+	<para>
+	  See
+	  <link linkend="vera.logs.8">
+	    <citerefentry>
+              <refentrytitle>vera.logs</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	  </link>
+	  for more information on obtaining basic statistics on processes
+	  started by <command>vera</command>.
+	</para>
+      </refsect1>
+
+      <refsect1 id="management">
+	<title>MANAGING <command>vera</command></title>
+	<para>
+	  <quote>reexec</quote> signals the <command>vera</command> system
+	  process to restart itself. This is needed after installing a new
+	  version of <command>vera</command> or one of the system libraries
+	  it uses (the system was already converted to run
+	  <command>vera</command> instead of <command>init</command> and
+	  a new version of <command>vera</command> was installed).
+	  It's possible that <command>vera</command> will not
+	  restart immediately. If any units are in the middle of being
+	  stopped, started, restarted, or respawned a
+	  <quote>reexec</quote> gets delayed until
+	  all pending activity finishes.
+	</para>
+
+	<note>
+	  <para>
+	    This can be a lengthy delay when there's a respawned unit that
+	    reached its maximum number of attempts and it's waiting until
+	    it's respawnable.
+	    Additionally, <quote>reexec</quote> resets all respawned units'
+	    counters and limits.
+	  </para>
+
+	  <para>
+	    This is not considered critical, a <quote>reexec</quote> is
+	    not something that normally happens.
+	  </para>
+	</note>
+
+	<para>
+	  <command>vlad vera-up</command> tries to connect to
+	  <command>vera</command>'s public socket. A successful connection
+	  indicates that <command>vera</command> is installed and
+	  running. This is indicated by a 0 exit code.
+	  A connection failure is reported by terminating with a non-0
+	  exit code (no error message is shown).
+	</para>
+
+	<para>
+	  Installing <command>vera</command> (from a package or by
+	  <command>make install</command>) does not touch or replace the
+	  default system <command>init</command> daemon. Additional commands
+	  must be executed, and a coordinated reboot is required in order to
+	  roll the dice, and start <command>vera</command>.
+	</para>
+
+	<para>
+	  The <command>hook</command> and <command>hookonce</command> commands
+	  begin the process of converting from <command>init</command> to
+	  <command>vera</command>. They make the following changes:
 	</para>
 
 	<itemizedlist>
 	  <listitem>
-	    <para>this introduction to <command>vera</command> and a
-	    <link linkend="runlevels">brief
-	    overview of runlevels</link></para>
-	  </listitem>
-	  <listitem>
 	    <para>
-	      <xref linkend="units" /> describes the directories where
-	      unit specification files get installed and describes their format.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      <xref linkend="dependencies" /> describes how dependencies between
-	      units get defined.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      <xref linkend="additionalconfig" /> with additional
-	      documentation of runlevels and hierarchical and compound
-	      units.
+	      The original <filename>/sbin/init</filename> gets moved to
+	      <filename>/sbin/init.init</filename>.
 	    </para>
 	  </listitem>
 
 	  <listitem>
 	    <para>
-	      <xref linkend="management" /> contains instructions for
-	      switching the system to use <command>vera</command>
-	      instead of <command>init</command>, and switching back.
+	      The original
+	      <filename>/etc/rc.d/rc.sysvinit</filename>,
+	      <filename>/etc/rc.d/rc.local</filename> and
+	      <filename>/etc/rc.d/rc.local_shutdown</filename>,
+	      scripts get moved to
+	      <filename>/etc/rc.d/rc.sysvinit.init</filename>,
+	      <filename>/etc/rc.d/rc.local.init</filename> and
+	      <filename>/etc/rc.d/rc.local_shutdown.init</filename>,
+	      if they exist.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The moved scripts get replaced
+	      with links to <command>vera</command>'s replacements.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      <filename>@CONFIGDIR@/hook</filename> gets created.
 	    </para>
 	  </listitem>
 	</itemizedlist>
+
+	<para>
+	  The installed replacements check if <command>vera-up</command>,
+	  if so they do nothing because the <command>inittab</command>
+	  command (see <xref linkend="management" />) installs units that
+	  run these scripts.
+	  Otherwise, if not <command>vera-up</command> and
+	  <command>init</command>
+	  is still running (prior/after a reboot) the
+	  replacements execute the replaced program or script, with no
+	  change in behavior.
+	</para>
+
+	<para>
+	  The replacement <command>/sbin/init</command>, called
+	  <command>vera-init</command>, checks that
+	  <filename>@CONFIGDIR@/hook</filename> exists on the next reboot, and
+	  starts <command>vera</command> instead of the replaced
+	  <command>init</command>. See <xref linkend="internal" /> for more
+	  information.
+	</para>
+
+	<para>
+	  <command>hookonce</command> results in the removal of
+	  <filename>@CONFIGDIR@/hook</filename> on the next reboot as early
+	  as possible. Its absence on a subsequent reboot results in the
+	  original <command>init</command> (now
+	  <filename>/sbin/init.init</filename>) starting normally as PID 1.
+	</para>
+
+	<para>
+	  The <command>unhook</command> command manually removes
+	  <filename>@CONFIGDIR@/hook</filename> and if the system was booted
+	  with <command>vera</command> no further action is taken.
+	  A reboot is required to start the system with the original
+	  <command>init</command> then the <command>unhook</command> command
+	  gets executed a second time. This
+	  completes the process of reverting back to
+	  <command>init</command>.
+	</para>
+
+	<para>
+	  When <command>unhook</command> determines that
+	  <command>vera-up</command> is not the case, <command>unhook</command>
+	  restores the scripts that <command>hook</command> originally moved.
+	</para>
+
+	<note>
+	  <para>
+	    Do not run <command>make uninstall</command> to completely
+	    uninstall <command>vera</command> unless it's fully unhooked.
+	  </para>
+
+	  <para>
+	    Do not update <command>sysvinit</command>
+	    unless
+	    <command>vera</command> is fully unhooked.
+	  </para>
+	</note>
+
+	<para>
+	  The <command>inittab</command> command
+	  rereads <filename>/etc/inittab</filename>,
+	  <filename>/etc/rc.d/rc.M</filename>,
+	  and <filename>/etc/rc.d/rc?.d</filename> directories,
+	  the translates them to unit specification files in
+	  <filename>@INSTALLCONFIGDIR@</filename>. A brief overview
+	  of the translation process for entries in the
+	  <filename>/etc/inittab</filename> file:
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      All <quote><replaceable>keyword</replaceable>wait</quote>
+	      entries get created as <quote>forking</quote> start types;
+	      <quote>respawn</quote> as <quote>respawn</quote>; and
+	      all others as <quote>oneshot</quote>.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <quote>power<replaceable>state</replaceable></quote>,
+	      <quote>ctrlaltdel</quote>, and
+	      <quote>boot</quote> are added to the corresponding
+	      target.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <quote>boot</quote> and
+	      <quote>bootwait</quote>
+	      entries get added as dependencies of
+	      <filename>system/boot</filename> which is a dependency of
+	      all runlevels, in this manner these entries get executed
+	      before all runlevels' entries.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      Each entry's one-character runlevels get converted to the
+	      corresponding <command>vera</command> runlevel targets,
+	      and the entry becomes a dependency of the runlevel target.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      Entries that match the names of selected
+	      <filename>/etc/rc.d/rc.<replaceable>X</replaceable></filename>
+	      scripts get singled out for special processing.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <quote>Before</quote> and <quote>After</quote>
+	      get specified for each converted inittab, that starts them
+	      (and stops them in reverse order) in order of appearance
+	      in <filename>/etc/inittab</filename>.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The
+	      <filename>@INSTALLCONFIGDIR@/system/inittab</filename>
+	      directory gets created or updated with units that run each
+	      <filename>/etc/inittab</filename> entry.
+	    </para>
+	  </listitem>
+	</itemizedlist>
+
+	<note>
+	  <para>
+	    Changes to the <quote>initdefault</quote> entry are ignored.
+	    Use the
+	    <command>default</command> command to change the default
+	    runlevel (see
+	    <link linkend="vera.runlevels.8">
+	      <citerefentry>
+		<refentrytitle>vera.runlevels</refentrytitle>
+		<manvolnum>8</manvolnum>
+	      </citerefentry>
+	      </link>).
+	  </para>
+	</note>
+
+	<para>
+	  The <filename>/etc/rc.d/rc.M</filename> script's contents are
+	  searched for every instance of
+	  <quote>-x /etc/rc.d/<replaceable>rc.script</replaceable></quote>
+	  followed by
+	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable>
+	  start</quote>.
+	  This creates a corresponding
+	  <filename>@INSTALLCONFIGDIR@/system/rc.M/<replaceable>rc.script</replaceable></filename>
+	  unit that runs
+	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> start</quote>
+	  and
+	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> stop</quote>.
+	  The entry for <filename>/etc/rc.d/rc.M</filename> executes it via
+	  a wrapper that converts it, on the fly,
+	  to start each corresponding unit, instead of running each script
+	  directly.
+	</para>
+
+	<para>
+	  Finally, entries in <filename>/etc/rc.d/rc?.d</filename>
+	  get translated to unit files as follows:
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      All files with names that don't start with
+	      <quote>S</quote> and <quote>K</quote> get ignored.
+	      Files containing whitespace, a <quote>~</quote>, or a
+	      <quote>#</quote> get ignored;
+	      Otherwise:
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      Every file's (device and) inode gets looked up. All
+	      <quote>S</quote> files named the same, but in different
+	      <filename>/etc/rc.d/rc?.d</filename> directories must have the
+	      same (device and) inode.
+	    </para>
+
+	    <para>
+	      This verifies that the same <quote>S</quote> file in every
+	      <filename>/etc/rc.d/rc?.d</filename> directory is the same
+	      script.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The
+	      <filename>@INSTALLCONFIGDIR@/system/rc</filename>
+	      directory gets created or updated with units that run each
+	      script from the <filename>/etc/rc.d/rc?.d</filename>, and
+	      the converted units are dependencies of the corresponding
+	      <command>vera</command> runlevel target.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      Each unit's starting command runs the <filename>S</filename>
+	      script with the <quote>start</quote> parameter.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      The existence of a <quote>K</quote> file with the same
+	      (device and) inode results in the unit's stopping command
+	      getting set, which runs the script with the
+	      <quote>stop</quote> parameter. Otherwise there is no explicit
+	      stopping command.
+	    </para>
+	  </listitem>
+
+	  <listitem>
+	    <para>
+	      If the <filename>S</filename> or <filename>K</filename> scripts
+	      are symbolic links the commands are updated to reflect the
+	      symlink target name, as syntactic sugar.
+	    </para>
+	  </listitem>
+	</itemizedlist>
+
+	<para>
+	  If everything was converted successfully,
+	  <command>inittab</command> makes sure that, if
+	  <command>vera</command> is hooked, the replacement
+	  <filename>/sbin/init</filename> is hard-linked to the current
+	  <filename>vera-init</filename> executable.
+	  Updating (via <command>make install</command> or a built package)
+	  installs a new <command>vera-init</command> binary.
+	  The <command>inittab</command> command runs automatically during
+	  the update and this updates the hard link.
+	</para>
+
+	<para>
+	  The <command>rehook</command> command runs just the last part that
+	  reinstalls the <filename>/sbin/init</filename> hard link.
+	</para>
+      </refsect1>
+
+      <refsect1 id="internal">
+	<title>Internal commands</title>
+
+	<para>
+	  These commands are for internal use only, and are only documented
+	  here for completeness.
+	</para>
+
+	<para>
+	  <quote>sysdown</quote> directs <command>vera</command> on PID 1
+	  to set the <envar>RUNLEVEL</envar>
+	  environment variable and execute a specified script, replacing
+	  PID 1.
+	  This is used as a final action for executing a shutdown or a reboot
+	  (the <filename>rc.0</filename> and <filename>rc.6</filename>
+	  scripts).
+	</para>
+
+	<para>
+	  The <command>vera-init</command> executable gets linked as
+	  <filename>/sbin/init</filename> and it performs a delicate juggling
+	  act of switching between <command>vera</command> and the legacy
+	  <command>init</command> command, which gets renamed as
+	  <filename>/sbin/init.init</filename> by the <quote>hook</quote>
+	  command.
+	</para>
+
+	<para>
+	  When it's not started as PID 1 <command>vera-init</command>
+	  determines whether the system was booted by <command>vera</command>
+	  or <command>init</command> by connecting to
+	  <command>vera</command>'s internal communication socket. A connection
+	  failure indicates that <command>vera</command> is hooked as
+	  <command>/sbin/init</command> but the system has not been rebooted
+	  yet, so <command>vera-init</command> executes
+	  <command>/sbin/init.init</command> and forwards all parameters to it.
+	  A successful connection indicates that <command>vera</command> is
+	  running. <command>vera-init</command> executes
+	  the <command>vlad</command> command and forwards its arguments to it.
+	</para>
+
+	<para>
+	  When started as PID 1 <command>vera-init</command> determines whether
+	  the system should be booted by the legacy <command>init</command>
+	  or vera.
+	</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>
+	      Absence of <command>/sbin/init.init</command> indicates
+	      that <command>vera</command> is installed and the legacy
+	      <command>init</command> is removed.
+	      <command>vera</command> is the only game in town.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <filename>@CONFIGDIR@/hook</filename> is checked, this file
+	      is updated by <command>hook</command>,
+	      <command>hookonce</command> and <command>unhook</command>
+	      commands.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      If <filename>@CONFIGDIR@/hook</filename> exists but its timestamp
+	      is identical to <filename>/proc/1</filename>'s timestamp then
+	      this is treated as if it does not exist.
+	      <command>hook</command>/<command>hookonce</command> intentionally
+	      sets the hook file's timestamp like this. <command>init</command>
+	      executes itself before a reboot, and this is used to detect this
+	      edge case. Even though this is PID 1 the system is not started
+	      by <command>vera</command>.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      The absence of <filename>@CONFIGDIR@/hook</filename> results
+	      in executing <filename>/sbin/init.init</filename>, the legacy
+	      init.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      A <command>hookonce</command> removes
+	      <filename>@CONFIGDIR@/hook</filename>, for the next boot.
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      At this point a final determination is made that the system
+	      is getting booted by <command>vera</command>. Before this happens
+	      <command>vera-init</command> reads
+	      <filename>/etc/inittab</filename> and directly runs all
+	      <command>sysinit</command> commands, then executes
+	      <command>vera</command> to start the rest of the system.
+	    </para>
+	  </listitem>
+	</itemizedlist>
+      </refsect1>
+
+      <refsect1 id="bugs">
+	<title>BUGS</title>
+
+	<para>
+	  The <command>vera</command> and
+	  <command>vlad</command> commands are not named after any
+	  well-known public figures.
+	</para>
+
+	<para>
+	  <command>vera</command> does not implement
+	  <filename>/var/run/runlevel</filename>.
+	</para>
+
+	<para>
+	  <command>vera</command> does not implement
+	  <filename>/dev/initctl</filename>.
+	</para>
+
+	<para>
+	  Updating <command>sysvinit</command> after hooking into and starting
+	  <command>vera</command> results in a mostly bricked system that
+	  will not shutdown properly, but will probably reboot into the
+	  original <command>init</command> if all filesystems are fully
+	  synced before forcing the reboot. Do not update
+	  <command>sysvinit</command> before fully
+	  unhooking <command>vera</command> (twice) and rebooting back into
+	  <command>init</command>
+	  (see <xref linkend="management" /> for more information).
+	</para>
+
+	<para>
+	  Using <command>killall</command> to send a
+	  <errorcode>SIGKILL</errorcode> ends up terminating
+	  <command>vera</command>'s
+	  secondary process that handles commands like
+	  <command>status</command>. Use
+	  <quote><command>kill -usr1 1</command></quote>
+	  to restart it.
+	</para>
+
+	<para>
+	  <filename>system/rc.M</filename> units always claim they're
+	  manually started, even though they get started automatically.
+	  This is an artifact of how <command>vera</command>'s
+	  <command>inittab</command> command works.
+	</para>
+      </refsect1>
+
+      <refsect1 id="seealso">
+	<title>SEE ALSO</title>
+
+	<para>
+	  <link linkend="vera.extras.8">
+	    <citerefentry>
+              <refentrytitle>vera.extras</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>,
+	  <link linkend="vera.logs.8">
+	    <citerefentry>
+              <refentrytitle>vera.logs</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>,
+	  <link linkend="vera.runlevels.8">
+	    <citerefentry>
+              <refentrytitle>vera.runlevels</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>,
+	  <link linkend="vera.units.8">
+	    <citerefentry>
+              <refentrytitle>vera.units</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>.
+	</para>
+      </refsect1>
+
+    </refentry>
+
+    <refentry id="vera.runlevels.8">
+      <refmeta>
+	<refentrytitle>vera runlevels</refentrytitle>
+	<manvolnum>8</manvolnum>
+	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+      </refmeta>
+
+      <refnamediv>
+	<refname>vera.runlevels</refname>
+	<refpurpose>Vera runlevels</refpurpose>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='opt'>--wait</arg>
+	  <arg choice='plain'>switch</arg>
+	  <arg choice='plain'><replaceable>runlevel</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='req'><replaceable>LETTER/DIGIT</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='opt'>--override</arg>
+	  <arg choice='plain'>default</arg>
+	  <arg choice='plain'><replaceable>runlevel</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <group choice='req'>
+	    <arg choice='plain'>current</arg>
+	    <arg choice='plain'>default</arg>
+	  </group>
+	</cmdsynopsis>
+      </refsynopsisdiv>
+      <refsect1 id="runlevels_description">
+	<title>DESCRIPTION</title>
+	<para>
+	  This manual page is an overview of how
+	  <quote>runlevels</quote> are used with
+	  <citerefentry>
+            <refentrytitle>vera</refentrytitle>
+            <manvolnum>8</manvolnum>
+	    </citerefentry>.
+	</para>
+
+	<para>
+	  The term <quote>runlevel</quote> dates back to the original UNIX
+	  <command>init</command> process supervisor. At a given time the
+	  system is in one of several pre-defined runlevels. The runlevels
+	  determine which major system processes are running. The original
+	  runlevels were single characters, <command>vera</command> uses
+	  more descriptive labels and understands the legacy single-character
+	  runlevels as their aliases:
+	</para>
+
+	<informaltable>
+	  <tgroup cols='3'>
+	    <thead>
+	      <row>
+		<entry><command>vera</command> runlevel</entry>
+		<entry><command>init</command> runlevel</entry>
+		<entry>Description</entry>
+	      </row>
+	    </thead>
+	    <tbody>
+	      <row>
+		<entry>shutdown</entry><entry>0</entry><entry>System shutdown</entry>
+	      </row>
+	      <row>
+		<entry>single-user</entry><entry>1, S, s</entry><entry>Root login only</entry>
+	      </row>
+	      <row>
+		<entry>networking</entry><entry>2</entry><entry>Custom (same as multi-user), network enabled in some systems</entry>
+	      </row>
+	      <row>
+		<entry>multi-user</entry><entry>3</entry><entry>All logins</entry>
+	      </row>
+	      <row>
+		<entry>graphical</entry><entry>4</entry><entry>Networking and X</entry>
+	      </row>
+	      <row>
+		<entry>custom</entry><entry>5</entry><entry>Unused</entry>
+	      </row>
+	      <row>
+		<entry>reboot</entry><entry>6</entry><entry>reboot</entry>
+	      </row>
+	    </tbody>
+	  </tgroup>
+	  <tgroup cols="2">
+	    <thead>
+	      <row>
+		<entry>Additional <command>vera</command> target</entry>
+		<entry><filename>inittab</filename> entry</entry>
+		<entry>Description</entry>
+	      </row>
+	    </thead>
+	    <tbody>
+	      <row>
+		<entry>system/sigint</entry>
+		<entry>ctrlaltdel</entry>
+		<entry>Target started in response to <command>vera</command> receiving a <quote>SIGINT</quote> signal</entry>
+	      </row>
+	      <row>
+		<entry>system/powerfail, system/powerfailnow, system/powerok</entry>
+		<entry>powerfail, powerfailnow, powerok</entry>
+		<entry>Target started in response to <command>vera</command> receiving a <quote>SIGPWR</quote> signal, depending on the contents of <filename>/etc/powerstatus</filename></entry>
+	      </row>
+	      <row>
+		<entry>system/sighup</entry>
+		<entry>N/A</entry>
+		<entry>Target started in response to <command>vera</command> receiving a <quote>SIGHUP</quote> signal</entry>
+	      </row>
+	      <row>
+		<entry>system/sigwinch</entry>
+		<entry>kbrequest</entry>
+		<entry>Target started in response to <command>vera</command> receiving a <quote>SIGWINCH</quote> signal</entry>
+	      </row>
+
+	      <row>
+		<entry>system/a, system/b, and system/c</entry>
+		<entry>a, b, and c</entry>
+		<entry><quote>On-demand</quote> targets, start by <command>vlad start system/<replaceable>LETTER</replaceable></command></entry>
+	      </row>
+	    </tbody>
+	  </tgroup>
+	</informaltable>
+
+	<para>
+	  The actual behavior and environment of each runlevel depends on
+	  how the system is configured. It's also possible to define new
+	  runlevels (see <xref linkend="runlevelconfig" /> for more
+	  information).
+	  The <quote>switch</quote> command takes an argument and changes
+	  the system runlevel, for example:
+	  <command>vlad switch reboot</command>
+	  reboots the system. <command>vera</command> recognizes legacy
+	  runlevel aliases, <command>vlad switch 6</command> has the same
+	  result.
+	</para>
+
+	<para>
+	  For compatibility with <command>init</command>,
+	  a single parameter to <command>vlad</command> consisting of a
+	  single letter or digit gets interpreted as a reference to an
+	  <command>init</command> runlevel, an ondemand action, or an
+	  inittab update, and triggers the equivalent command.
+	  <command>vlad 6</command> also triggers a reboot.
+	</para>
+
+	<para>
+	  <quote>switch</quote> does not wait for all processes to stop and
+	  start and returns immediately. The <quote>--wait</quote> option
+	  makes <quote>switch</quote> wait until the switch to the new
+	  runlevel finishes.
+	</para>
+
+	<para>
+	  The <quote>default</quote> command shows the default runlevel when
+	  the system starts. Passing a parameter to <quote>default</quote>
+	  changes the default system startup runlevel.
+	</para>
+
+	<note>
+	  <para>
+	    <command>vlad default <replaceable>runlevel</replaceable></command>
+	    sets the default runlevel for the next system boot.
+	    <command>vera</command> does not read the default runlevel
+	    until it gets started or restarted; but the default runlevel
+	    has no other function except to set the runlevel when the system
+	    boots.
+	  </para>
+	</note>
+
+	<para>
+	  The <quote>--override</quote> option sets a "temporary"
+	  override for the default runlevel.
+	  The override gets removed by the next set <quote>default</quote>.
+	  The previous default gets restored by setting a default
+	  of <quote>default</quote>:
+	</para>
+
+	<blockquote>
+	  <informalexample>
+	    <programlisting>
+# vlad default
+graphical                 # Current default runlevel is graphical
+# vlad default multi-user
+# vlad default
+multi-user                # New default
+# vlad --override default graphical
+# vlad default
+graphical
+# vlad default default
+# vlad default
+multi-user                # Reverts to the previous default runlevel
+	    </programlisting>
+	  </informalexample>
+	</blockquote>
+
+	<refsect2 id="runlevelconfig">
+	  <title>System runlevels</title>
+
+	  <para>
+	    The file <filename>@RUNLEVELCONFIG@</filename> defines system
+	    runlevels. A default one gets installed and it should only
+	    be updated by <command>vlad</command>.
+	  </para>
+
+	  <para>
+	    This file is a YAML document, a map. The map keys are the
+	    canonical names
+	    of predefined runlevels. The map values are lists of aliases for
+	    each runlevel. Exactly one of the map keys have an alias called
+	    <quote>default</quote>, this is the default system runlevel.
+	    The <command>vlad default</command> command updates this alias
+	    by rewriting the configuration file.
+	  </para>
+
+	  <para>
+	    <command>vera</command> automatically creates internal
+	    units for runlevels' canonical names. Additional unit specification
+	    files get installed in
+	    <filename>@INSTALLCONFIGDIR@/system</filename>, for each runlevel.
+	    These system units,
+	    like <quote>system/graphical</quote> and
+	    <quote>system/multiuser</quote>,
+	    are the ones that's referenced by
+	    <quote>enabled</quote> dependencies (see
+	    <xref linkend='dependencies' />).
+	  </para>
+	</refsect2>
+      </refsect1>
+      <refsect1 id="runlevels_files">
+	<title>FILES</title>
+
+	<variablelist>
+	  <varlistentry>
+	    <term><filename>@RUNLEVELCONFIG@</filename></term>
+	    <listitem>
+	      <para>
+		Runlevel configuration, for compatibility with sysvinit.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
+      </refsect1>
+      <refsect1 id="runlevels_seealso">
+	<title>SEE ALSO</title>
+
+	<para>
+	  <link linkend="vera.8">
+	    <citerefentry>
+              <refentrytitle>vera</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>.
+	</para>
+      </refsect1>
+    </refentry>
+
+    <refentry id="vera.units.8">
+      <refmeta>
+	<refentrytitle>vera units</refentrytitle>
+	<manvolnum>8</manvolnum>
+	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+      </refmeta>
+
+      <refnamediv>
+	<refname>vera.units</refname>
+	<refpurpose>Vera units</refpurpose>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='opt'>--nowait</arg>
+	  <group choice='req'>
+	    <arg choice='plain'>start</arg>
+	    <arg choice='plain'>stop</arg>
+	    <arg choice='plain'>restart</arg>
+	    <arg choice='plain'>reload</arg>
+	  </group>
+	  <arg choice='plain'><replaceable>unit</replaceable></arg>
+	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <group choice='req'>
+	    <arg choice='plain'>mask</arg>
+	    <arg choice='plain'>disable</arg>
+	    <arg choice='plain'>enable</arg>
+	  </group>
+	  <arg choice='plain'><replaceable>unit</replaceable></arg>
+	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>setenv</arg>
+	  <arg choice='req'><replaceable>name</replaceable></arg>
+	  <arg choice='req'><replaceable>value</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>unsetenv</arg>
+	  <arg choice='req'><replaceable>name</replaceable></arg>
+	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='opt'>--stopped</arg>
+	  <group choice='opt'>
+	    <arg choice='plain'>--dependencies</arg>
+	    <arg choice='plain'>--terse</arg>
+	  </group>
+	  <arg choice='plain'>status</arg>
+	  <arg choice='opt' rep='repeat'>unit</arg>
+	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>validate</arg>
+	  <arg choice='req'>filename</arg>
+	  <arg choice='opt'>path</arg>
+	</cmdsynopsis>
+      </refsynopsisdiv>
+
+      <refsect1 id="units_description">
+	<title>DESCRIPTION</title>
 
 	<para>
 	  The term <quote>unit</quote> refers to each
@@ -481,10 +1244,23 @@
 	  commands to refer to it.
 	  The <quote>start</quote> and <quote>stop</quote> commands start and
 	  stop individual units. Units that do not get started automatically
-	  (see <quote>runlevels</quote> below) get started on demand by the
+	  (see <link linkend="vera.runlevels.8">
+	  <citerefentry>
+	    <refentrytitle>vera.runlevels</refentrytitle>
+	    <manvolnum>8</manvolnum>
+	  </citerefentry>
+	  </link>) get started on demand by the
 	  <quote>start</quote> command, and <quote>stop</quote> shuts down the
 	  unit, irrespective of whether it was started automatically or
 	  manually.
+	</para>
+
+	<para>
+	  Each unit runs in its own system container, see
+	  <citerefentry>
+	    <refentrytitle>cgroups</refentrytitle>
+	    <manvolnum>7</manvolnum>
+	  </citerefentry> for more information.
 	</para>
 
 	<para>
@@ -516,7 +1292,12 @@
 	  Both disabled and enabled units are <quote>start</quote>able.
 	  The only difference between a disabled or an enabled unit is that
 	  an enabled unit gets automatically started when the system starts
-	  (see <quote>runlevels</quote> below). Disabled units do not, but
+	  (see <link linkend="vera.runlevels.8">
+	  <citerefentry>
+	    <refentrytitle>vera.runlevels</refentrytitle>
+	    <manvolnum>8</manvolnum>
+	  </citerefentry>
+	  </link>). Disabled units do not, but
 	  they are <quote>start</quote>able on demand.
 	</para>
 
@@ -567,6 +1348,70 @@
 	    ends up having the same result as with regular units.
 	  </para>
 	</note>
+
+	<refsect2 id="envvars">
+	  <title>ENVIRONMENT VARIABLES</title>
+
+	  <para>
+	    Commands executed by <command>vera</command> (namely the
+	    <link linkend="startstop">starting and stopping commands</link>)
+	    inherit the following environment variables, in addition to the
+	    ones that are set by the <quote>setenv</quote> command (and
+	    recorded in <filename>@ENVIRONCONFIG@</filename>).
+	  </para>
+
+	  <variablelist>
+	    <varlistentry>
+	      <term><envar>PATH</envar></term>
+	      <listitem>
+		<para>
+		  The default path is <quote>/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin</quote>.
+		  Any non-default <command>vera</command> installation directory
+		  gets prepended to this default path.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><envar>CONSOLE</envar></term>
+	      <listitem>
+		<para>
+		  The path to the system console device in
+		  <filename>/dev</filename>.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><envar>INIT_VERSION</envar></term>
+	      <listitem>
+		<para>
+		  <command>vera</command>'s version, for compatibility
+		  with <command>init</command>.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><envar>RUNLEVEL</envar> and <envar>PREVRUNLEVEL</envar> (if
+	      applicable)</term>
+	      <listitem>
+		<para>
+		  The current and possibly the previous runlevel (the
+		  one-character <command>init</command> alias), for
+		  compatibility with <command>init</command>.
+		</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+
+	  <para>
+	    The <command>setenv</command> and <command>unsetenv</command>
+	    commands update
+	    additional environment variables for all commands started
+	    by <command>vera</command>. These commands update the
+	    <filename>@ENVIRONCONFIG@</filename> file that sets the
+	    environment variables for all commands started
+	    by <command>vera</command>.
+	  </para>
+	</refsect2>
 
 	<refsect2 id="status">
 	  <title>The <quote>status</quote> command</title>
@@ -737,156 +1582,7 @@ echo $pids</programlisting>
 	    </para>
 	  </note>
 	</refsect2>
-	<refsect2 id="runlevels">
-	  <title>Runlevels</title>
-	  <para>
-	    The term <quote>runlevel</quote> dates back to the original UNIX
-	    <command>init</command> process supervisor. At a given time the
-	    system is in one of several pre-defined runlevels. The runlevels
-	    determine which major system processes are running. The original
-	    runlevels were single characters, <command>vera</command> uses
-	    more descriptive labels and understands the legacy single-character
-	    runlevels as their aliases:
-	  </para>
-
-	  <informaltable>
-	    <tgroup cols='3'>
-	      <thead>
-		<row>
-		  <entry><command>vera</command> runlevel</entry>
-		  <entry><command>init</command> runlevel</entry>
-		  <entry>Description</entry>
-		</row>
-	      </thead>
-	      <tbody>
-		<row>
-		  <entry>shutdown</entry><entry>0</entry><entry>System shutdown</entry>
-		</row>
-		<row>
-		  <entry>single-user</entry><entry>1, S, s</entry><entry>Root login only</entry>
-		</row>
-		<row>
-		  <entry>networking</entry><entry>2</entry><entry>Custom (same as multi-user), network enabled in some systems</entry>
-		</row>
-		<row>
-		  <entry>multi-user</entry><entry>3</entry><entry>All logins</entry>
-		</row>
-		<row>
-		  <entry>graphical</entry><entry>4</entry><entry>Networking and X</entry>
-		</row>
-		<row>
-		  <entry>custom</entry><entry>5</entry><entry>Unused</entry>
-		</row>
-		<row>
-		  <entry>reboot</entry><entry>6</entry><entry>reboot</entry>
-		</row>
-	      </tbody>
-	    </tgroup>
-	    <tgroup cols="2">
-	      <thead>
-		<row>
-		  <entry>Additional <command>vera</command> target</entry>
-		  <entry><filename>inittab</filename> entry</entry>
-		  <entry>Description</entry>
-		</row>
-	      </thead>
-	      <tbody>
-		<row>
-		  <entry>system/sigint</entry>
-		  <entry>ctrlaltdel</entry>
-		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGINT</quote> signal</entry>
-		</row>
-		<row>
-		  <entry>system/powerfail, system/powerfailnow, system/powerok</entry>
-		  <entry>powerfail, powerfailnow, powerok</entry>
-		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGPWR</quote> signal, depending on the contents of <filename>/etc/powerstatus</filename></entry>
-		</row>
-		<row>
-		  <entry>system/sighup</entry>
-		  <entry>N/A</entry>
-		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGHUP</quote> signal</entry>
-		</row>
-		<row>
-		  <entry>system/sigwinch</entry>
-		  <entry>kbrequest</entry>
-		  <entry>Target started in response to <command>vera</command> receiving a <quote>SIGWINCH</quote> signal</entry>
-		</row>
-
-		<row>
-		  <entry>system/a, system/b, and system/c</entry>
-		  <entry>a, b, and c</entry>
-		  <entry><quote>On-demand</quote> targets, start by <command>vlad start system/<replaceable>LETTER</replaceable></command></entry>
-		</row>
-	      </tbody>
-	    </tgroup>
-	  </informaltable>
-
-	  <para>
-	    The actual behavior and environment of each runlevel depends on
-	    how the system is configured. It's also possible to define new
-	    runlevels (see <xref linkend="runlevelconfig" /> for more
-	    information).
-	    The <quote>switch</quote> command takes an argument and changes
-	    the system runlevel, for example:
-	    <command>vlad switch reboot</command>
-	    reboots the system. <command>vera</command> recognizes legacy
-	    runlevel aliases, <command>vlad switch 6</command> has the same
-	    result.
-	  </para>
-
-	  <para>
-	    <quote>switch</quote> does not wait for all processes to stop and
-	    start and returns immediately. The <quote>--wait</quote> option
-	    makes <quote>switch</quote> wait until the switch to the new
-	    runlevel finishes.
-	  </para>
-
-	  <para>
-	    The <quote>default</quote> command shows the default runlevel when
-	    the system starts. Passing a parameter to <quote>default</quote>
-	    changes the default system startup runlevel.
-	  </para>
-
-	  <note>
-	    <para>
-	      <command>vlad default <replaceable>runlevel</replaceable></command>
-	      sets the default runlevel for the next system boot.
-	      <command>vera</command> does not read the default runlevel
-	      until it gets started or restarted; but the default runlevel
-	      has no other function except to set the runlevel when the system
-	      boots.
-	    </para>
-	  </note>
-
-	  <para>
-	    The <quote>--override</quote> option sets a "temporary"
-	    override for the default runlevel.
-	    The override gets removed by the next set <quote>default</quote>.
-	    The previous default gets restored by setting a default
-	    of <quote>default</quote>:
-	  </para>
-
-	  <blockquote>
-	    <informalexample>
-	      <programlisting>
-# vlad default
-graphical                 # Current default runlevel is graphical
-# vlad default multi-user
-# vlad default
-multi-user                # New default
-# vlad --override default graphical
-# vlad default
-graphical
-# vlad default default
-# vlad default
-multi-user                # Reverts to the previous default runlevel
-	      </programlisting>
-	    </informalexample>
-	  </blockquote>
-
-	</refsect2>
       </refsect1>
-
       <refsect1 id="units">
 	<title>Unit specifications</title>
 	<synopsis><filename>@INSTALLCONFIGDIR@</filename></synopsis>
@@ -1000,7 +1696,13 @@ multi-user                # Reverts to the previous default runlevel
 	    <itemizedlist>
 	      <listitem>
 		<para>
-		  Each runlevel (see <xref linkend="runlevels" /> above)
+		  Each runlevel (see
+		  <link linkend="vera.runlevels.8">
+		    <citerefentry>
+		      <refentrytitle>vera.runlevels</refentrytitle>
+		      <manvolnum>8</manvolnum>
+		    </citerefentry>
+		    </link>)
 		  has a corresponding
 		  <quote>system/<replaceable>name</replaceable></quote>.
 		  Installing a unit specification for a specific runlevel
@@ -1484,11 +2186,13 @@ Version: 1</literallayout>
 	      <tbody>
 		<row>
 		  <entry><envar>RUNLEVEL</envar></entry>
-		  <entry>Current <link linkend="runlevels">runlevel</link></entry>
+		  <entry>Current
+		  <link linkend="vera.runlevels.8">runlevel</link></entry>
 		</row>
 		<row>
 		  <entry><envar>PREVRUNLEVEL</envar></entry>
-		  <entry>The previous <link linkend="runlevels">runlevel</link></entry>
+		  <entry>The previous
+		  <link linkend="vera.runlevels.8">runlevel</link></entry>
 		</row>
 	      </tbody>
 	    </tgroup>
@@ -1506,10 +2210,17 @@ Version: 1</literallayout>
 	    </para>
 
 	    <para>
-	      The <quote>switch</quote> command immediately updates the
-	      advertized runlevels. Commands started to stop units from the
-	      previous runlevel see the new runlevel in the
-	      <envar>RUNLEVEL</envar> environment variable.
+	      The <quote>switch</quote> command (see
+	      <link linkend="vera.runlevels.8">
+		<citerefentry>
+		  <refentrytitle>vera.runlevels</refentrytitle>
+		  <manvolnum>8</manvolnum>
+		</citerefentry>
+		</link>)
+		immediately updates the
+		advertized runlevels. Commands started to stop units from the
+		previous runlevel see the new runlevel in the
+		<envar>RUNLEVEL</envar> environment variable.
 	    </para>
 	  </note>
 	</refsect2>
@@ -1756,7 +2467,7 @@ Version: 1
 		<quote>networking/webservers</quote> (unless it's given as
 		<quote>/webserver</quote>).
 		See <xref linkend="hierarchy" /> for a description of
-		unit hierarchies. For example:
+		unit hierarchies.
 	      </para>
 	    </listitem>
 	  </itemizedlist>
@@ -1993,39 +2704,6 @@ Before: networking
       <refsect1 id="additionalconfig">
 	<title>ADDITIONAL CONFIGURATION DOCUMENTATION</title>
 
-	<refsect2 id="runlevelconfig">
-	  <title>System runlevels</title>
-
-	  <para>
-	    The file <filename>@RUNLEVELCONFIG@</filename> defines system
-	    runlevels. A default one gets installed and it should only
-	    be updated by <command>vlad</command>.
-	  </para>
-
-	  <para>
-	    This file is a YAML document, a map. The map keys are the
-	    canonical names
-	    of predefined runlevels. The map values are lists of aliases for
-	    each runlevel. Exactly one of the map keys have an alias called
-	    <quote>default</quote>, this is the default system runlevel.
-	    The <command>vlad default</command> command updates this alias
-	    by rewriting the configuration file.
-	  </para>
-
-	  <para>
-	    <command>vera</command> automatically creates internal
-	    units for runlevels' canonical names. Additional unit specification
-	    files get installed in
-	    <filename>@INSTALLCONFIGDIR@/system</filename>, for each runlevel.
-	    These system units,
-	    like <quote>system/graphical</quote> and
-	    <quote>system/multiuser</quote>,
-	    are the ones that's referenced by
-	    <quote>enabled</quote> dependencies (see
-	    <xref linkend='dependencies' />).
-	  </para>
-	</refsect2>
-
 	<refsect2 id="hierarchy">
 	  <title>Hierarchies of unit specification files</title>
 
@@ -2215,356 +2893,95 @@ version: 1
 	  </note>
 	</refsect2>
       </refsect1>
+      <refsect1 id="files">
+	<title>FILES</title>
 
-      <refsect1 id="management">
-	<title>MANAGING <command>vera</command></title>
-      	<para>
-	  <quote>reexec</quote> signals the <command>vera</command> system
-	  process to restart itself. This is needed after installing a new
-	  version of <command>vera</command> or one of the system libraries
-	  it uses. It's possible that <command>vera</command> will not
-	  restart immediately. If any units are in the middle of being
-	  stopped, started, restarted, or respawned a
-	  <quote>reexec</quote> gets delayed until
-	  all pending activity finishes.
-	</para>
-
-	<note>
-	  <para>
-	    This can be a lengthy delay when there's a respawned unit that
-	    reached its maximum number of attempts and it's waiting until
-	    it's respawnable.
-	    Additionally, <quote>reexec</quote> resets all respawned units'
-	    counters and limits.
-	  </para>
-
-	  <para>
-	    This is not considered critical, a <quote>reexec</quote> is
-	    not something that normally happens.
-	  </para>
-	</note>
-
-	<para>
-	  <command>vlad vera-up</command> tries to connect to
-	  <command>vera</command>'s public socket. A successful connection
-	  indicates that <command>vera</command> is installed and
-	  running. This is indicated by a 0 exit code.
-	  A connection failure is reported by terminating with a non-0
-	  exit code (no error message is shown).
-	</para>
-
-	<para>
-	  A single parameter to <command>vera</command> consisting of a
-	  single letter or digit gets interpreted as a reference to an
-	  <command>init</command> runlevel, an ondemand action, or an
-	  inittab update, and triggers the equivalent <command>vera</command>
-	  command.
-	</para>
-
-	<para>
-	  Installing <command>vera</command> (from a package or by
-	  <command>make install</command>) does not touch or replace the
-	  default system <command>init</command> daemon. Additional commands
-	  must be executed, and a coordinated reboot is required in order to
-	  roll the dice, and start <command>vera</command>.
-	</para>
-
-	<para>
-	  The <command>hooK</command> and <command>hookonce</command> commands
-	  make the following changes:
-	</para>
-
-	<itemizedlist>
-	  <listitem>
-	    <para>
-	      The original <filename>/sbin/init</filename> gets moved to
-	      <filename>/sbin/init.init</filename>.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      The original
-	      <filename>/etc/rc.d/rc.sysvinit</filename>,
-	      <filename>/etc/rc.d/rc.local</filename> and
-	      <filename>/etc/rc.d/rc.local_shutdown</filename>,
-	      scripts get moved to
-	      <filename>/etc/rc.d/rc.sysvinit.init</filename>,
-	      <filename>/etc/rc.d/rc.local.init</filename> and
-	      <filename>/etc/rc.d/rc.local_shutdown.init</filename>,
-	      if they exist.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      The moved scripts get replaced
-	      with links to <command>vera</command>'s replacements.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      <filename>@CONFIGDIR@/hook</filename> gets created.
-	    </para>
-	  </listitem>
-	</itemizedlist>
-
-	<para>
-	  The installed replacements check if <command>vera-up</command>,
-	  if so they do nothing because the <command>inittab</command>
-	  command (see <xref linkend="management" />) installs units that
-	  run these scripts.
-	  Otherwise, if not <command>vera-up</command> and
-	  <command>init</command>
-	  is still running (prior/after a reboot) the
-	  replacements execute the replaced program or script, with no
-	  change in behavior.
-	</para>
-
-	<para>
-	  The replacement <command>/sbin/init</command>, called
-	  <command>vera-init</command>, checks that
-	  <filename>@CONFIGDIR@/hook</filename> exists on the next reboot, and
-	  starts <command>vera</command> instead of the replaced
-	  <command>init</command>. See <xref linkend="internal" /> for more
-	  information.
-	</para>
-
-	<para>
-	  <command>hookonce</command> results in the removal of
-	  <filename>@CONFIGDIR@/hook</filename> on the next reboot as early
-	  as possible. Its absence on a subsequent reboot results in the
-	  original <command>init</command> (now
-	  <filename>/sbin/init.init</filename>) starting normally as PID 1.
-	</para>
-
-	<para>
-	  The <command>unhook</command> command manually removes
-	  <filename>@CONFIGDIR@/hook</filename> and if the system was booted
-	  with <command>vera</command> no further action is taken.
-	  A reboot is required to start the system with the original
-	  <command>init</command> then the <command>unhook</command> command
-	  completes the process.
-	</para>
-
-	<para>
-	  When <command>unhook</command> determines that
-	  <command>vera-up</command> is not the case, <command>unhook</command>
-	  restores the scripts that <command>hook</command> originally moved.
-	</para>
-
-	<note>
-	  <para>
-	    Do not run <command>make uninstall</command> to completely
-	    uninstall <command>vera</command> unless it's fully unhooked.
-	  </para>
-
-	  <para>
-	    Do not update the <command>sysvinit</command>
-	    and <command>vera</command>
-	    packages unless
-	    <command>vera</command> is fully unhooked.
-	  </para>
-	</note>
-
-	<para>
-	  The <command>inittab</command> command
-	  rereads <filename>/etc/inittab</filename>,
-	  <filename>/etc/rc.d/rc.M</filename>,
-	  and <filename>/etc/rc.d/rc?.d</filename> directories,
-	  the translates them to unit specification files in
-	  <filename>@INSTALLCONFIGDIR@</filename>. A brief overview
-	  of the translation process for entries in the
-	  <filename>/etc/inittab</filename> file:
-	</para>
-
-	<itemizedlist>
-	  <listitem>
-	    <para>
-	      All <quote><replaceable>keyword</replaceable>wait</quote>
-	      entries get created as <quote>forking</quote> start types;
-	      <quote>respawn</quote> as <quote>respawn</quote>; and
-	      all others as <quote>oneshot</quote>.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      <quote>power<replaceable>state</replaceable></quote>,
-	      <quote>ctrlaltdel</quote>, and
-	      <quote>boot</quote> are added to the corresponding
-	      target.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      <quote>boot</quote> and
-	      <quote>bootwait</quote>
-	      entries get added as dependencies of
-	      <filename>system/boot</filename> which is a dependency of
-	      all runlevels, in this manner these entries get executed
-	      before all runlevels' entries.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      Each entry's one-character runlevels get converted to the
-	      corresponding <command>vera</command> runlevel targets,
-	      and the entry becomes a dependency of the runlevel target.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      Entries that match the names of selected
-	      <filename>/etc/rc.d/rc.<replaceable>X</replaceable></filename>
-	      scripts get singled out for special processing.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      <quote>Before</quote> and <quote>After</quote>
-	      get specified for each converted inittab, that starts them
-	      (and stops them in reverse order) in order of appearance
-	      in <filename>/etc/inittab</filename>.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      The
-	      <filename>@INSTALLCONFIGDIR@/system/inittab</filename>
-	      directory gets created or updated with units that run each
-	      <filename>/etc/inittab</filename> entry.
-	    </para>
-	  </listitem>
-	</itemizedlist>
-
-	<note>
-	  <para>
-	    Changes to the <quote>initdefault</quote> entry are ignored.
-	    Use the
-	    <command>default</command> command to change the default
-	    runlevel.
-	  </para>
-	</note>
-
-	<para>
-	  The <filename>/etc/rc.d/rc.M</filename> script's contents are
-	  searched for every instance of
-	  <quote>-x /etc/rc.d/<replaceable>rc.script</replaceable></quote>
-	  followed by
-	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable>
-	  start</quote>.
-	  This creates a corresponding
-	  <filename>@INSTALLCONFIGDIR@/system/rc.M/<replaceable>rc.script</replaceable></filename>
-	  unit that runs
-	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> start</quote>
-	  and
-	  <quote>/etc/rc.d/<replaceable>rc.script</replaceable> stop</quote>.
-	  The entry for <filename>/etc/rc.d/rc.M</filename> executes it via
-	  a wrapper that converts it, on the fly,
-	  to start each corresponding unit, instead of running each script
-	  directly.
-	</para>
-
-	<para>
-	  Finally, entries in <filename>/etc/rc.d/rc?.d</filename>
-	  get translated to unit files as follows:
-	</para>
-
-	<itemizedlist>
-	  <listitem>
-	    <para>
-	      All files with names that don't start with
-	      <quote>S</quote> and <quote>K</quote> get ignored.
-	      Files containing whitespace, a <quote>~</quote>, or a
-	      <quote>#</quote> get ignored;
-	      Otherwise:
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      Every file's (device and) inode gets looked up. All
-	      <quote>S</quote> files named the same, but in different
-	      <filename>/etc/rc.d/rc?.d</filename> directories must have the
-	      same (device and) inode.
-	    </para>
-
-	    <para>
-	      This verifies that the same <quote>S</quote> file in every
-	      <filename>/etc/rc.d/rc?.d</filename> directory is the same
-	      script.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      The
-	      <filename>@INSTALLCONFIGDIR@/system/rc</filename>
-	      directory gets created or updated with units that run each
-	      script from the <filename>/etc/rc.d/rc?.d</filename>, and
-	      the converted units are dependencies of the corresponding
-	      <command>vera</command> runlevel target.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      Each unit's starting command runs the <filename>S</filename>
-	      script with the <quote>start</quote> parameter.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      The existence of a <quote>K</quote> file with the same
-	      (device and) inode results in the unit's stopping command
-	      getting set, which runs the script with the
-	      <quote>stop</quote> parameter. Otherwise there is no explicit
-	      stopping command.
-	    </para>
-	  </listitem>
-
-	  <listitem>
-	    <para>
-	      If the <filename>S</filename> or <filename>K</filename> scripts
-	      are symbolic links the commands are updated to reflect the
-	      symlink target name, as syntactic sugar.
-	    </para>
-	  </listitem>
-	</itemizedlist>
-
-	<para>
-	  If everything was converted successfully,
-	  <command>inittab</command> makes sure that, if
-	  <command>vera</command> is hooked, the replacement
-	  <filename>/sbin/init</filename> is hard-linked to the current
-	  <filename>vera-init</filename> executable.
-	  Updating (via <command>make install</command> or a built package)
-	  installs a new <command>vera-init</command> binary.
-	  The <command>inittab</command> command runs automatically during
-	  the update and this updates the hard link.
-	</para>
-
-	<para>
-	  The <command>rehook</command> command runs just the last part that
-	  reinstalls the <filename>/sbin/init</filename> hard link.
-	</para>
-
-	<para>
-	  The <command>setenv</command> and <command>unsetenv</command>
-	  commands update the environment variables for all commands started
-	  by <command>vera</command>. These commands update the
-	  <filename>@ENVIRONCONFIG@</filename> file that sets the
-	  environment variables for all commands started
-	  by <command>vera</command> (in addition to several environment
-	  variables that are always set, see <xref linkend="envvars" />
-	  for more information).
-	</para>
+	<variablelist>
+	  <varlistentry>
+	    <term><filename>@INSTALLCONFIGDIR@</filename></term>
+	    <listitem>
+	      <para>
+		Unit specification files.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><filename>@LOCALCONFIGDIR@</filename></term>
+	    <listitem>
+	      <para>
+		Locally-modified unit specification files.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><filename>@OVERRIDECONFIGDIR@</filename></term>
+	    <listitem>
+	      <para>
+		<command>vera</command>-maintained directory that keeps track
+		of masked and enabled units.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term><filename>@ENVIRONCONFIG@</filename></term>
+	    <listitem>
+	      <para>
+		Environment variables that are set for all started commands.
+		This file is maintained by
+		<quote>setenv</quote> and <quote>unsetenv</quote>
+		commands.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
       </refsect1>
 
-      <refsect1 id="logging">
-	<title>Logging</title>
+      <refsect1 id="units_seealso">
+	<title>SEE ALSO</title>
+
+	<para>
+	  <link linkend="vera.8">
+	    <citerefentry>
+              <refentrytitle>vera</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>,
+	    <link linkend="vera.runlevels.8">
+	      <citerefentry>
+		<refentrytitle>vera.runlevels</refentrytitle>
+		<manvolnum>8</manvolnum>
+	      </citerefentry>
+	      </link>.
+	</para>
+      </refsect1>
+    </refentry>
+
+    <refentry id="vera.logs.8">
+      <refmeta>
+	<refentrytitle>vera logs</refentrytitle>
+	<manvolnum>8</manvolnum>
+	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+      </refmeta>
+
+      <refnamediv>
+	<refname>vera.logs</refname>
+	<refpurpose>Vera logging</refpurpose>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>logs</arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>log</arg>
+	  <arg choice='opt'>number</arg>
+	</cmdsynopsis>
+      </refsynopsisdiv>
+
+      <refsect1 id="logs_description">
+	<title>DESCRIPTION</title>
 
 	<para>
 	  <command>vera</command> logs all runlevel switches, this includes
@@ -2625,301 +3042,143 @@ version: 1
 
 	<para>
 	  The log files record low-level details and times, the
-	  <quote><command>vlag log</command></quote> reads log file #1, the
+	  <quote><command>vlag log</command></quote>
+	  command reads log file #1, the
 	  most recent log file,
-	  and processes the logs into a basic list of containers and how
-	  long it took for each container to start.
+	  and processes the logs into a basic list of units and how
+	  long it took for each unit to start.
 	  An optional parameter reads a different log file.
 	  <quote><command>vlag log 2</command></quote> reads log file #2.
 	</para>
 
 	<para>
-	  The <command>log</command> command produces a listing of containers
-	  that were started or stopped, one container per line.
+	  The <command>log</command> command produces a listing of units
+	  that were started or stopped, one units per line.
 	  Each line contains:
 	</para>
 
 	<itemizedlist>
 	  <listitem>
 	    <para>
-	      How long the container's starting or stopping command ran
+	      How long the unit's starting or stopping command took to ran
 	      to completion.
 	    </para>
 	  </listitem>
 
 	  <listitem>
 	    <para>
-	      How long the container waited for other containers to start
+	      How long the unit waited for other units to start
 	      or stop, before it could start or stop.
 	    </para>
 	  </listitem>
 
 	  <listitem>
 	    <para>
-	      The container's name.
+	      The unit's name.
 	    </para>
 	  </listitem>
 	</itemizedlist>
 
 	<para>
 	  An asterisk, <quote>*</quote> appears at the beginning of the line
-	  of the container that took the longest time to start or stop.
-	  The asterisk's only purpose is to identify the container with the
+	  of the unit that took the longest time to start or stop.
+	  The asterisk's only purpose is to identify the unit with the
 	  longest starting or stopping time.
 	</para>
       </refsect1>
-
-      <refsect1 id="internal">
-	<title>Internal commands</title>
-
-	<para>
-	  These commands are for internal use only, and are only documented
-	  here for completeness.
-	</para>
+      <refsect1 id="logs_seealso">
+	<title>SEE ALSO</title>
 
 	<para>
-	  <quote>sysdown</quote> directs <command>vera</command> on PID 1
-	  to set the <envar>RUNLEVEL</envar>
-	  environment variable and execute a specified script, replacing
-	  PID 1.
-	  This is used as a final action for executing a shutdown or a reboot
-	  (the <filename>rc.0</filename> and <filename>rc.6</filename>
-	  scripts).
+	  <link linkend="vera.8">
+	    <citerefentry>
+              <refentrytitle>vera</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>.
 	</para>
-
-	<para>
-	  The <command>vera-init</command> executable gets linked as
-	  <filename>/sbin/init</filename> and it performs a delicate juggling
-	  act of switching between <command>vera</command> and the legacy
-	  <command>init</command> command, which gets renamed as
-	  <filename>/sbin/init.init</filename> by the <quote>hook</quote>
-	  command.
-	</para>
-
-	<para>
-	  When it's not started as PID 1 <command>vera-init</command>
-	  determines whether the system was booted by <command>vera</command>
-	  or <command>init</command> by connecting to
-	  <command>vera</command>'s internal communication socket. A connection
-	  failure indicates that <command>vera</command> is hooked as
-	  <command>/sbin/init</command> but the system has not been rebooted
-	  yet, so <command>vera-init</command> executes
-	  <command>/sbin/init.init</command> and forwards all parameters to it.
-	  A successful connection indicates that <command>vera</command> is
-	  running. <command>vera-init</command> executes
-	  the <command>vlad</command> command and forwards its arguments to it.
-	</para>
-
-	<para>
-	  When started as PID 1 <command>vera-init</command> determines whether
-	  the system should be booted by the legacy <command>init</command>
-	  or vera.
-	</para>
-
-	<itemizedlist>
-	  <listitem>
-	    <para>
-	      Absence of <command>/sbin/init.init</command> indicates
-	      that <command>vera</command> is installed and the legacy
-	      <command>init</command> is removed.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      <filename>@CONFIGDIR@/hook</filename> is checked, this file
-	      is updated by <command>hook</command>,
-	      <command>hookonce</command> and <command>unhook</command>
-	      commands.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      If <filename>@CONFIGDIR@/hook</filename> exists but its timestamp
-	      is identical to <filename>/proc/1</filename>'s timestamp then
-	      this is treated as if it does not exist.
-	      <command>hook</command>/<command>hookonce</command> intentionally
-	      sets the hook file's timestamp like this. <command>init</command>
-	      executes itself before a reboot, and this is used to detect this
-	      edge case. Even though this is PID 1 the system is not started
-	      by <command>vera</command>.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      The absence of <filename>@CONFIGDIR@/hook</filename> results
-	      in executing <filename>/sbin/init.init</filename>, the legacy
-	      init.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      A <command>hookonce</command> removes
-	      <filename>@CONFIGDIR@/hook</filename>, for the next boot.
-	    </para>
-	  </listitem>
-	  <listitem>
-	    <para>
-	      At this point a final determination is made that the system
-	      is getting booted by <command>vera</command>. Before this happens
-	      <command>vera-init</command> reads
-	      <filename>/etc/inittab</filename> and directly runs all
-	      <command>sysinit</command> commands, then executes
-	      <command>vera</command> to start the rest of the system.
-	    </para>
-	  </listitem>
-	</itemizedlist>
       </refsect1>
 
-      <refsect1 id="files">
-	<title>FILES</title>
-
-	<variablelist>
-	  <varlistentry>
-	    <term><filename>@INSTALLCONFIGDIR@</filename></term>
-	    <listitem>
-	      <para>
-		Unit specification files.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><filename>@LOCALCONFIGDIR@</filename></term>
-	    <listitem>
-	      <para>
-		Locally-modified unit specification files.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><filename>@RUNLEVELCONFIG@</filename></term>
-	    <listitem>
-	      <para>
-		Runlevel configuration, for compatibility with sysvinit.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><filename>@OVERRIDECONFIGDIR@</filename></term>
-	    <listitem>
-	      <para>
-		<command>vera</command>-maintained directory that keeps track
-		of masked and enabled units.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><filename>@ENVIRONCONFIG@</filename></term>
-	    <listitem>
-	      <para>
-		Environment variables that are set for all started commands.
-		This file is maintained by
-		<quote>setenv</quote> and <quote>unsetenv</quote>
-		commands.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	</variablelist>
-      </refsect1>
-
-      <refsect1 id="envvars">
-	<title>ENVIRONMENT VARIABLES</title>
-
-	<para>
-	  Commands executed by <command>vera</command> (namely the
-	  <link linkend="startstop">starting and stopping commands</link>)
-	  inherit the following environment variables, in addition to the
-	  ones that are set by the <quote>setenv</quote> command (and
-	  recorded in <filename>@ENVIRONCONFIG@</filename>).
-	</para>
-
-	<variablelist>
-	  <varlistentry>
-	    <term><envar>PATH</envar></term>
-	    <listitem>
-	      <para>
-		The default path is <quote>/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin</quote>.
-		Any non-default <command>vera</command> installation directory
-		gets prepended to this default path.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><envar>CONSOLE</envar></term>
-	    <listitem>
-	      <para>
-		The path to the system console device in
-		<filename>/dev</filename>.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><envar>INIT_VERSION</envar></term>
-	    <listitem>
-	      <para>
-		<command>vera</command>'s version, for compatibility
-		with <command>init</command>.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	  <varlistentry>
-	    <term><envar>RUNLEVEL</envar> and <envar>PREVRUNLEVEL</envar> (if
-	    applicable)</term>
-	    <listitem>
-	      <para>
-		The current and possibly the previous runlevel (the
-		one-character <command>init</command> alias), for compatibility
-		with <command>init</command>.
-	      </para>
-	    </listitem>
-	  </varlistentry>
-	</variablelist>
-      </refsect1>
-      <refsect1 id="bugs">
+      <refsect1 id="logs_bugs">
 	<title>BUGS</title>
 
 	<para>
-	  The <command>vera</command> and
-	  <command>vlad</command> commands are not named after any
-	  well-known public figures.
+	  <literal>system/inittab/rc</literal> often gets fingered as the
+	  slowest-starting unit. The actual culprit will be some other
+	  unit that gets started by <literal>system/inittab/rc</literal>.
+	  This is an artifact of how the <quote>inittab</quote> command
+	  converts the <command>init</command>scripts to
+	  <command>vera</command> units.
 	</para>
+      </refsect1>
+    </refentry>
+
+    <refentry id="vera.extras.8">
+      <refmeta>
+	<refentrytitle>vera extras</refentrytitle>
+	<manvolnum>8</manvolnum>
+	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+      </refmeta>
+
+      <refnamediv>
+	<refname>vera.extras</refname>
+	<refpurpose>Optional vera features</refpurpose>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	<cmdsynopsis>
+	  <command>vlad enable system/networkmanager-wait-online</command>
+	</cmdsynopsis>
+      </refsynopsisdiv>
+
+      <refsect1 id="extras_description">
+	<title>DESCRIPTION</title>
 
 	<para>
-	  <command>vera</command> does not implement
-	  <filename>/var/run/runlevel</filename>.
+	  This manual page describes optional <command>vera</command>
+	  features.
 	</para>
 
-	<para>
-	  <command>vera</command> does not implement
-	  <filename>/dev/initctl</filename>.
-	</para>
+	<refsect2 id="networkmanager-wait-online">
+	  <title><quote>system/network-online</quote> and
+	  <quote>system/networkmanager-wait-online</quote></title>
+
+	  <para>
+	    The <command>inittab</command> command adds a
+	    requirement on the <quote>system/network-online</quote>
+	    target to every converted <filename>/etc/rc.d/rc.inet2</filename>
+	    unit.
+	  </para>
+
+	  <para>
+	    The <quote>system/networkmanager-wait-online</quote> unit
+	    can be enabled for
+	    <quote>system/network-online</quote>.
+	    This unit runs <command>/usr/bin/nm-online</command>
+	    when started.
+	  </para>
+
+	  <para>
+	    If a system uses <filename>/etc/rc.d/rc.networkmanager</filename>
+	    then enabling <quote>system/networkmanager-wait-online</quote>
+	    pauses system startup until NetworkManager initializes all
+	    network interfaces (all network interfaces come up with an
+	    active IP address). <quote>system/networkmanager-wait-online</quote>
+	    should not be enabled unless
+	    <quote>system/rc.M/rc.networkmanager</quote> is also enabled.
+	  </para>
+	</refsect2>
+      </refsect1>
+      <refsect1 id="extras_seealso">
+	<title>SEE ALSO</title>
 
 	<para>
-	  Updating <command>sysvinit</command> after hooking into and starting
-	  <command>vera</command> results in a mostly bricked system that
-	  will not shutdown properly, but will probably reboot into the
-	  original <command>init</command> if all filesystems are fully
-	  synced before forcing the reboot. Do not update
-	  <command>sysvinit</command> before fully
-	  unhooking <command>vera</command> (twice) and rebooting back into
-	  <command>init</command>
-	  (see <xref linkend="management" /> for more information).
-	</para>
-
-	<para>
-	  Using <command>killall</command> to send a
-	  <errorcode>SIGKILL</errorcode> ends up terminating
-	  <command>vera</command>'s
-	  secondary process that handles commands like
-	  <command>status</command>. Use
-	  <quote><command>kill -usr1 1</command></quote>
-	  to restart it.
-	</para>
-
-	<para>
-	  <filename>system/rc.M</filename> units always claim they're
-	  manually started, even though they get started automatically.
-	  This is an artifact of how <command>vera</command>'s
-	  <command>inittab</command> command works.
+	  <link linkend="vera.units.8">
+	    <citerefentry>
+              <refentrytitle>vera.units</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>.
 	</para>
       </refsect1>
     </refentry>
