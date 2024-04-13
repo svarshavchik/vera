@@ -1,3 +1,8 @@
+2024-04-13  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* vera.C: suppress containers without processes from "status", by
+	default, add --all option to still show them.
+
 2024-04-11  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Release 0.93

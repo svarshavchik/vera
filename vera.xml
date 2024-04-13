@@ -1075,6 +1075,7 @@
 	</para>
 
 	<para>
+	  <quote>current</quote> shows the current <quote>runlevel</quote>.
 	  The <quote>default</quote> command shows the default runlevel when
 	  the system starts. Passing a parameter to <quote>default</quote>
 	  changes the default system startup runlevel.
@@ -1227,7 +1228,10 @@ multi-user                # Reverts to the previous default runlevel
 
 	<cmdsynopsis>
 	  <command>vlad</command>
-	  <arg choice='opt'>--stopped</arg>
+	  <group choice='opt'>
+	    <arg choice='plain'>--all</arg>
+	    <arg choice='plain'>--stopped</arg>
+	  </group>
 	  <group choice='opt'>
 	    <arg choice='plain'>--dependencies</arg>
 	    <arg choice='plain'>--terse</arg>
@@ -1302,14 +1306,15 @@ multi-user                # Reverts to the previous default runlevel
 	  or automatically, and <quote>start</quote>ing it fails.
 	  Both disabled and enabled units are <quote>start</quote>able.
 	  The only difference between a disabled or an enabled unit is that
-	  an enabled unit gets automatically started when the system starts
-	  (see <link linkend="vera.runlevels.8">
+	  an enabled unit gets automatically started as a result of some
+	  other unit starting, typically when the system starts,
+	  see <link linkend="vera.runlevels.8">
 	  <citerefentry>
 	    <refentrytitle>vera.runlevels</refentrytitle>
 	    <manvolnum>8</manvolnum>
 	  </citerefentry>
-	  </link>). Disabled units do not, but
-	  they are <quote>start</quote>able on demand.
+	  </link>. Disabled units do not, but
+	  they are <quote>start</quote>able directly by themselves, on demand.
 	</para>
 
 	<para>
@@ -1430,9 +1435,16 @@ multi-user                # Reverts to the previous default runlevel
 	  <para>
 	    This command shows a list of all units (or just the units given
 	    as optional parameters), their current state, and their processes.
-	    <quote>current</quote> shows the current <quote>runlevel</quote>.
-	    <quote>status</quote> omits stopped units by default; the
-	    <quote>--stopped</quote> option includes them in the output.
+	    <quote>status</quote> omits stopped units by default and units
+	    that are started but no longer have any processes (targets).
+	    The <quote>--all</quote> option includes started units without
+	    any processes.
+	    <quote>--stopped</quote> option also includes stopped
+	    units (so <quote>--all</quote> is not really all of them, the
+	    stopped processes are not included).
+	  </para>
+
+	  <para>
 	    <quote>--dependencies</quote> lists all units' dependencies
 	    (which all other units it requires, its required by,
 	    and which ones must be started or stopped first, as calculated
@@ -1465,7 +1477,7 @@ multi-user                # Reverts to the previous default runlevel
 		</row>
 		<row>
 		  <entry><quote>starting</quote> or <quote>starting (manual)</quote></entry>
-		  <entry>This unit is starting, but it's not finished starting</entry>
+		  <entry>This unit is starting, but has not finished starting</entry>
 		</row>
 		<row>
 		  <entry><quote>respawning</quote> or <quote>respawning (manual)</quote></entry>
@@ -1494,7 +1506,8 @@ multi-user                # Reverts to the previous default runlevel
 	  </para>
 
 	  <para>
-	    The terse option formats the units in a compact list, one unit
+	    The <quote>terse</quote> option shows a subset of the above
+	    information and formats the units in a compact list, one unit
 	    per line. Each line contains a list of
 	    <quote>field=value</quote> tuples, with colons as separators:
 	  </para>
@@ -1581,8 +1594,9 @@ echo $pids</programlisting>
 	  <note>
 	    <para>
 	      There's no output from <quote>vlad status</quote> if the given
-	      container does not exist or if it's stopped and the
-	      <option>--stopped</option> is not specified. Therefore any
+	      container does not exist or if it's suppressed byx the absense of
+	      <option>--all</option> and
+	      <option>--stopped</option>. Therefore any
 	      existing values of these shell variables remain unchanged.
 	    </para>
 

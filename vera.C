@@ -48,6 +48,7 @@
 
 #define PUB_PROCESS_SIGNATURE "[public process]"
 
+int all_flag;
 int stopped_flag;
 int dependencies_flag;
 int terse_flag;
@@ -57,6 +58,7 @@ int override_flag;
 const char slashprocslash[] = "/proc/";
 
 const struct option options[]={
+	{"all", 0, &all_flag, 1},
 	{"stopped", 0, &stopped_flag, 1},
 	{"dependencies", 0, &dependencies_flag, 1},
 	{"terse", 0, &terse_flag, 1},
@@ -1978,6 +1980,10 @@ void vlad(std::vector<std::string> args)
 			auto &[name_ignore, info]=*status.find(name);
 
 			if (info.state == "stopped" && !stopped_flag)
+				continue;
+
+			if (info.processes.empty() && !stopped_flag &&
+			    !all_flag)
 				continue;
 
 			if (terse_flag)

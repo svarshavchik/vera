@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([vera],[0.93],[mrsam@courier-mta.com])
+AC_INIT([vera],[0.94],[mrsam@courier-mta.com])
 AC_CONFIG_SRCDIR([testcontroller.C])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign dist-xz -Wno-portability])
