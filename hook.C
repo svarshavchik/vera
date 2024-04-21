@@ -4,6 +4,7 @@
 */
 #include "config.h"
 #include "hook.H"
+#include "messages.H"
 #include "verac.h"
 #include <functional>
 #include <unistd.h>
@@ -109,7 +110,7 @@ struct hooked_file {
 	bool hardlink;
 };
 
-typedef std::array<hooked_file, 4> hooks_t;
+typedef std::array<hooked_file, 5> hooks_t;
 
 hooked_file init_hook(const std::string &sbindir,
 		      const std::string &vera_init)
@@ -125,6 +126,7 @@ hooked_file init_hook(const std::string &sbindir,
 
 hooks_t define_hooks(std::string etc_sysinit_dir,
 		     std::string sbindir,
+		     std::string usr_sbindir,
 		     std::string vera_init,
 		     std::string pkgdatadir)
 {
@@ -153,6 +155,13 @@ hooks_t define_hooks(std::string etc_sysinit_dir,
 				pkgdatadir + "/rc.local_shutdown.vera",
 				false,
 			},
+			{
+				usr_sbindir + "/logrotate",
+				usr_sbindir + "/logrotate.tmp",
+				usr_sbindir + "/logrotate.init",
+				pkgdatadir + "/vera-logrotate",
+				false,
+			},
 			init_hook(sbindir, vera_init)
 		}
 	};
@@ -164,31 +173,50 @@ hooks_t define_hooks(std::string etc_sysinit_dir,
 
 bool hook(std::string etc_sysinit_dir,
 	  std::string sbindir,
+	  std::string usr_sbindir,
 	  std::string vera_init,
 	  std::string pkgdatadir,
 	  std::string hookfile,
-	  bool once)
+	  hook_op op)
 {
 	std::error_code ec;
 
 	hooks_t hooks=define_hooks(etc_sysinit_dir,
 				   sbindir,
+				   usr_sbindir,
 				   vera_init,
 				   pkgdatadir);
 
 	// Do the original, hooked files already exists.
 
+	bool is_hooked=false;
+
 	for (auto &h:hooks)
 	{
-		if (std::filesystem::exists(h.backup, ec))
-		{
+		if (!std::filesystem::exists(h.backup, ec))
+			continue;
+
+		is_hooked=true;
+
+		switch (op) {
+		case hook_op::once:
+		case hook_op::permanently:
 			std::cerr << "init appears to be hooked already: "
 				  << h.backup
 				  << " exists" << std::endl;
 			std::cerr << "Reinstalled hook file." << std::endl;
-			sethookfile(hookfile, once);
+
+			sethookfile(hookfile, op == hook_op::once);
 			return true;
+		case hook_op::rehook:
+			break;
 		}
+	}
+
+	if (op == hook_op::rehook)
+	{
+		if (!is_hooked)
+			return false;
 	}
 
 	// Create a hard link from the real file to the backup.
@@ -203,6 +231,33 @@ bool hook(std::string etc_sysinit_dir,
 			continue;
 		}
 
+		if (std::filesystem::exists(p->backup))
+		{
+			// This must be a hook_op::rehook, otherwise the loop
+			// above would've bailed out on us
+			//
+			// If the link, hard or soft, still exists then
+			// this hook is intact. Otherwise the hooked binary
+			// must've been updated.
+
+			if (std::filesystem::equivalent(
+				    p->filename,
+				    p->replacement))
+			{
+				p->filename.clear();
+				continue;
+			}
+			ec={};
+			std::filesystem::remove_all(p->backup, ec);
+			if (ec)
+			{
+				std::cerr << _("Cannot remove obsolete hook: ")
+					  << p->backup
+					  << ": "
+					  << ec.message();
+				return false;
+			}
+		}
 		std::filesystem::create_hard_link(p->filename,
 						  p->backup,
 						  ec);
@@ -215,7 +270,8 @@ bool hook(std::string etc_sysinit_dir,
 				  << p->backup
 				  << ": " << ec.message()
 				  << std::endl;
-			while (b != p)
+
+			while (op != hook_op::rehook && b != p)
 			{
 				std::filesystem::remove(p->backup);
 				++b;
@@ -229,6 +285,10 @@ bool hook(std::string etc_sysinit_dir,
 	{
 		if (h.filename.empty())
 			continue;
+
+#ifdef HOOK_DEBUG2
+		HOOK_DEBUG2();
+#endif
 
 		std::filesystem::remove(h.filenametmp, ec);
 
@@ -256,6 +316,9 @@ bool hook(std::string etc_sysinit_dir,
 			for (auto &h:hooks)
 			{
 				std::filesystem::remove(h.filenametmp, ec);
+
+				if (op == hook_op::rehook)
+					continue;
 				std::filesystem::remove(h.backup, ec);
 			}
 			return false;
@@ -274,21 +337,35 @@ bool hook(std::string etc_sysinit_dir,
 			std::cerr << "Cannot overwrite " << h.filename
 				  << ": " << ec.message();
 
-
-			for (auto &h:hooks)
-			{
-				std::filesystem::rename(
-					h.backup,
-					h.filename,
-					ec
-				);
-			}
+			if (op != hook_op::rehook)
+				for (auto &h:hooks)
+				{
+					std::filesystem::rename(
+						h.backup,
+						h.filename,
+						ec
+					);
+				}
 
 			return false;
 		}
+
+		if (op == hook_op::rehook)
+		{
+			std::cout << "New hook created: "
+				  << h.filename
+				  << std::endl;
+		}
 	}
 
-	sethookfile(hookfile, once);
+	switch (op) {
+	case hook_op::once:
+	case hook_op::permanently:
+		sethookfile(hookfile, op == hook_op::once);
+		break;
+	case hook_op::rehook:
+		break;
+	}
 	return true;
 }
 
@@ -323,6 +400,7 @@ bool rehook_sbin_init(std::string sbindir, std::string vera_init)
 
 void unhook(std::string etc_sysinit_dir,
 	    std::string sbindir,
+	    std::string usr_sbindir,
 	    std::string pubcmdsocket,
 	    std::string hookfile)
 {
@@ -341,6 +419,7 @@ void unhook(std::string etc_sysinit_dir,
 
 	hooks_t hooks=define_hooks(etc_sysinit_dir,
 				   sbindir,
+				   usr_sbindir,
 				   "",
 				   "");
 

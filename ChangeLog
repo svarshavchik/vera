@@ -1,3 +1,15 @@
+2024-04-21  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* hook.C: New container, system/update-logrotate, required by
+	system/boot, reads logrotate's configuration and updates a modified
+	configuration that uses vera to restart logrotated containers.
+
+	* vera.C: The "inittab" command no longer includes "rehook". Change
+	"make install" for slackware to run both commands, separately, for
+	no change in behavior. The "rehook" command also attempts to repair
+	all hooked scripts if they were inadvertently overwritten by a manual
+	update.
+
 2024-04-13  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* vera.C: suppress containers without processes from "status", by

@@ -466,12 +466,14 @@
 	      <filename>/etc/rc.d/rc.local.init</filename> and
 	      <filename>/etc/rc.d/rc.local_shutdown.init</filename>,
 	      if they exist.
+	      The original <filename>/usr/sbin/logrotate</filename> binary
+	      gets moved to <filename>/usr/sbin/logrotate.init</filename>.
 	    </para>
 	  </listitem>
 
 	  <listitem>
 	    <para>
-	      The moved scripts get replaced
+	      The moved scripts and binaries get replaced
 	      with links to <command>vera</command>'s replacements.
 	    </para>
 	  </listitem>
@@ -484,15 +486,42 @@
 	</itemizedlist>
 
 	<para>
-	  The installed replacements check if <command>vera-up</command>,
+	  The installed rc script replacements check if
+	  <command>vera-up</command>,
 	  if so they do nothing because the <command>inittab</command>
 	  command installs units that
-	  run these scripts.
+	  run these scripts and commands.
 	  Otherwise, if not <command>vera-up</command> and
 	  <command>init</command>
 	  is still running (prior/after a reboot) the
 	  replacements execute the replaced program or script, with no
 	  change in behavior.
+	</para>
+
+	<para>
+	  The replacement <command>/usr/sbin/logrotate</command> script
+	  checks if <command>vera-up</command>, if so then the original
+	  <command>/usr/sbin/logrotate.init</command> runs with a different
+	  configuration, <filename>/etc/logrotate.conf.vera</filename>.
+	  Otherwise, if not <command>vera-up</command> and
+	  <command>init</command>
+	  is still running (prior/after a reboot) then
+	  <command>/usr/sbin/logrotate.init</command> runs with the default
+	  <filename>/etc/logrotate.conf</filename> configuration.
+	</para>
+
+	<para>
+	  An installed container, <filename>system/update-logrotate</filename>
+	  runs a script when the system boot. This script reads
+	  <filename>/etc/logrotate.conf</filename> and
+	  <filename>/etc/logrotate.d</filename>, and creates
+	  <filename>/etc/logrotate.conf.vera</filename> and
+	  <filename>/etc/logrotate.d.vera</filename>. Every reference in
+	  logrotate's scripts that runs
+	  <filename>/etc/rc.d/<replaceable>name</replaceable> restart</filename>
+	  or
+	  <filename>/etc/rc.d/<replaceable>name</replaceable> reload</filename>
+	  gets replaced with the equivalent <command>vlad</command> command.
 	</para>
 
 	<para>
@@ -525,7 +554,8 @@
 	<para>
 	  When <command>unhook</command> determines that
 	  <command>vera-up</command> is not the case, <command>unhook</command>
-	  restores the scripts that <command>hook</command> originally moved.
+	  restores the scripts and binaries
+	  that <command>hook</command> originally moved.
 	</para>
 
 	<note>
@@ -535,7 +565,8 @@
 	  </para>
 
 	  <para>
-	    Do not update <command>sysvinit</command>
+	    Do not update <command>sysvinit</command> and
+	    <command>logrotate</command>
 	    unless
 	    <command>vera</command> is fully unhooked.
 	  </para>
@@ -714,20 +745,23 @@
 	</itemizedlist>
 
 	<para>
-	  If everything was converted successfully,
-	  <command>inittab</command> makes sure that, if
-	  <command>vera</command> is hooked, the replacement
+	  The <command>rehook</command> command checks that
 	  <filename>/sbin/init</filename> is hard-linked to the current
 	  <filename>vera-init</filename> executable.
 	  Updating (via <command>make install</command> or a built package)
-	  installs a new <command>vera-init</command> binary.
-	  The <command>inittab</command> command runs automatically during
-	  the update and this updates the hard link.
+	  installs a new <command>vera-init</command> binary,
+	  and this recreates the hard link.
+	  <command>rehook</command> then checks all the other files that get
+	  hooked via symbolic links. If the symbolic link is gone this is
+	  presumed to be the result of erroneously updating the hooked
+	  program, and it is re-hooked again using the same process that
+	  <command>hook</command> or <command>hookonce</command> uses.
 	</para>
 
 	<para>
-	  The <command>rehook</command> command runs just the last part that
-	  reinstalls the <filename>/sbin/init</filename> hard link.
+	  The <command>inittab</command> and
+	  <command>rehook</command> commands run automatically when
+	  <command>vera</command> gets updated.
 	</para>
       </refsect1>
 
@@ -1719,6 +1753,14 @@ echo $pids</programlisting>
 	    </para>
 
 	    <itemizedlist>
+	      <listitem>
+		<para>
+		  <quote>/</quote> implies that unit specification files
+		  can be installed in subdirectories, this is discussed
+		  in <xref linkend="hierarchy" />.
+		</para>
+	      </listitem>
+
 	      <listitem>
 		<para>
 		  Each runlevel (see

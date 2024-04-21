@@ -117,5 +117,6 @@ AC_CONFIG_FILES([
 	rc.sysvinit.vera
 	rc.local.vera
 	rc.local_shutdown.vera
+	vera-logrotate
 ])
 AC_OUTPUT

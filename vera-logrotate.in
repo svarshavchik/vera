@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# If vera was started instead of init, use vera's patched logrotate
+# configuration.
+
+if @sbindir@/vlad vera-up
+then
+    if test "$#" -gt 0
+    then
+	declare -A ARGS
+	ARGS=$@
+
+	NEWARGS=()
+
+	for i in ${ARGS[@]}
+	do
+	    if test -f "$i.vera"
+	    then
+		i="$i.vera"
+	    fi
+	    NEWARGS+=($i)
+	done
+
+	set -- ${NEWARGS[@]}
+    fi
+fi
+
+exec "$0.init" "$@"

@@ -9,7 +9,7 @@ sbin_PROGRAMS=vera vera-init
 noinst_SCRIPTS=vlad
 
 pkgdata_SCRIPTS=rc.sysvinit.vera rc.local.vera rc.local_shutdown.vera \
-	vera-rcm vera-rck
+	vera-logrotate vera-logrotate-migrate vera-rcm vera-rck
 
 noinst_PROGRAMS=\
 	testcontroller						\
@@ -31,7 +31,9 @@ EXTRA_DIST= 							\
 	slack-desc						\
 	testinittab.sh						\
 	testinittab.txt						\
+	testlogrotate.sh					\
 	testprocloader.sh					\
+	vera-logrotate-migrate					\
 	vera-rck						\
 	vera-rcm
 
@@ -154,6 +156,21 @@ install-exec-hook:
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system
+	echo '# Update migrated logrotate scripts' >$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo 'name: update-logrotate' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo 'description: update logrotate scripts' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo 'required-by:' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '  - boot' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo 'starting:' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '  type: forking' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '  command: $(pkgdatadir)/vera-logrotate-migrate' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '     /etc/logrotate.conf' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '     /etc/logrotate.conf.vera' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '     /etc/logrotate.d' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '     /etc/logrotate.d.vera' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '     /etc/rc.d' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo '     $(INSTALLCONFIGDIR)/system/rc.M' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	echo 'version: 1' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
 	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(localstatedir)
 	$(MKDIR_P) $(DESTDIR)$(SWITCHLOGDIR)
@@ -175,7 +192,7 @@ install-data-local:
 			-p $(DESTDIR)${pkgdatadir} \
 			-o $(DESTDIR)$(OVERRIDECONFIGDIR) \
 			-r $(DESTDIR)$(RUNLEVELCONFIG) >/dev/null
-	$(DESTDIR)$(sbindir)/vlad rehook || true
+	test "$(TESTDIR)" = "" || exit 0; $(DESTDIR)$(sbindir)/vlad rehook || true
 
 uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system
@@ -208,6 +225,7 @@ check-am:
 		sh $(srcdir)/testinittab.sh "$(srcdir)"
 	./testhook
 	./testswitchlog
+	srcdir="$(srcdir)"; export srcdir; $(SHELL) $(srcdir)/testlogrotate.sh
 
 man8_MANS=vera.8 vlad.8 vera.extras.8 vera.logs.8 vera.runlevels.8 vera.units.8
 

@@ -1020,7 +1020,7 @@ void pager()
 	if (!p)
 		p=PAGER;
 
-	setenv("LESS", "-F", 0);
+	setenv("LESS", "-F -S", 0);
 	execlp(PAGER, PAGER, nullptr);
 	perror(PAGER);
 	exit(1);
@@ -1756,10 +1756,22 @@ static auto get_requested_log(const std::string &lognum_str)
 	return switchlog_analyze(logs.at(logs.size()-lognum));
 }
 
+static bool vera_hook(hook_op op)
+{
+	return hook("/etc/rc.d",
+		    "/sbin",
+		    "/usr/sbin",
+		    SBINDIR "/vera-init",
+		    PKGDATADIR,
+		    HOOKFILE,
+		    op);
+}
+
 static bool rehook()
 {
 	return rehook_sbin_init("/sbin",
-				SBINDIR "/vera-init");
+				SBINDIR "/vera-init") &&
+		vera_hook(hook_op::rehook);
 }
 
 void vlad(std::vector<std::string> args)
@@ -2007,10 +2019,11 @@ void vlad(std::vector<std::string> args)
 	{
 		if (!hook("/etc/rc.d",
 			  "/sbin",
+			  "/usr/sbin",
 			  SBINDIR "/vera-init",
 			  PKGDATADIR,
 			  HOOKFILE,
-			  false))
+			  hook_op::permanently))
 			exit(1);
 		std::cout << "Switched to vera for future boots." << std::endl;
 		exit(0);
@@ -2020,10 +2033,11 @@ void vlad(std::vector<std::string> args)
 	{
 		if (!hook("/etc/rc.d",
 			  "/sbin",
+			  "/usr/sbin",
 			  SBINDIR "/vera-init",
 			  PKGDATADIR,
 			  HOOKFILE,
-			  true))
+			  hook_op::once))
 			exit(1);
 		std::cout << "Switched to vera for the next reboot."
 			  << std::endl;
@@ -2034,6 +2048,7 @@ void vlad(std::vector<std::string> args)
 	{
 		unhook("/etc/rc.d",
 		       "/sbin",
+		       "/usr/sbin",
 		       PUBCMDSOCKET,
 		       HOOKFILE);
 		std::cout << "Reinstalled init." << std::endl;
@@ -2104,7 +2119,6 @@ void vlad(std::vector<std::string> args)
 		{
 			exit(1);
 		}
-		rehook();
 		return;
 	}
 	if (args.size() == 1 && args[0] == "rehook")

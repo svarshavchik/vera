@@ -18,6 +18,9 @@
 #include <sys/time.h>
 
 int sim_error=0;
+std::string current_directory;
+
+std::vector<std::string> hooklog;
 
 #define HOOK_DEBUG() do {						\
 		if (sim_error)						\
@@ -27,6 +30,8 @@ int sim_error=0;
 		}							\
 	} while(0)
 
+#define HOOK_DEBUG2() do { hooklog.push_back(h.filename); } while(0)
+
 #include "hook.C"
 
 #define FAKEHOOKFILE "testhook.etcrc/hook"
@@ -35,6 +40,30 @@ static int fake_run_sysinit_called;
 static void fake_run_sysinit(const char *)
 {
 	++fake_run_sysinit_called;
+}
+
+static void testlogrotatehook(int ec1, int ec2)
+{
+	std::error_code ec;
+
+	std::filesystem::remove_all("testhook.pkgdata/logrotate.conf.vera",
+				    ec);
+
+	if (WEXITSTATUS(system("testhook.sbin/logrotate "
+			       "testhook.pkgdata/logrotate.conf")) != ec1)
+	{
+		throw std::runtime_error("Did not get expected default "
+					 "result from logrotate hook\n");
+	}
+
+	std::ofstream{"testhook.pkgdata/logrotate.conf.vera"};
+
+	if (WEXITSTATUS(system("testhook.sbin/logrotate "
+			       "testhook.pkgdata/logrotate.conf")) != ec2)
+	{
+		throw std::runtime_error("Did not get expected hooked "
+					 "result from logrotate hook\n");
+	}
 }
 
 void testhook()
@@ -60,8 +89,19 @@ void testhook()
 		o5 << "#! /bin/sh\nexit 7\n";
 		o5.close();
 
+		std::ofstream o6{"testhook.sbin/logrotate"};
+		o6 << "#! /bin/sh\n"
+			"if test \"$1\" ="
+			" \"testhook.pkgdata/logrotate.conf.vera\"\n"
+			"then\n"
+			"   exit 10\n"
+			"fi\n"
+			"exit 11\n";
+
+		o6.close();
+
 		if (o1.fail() || o2.fail() || o3.fail() || o4.fail()
-		    || o5.fail())
+		    || o5.fail() || o6.fail())
 			throw std::runtime_error{"Cannot create dummy scripts"};
 
 		std::filesystem::permissions(
@@ -77,9 +117,29 @@ void testhook()
 			std::filesystem::perms::owner_all);
 
 		std::filesystem::permissions(
+			"testhook.sbin/logrotate",
+			std::filesystem::perms::owner_all);
+
+		std::filesystem::permissions(
 			"testhook.sbin/vlad",
 			std::filesystem::perms::owner_all);
+
+		std::error_code ec;
+
+		std::filesystem::copy(
+			"vera-logrotate",
+			"testhook.pkgdata/vera-logrotate"
+		);
+
+		if (ec)
+			throw std::runtime_error{"Cannot link vera-logrotate"};
+
+		std::filesystem::permissions(
+			"testhook.pkgdata/vera-logrotate",
+			std::filesystem::perms::owner_all);
 	}
+
+	testlogrotatehook(11, 11);
 
 #define INIT "testhook.sbin/init"
 
@@ -100,10 +160,11 @@ void testhook()
 
 	if (!hook("testhook.etcrc",
 		  "testhook.sbin",
+		  "testhook.sbin",
 		  "testhook.sbin/vlad",
-		  "../testhook.pkgdata",
+		  current_directory + "/testhook.pkgdata",
 		  FAKEHOOKFILE,
-		  true
+		  hook_op::once
 	    ))
 		throw std::runtime_error{"Hook failed"};
 
@@ -138,10 +199,11 @@ void testhook()
 
 	if (!hook("testhook.etcrc",
 		  "testhook.sbin",
+		  "testhook.sbin",
 		  "testhook.sbin/vlad",
-		  "../testhook.pkgdata",
+		  current_directory + "/testhook.pkgdata",
 		  FAKEHOOKFILE,
-		  true
+		  hook_op::once
 	    ))
 		throw std::runtime_error{"Hook failed unexpectedly (1)"};
 
@@ -155,6 +217,8 @@ void testhook()
 			"Unexpected exit from hooked rc.sysvinit"
 				};
 
+	testlogrotatehook(11, 10);
+
 	int fd=try_create_vera_socket("testhook.etcrc/socket.tmp",
 				      "testhook.etcrc/socket");
 
@@ -165,6 +229,7 @@ void testhook()
 
 	try {
 		unhook("testhook.etcrc",
+		       "testhook.sbin",
 		       "testhook.sbin",
 		       "testhook.etcrc/socket",
 		       FAKEHOOKFILE
@@ -182,6 +247,7 @@ void testhook()
 
 	unhook("testhook.etcrc",
 	       "testhook.sbin",
+	       "testhook.sbin",
 	       "testhook.etcrc/socket",
 	       FAKEHOOKFILE);
 
@@ -192,9 +258,10 @@ void testhook()
 
 	if (!hook("testhook.etcrc",
 		  "testhook.sbin",
+		  "testhook.sbin",
 		  "testhook.sbin/vlad",
-		  "../testhook.pkgdata",
-		  FAKEHOOKFILE, false))
+		  current_directory + "/testhook.pkgdata",
+		  FAKEHOOKFILE, hook_op::permanently))
 		throw std::runtime_error{"Hook failed unexpectedly (2)"};
 
 	utimensat(AT_FDCWD, FAKEHOOKFILE, 0, 0);
@@ -217,6 +284,7 @@ void testhook()
 
 	unhook("testhook.etcrc",
 	       "testhook.sbin",
+	       "testhook.sbin",
 	       "testhook.etcrc/socket",
 	       FAKEHOOKFILE);
 
@@ -229,9 +297,10 @@ void testhook()
 
 	if (hook("testhook.etcrc",
 		 "testhook.sbin",
+		 "testhook.sbin",
 		 "testhook.sbin/vlad",
-		 "../testhook.pkgdata",
-		 FAKEHOOKFILE, true))
+		 current_directory + "/testhook.pkgdata",
+		 FAKEHOOKFILE, hook_op::once))
 		throw std::runtime_error(
 			"hook() succeed despite a simulated error"
 		);
@@ -247,6 +316,7 @@ void testhook()
 		throw std::runtime_error(
 			"Failed hook() did not revert"
 		);
+	sim_error=0;
 }
 
 static void testsysinit()
@@ -317,6 +387,65 @@ void testrehook()
 		);
 }
 
+void testrehook2()
+{
+	unhook("testhook.etcrc",
+	       "testhook.sbin",
+	       "testhook.sbin",
+	       "testhook.etcrc/socket",
+	       FAKEHOOKFILE);
+
+	if (!hook("testhook.etcrc",
+		  "testhook.sbin",
+		  "testhook.sbin",
+		  "testhook.sbin/vlad",
+		  current_directory + "/testhook.pkgdata",
+		  FAKEHOOKFILE,
+		  hook_op::once
+	    ))
+		throw std::runtime_error{"Hook failed unexpectedly (3)"};
+
+	std::filesystem::remove_all("testhook.sbin/logrotate");
+
+	std::ofstream o6{"testhook.sbin/logrotate"};
+	o6 << "#! /bin/sh\n"
+		"if test \"$1\" ="
+		" \"testhook.pkgdata/logrotate.conf.vera\"\n"
+		"then\n"
+		"   exit 12\n"
+		"fi\n"
+		"exit 13\n";
+	o6.close();
+	if (o6.fail())
+		throw std::runtime_error{"Cannot create another dummy script"};
+
+	std::filesystem::permissions(
+		"testhook.sbin/logrotate",
+		std::filesystem::perms::owner_all);
+
+
+	hooklog.clear();
+	if (!hook("testhook.etcrc",
+		  "testhook.sbin",
+		  "testhook.sbin",
+		  "testhook.sbin/vlad",
+		  current_directory + "/testhook.pkgdata",
+		  FAKEHOOKFILE,
+		  hook_op::rehook
+	    ))
+		throw std::runtime_error{"hook_op::rehook failed"};
+
+	if (hooklog != std::vector<std::string>{"testhook.sbin/logrotate"})
+		throw std::runtime_error{"did not reinstall expected hooks."};
+
+	if (WEXITSTATUS(system("testhook.sbin/logrotate "
+			       "testhook.pkgdata/logrotate.conf")) != 12)
+	{
+		throw std::runtime_error{"unexpected result of running "
+					 "the rehooked script"};
+	}
+}
+
 int main(int argc, char **argv)
 {
 	umask(022);
@@ -335,8 +464,16 @@ int main(int argc, char **argv)
 		    || !std::filesystem::create_directory("testhook.sbin"))
 			throw std::runtime_error("Cannot create directories");
 
+		current_directory=std::filesystem::current_path(ec);
+
+		if (ec)
+			throw std::runtime_error(
+				"Cannot obtain current directory"
+			);
 		testhook();
 		testrehook();
+
+		testrehook2();
 
 		std::filesystem::remove_all("testhook.etcrc", ec);
 		std::filesystem::remove_all("testhook.pkgdata", ec);

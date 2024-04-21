@@ -5,15 +5,17 @@ test ! -f /sbin/vera || exit 0      # Upgrading
 oops=0
 
 for f in /etc/rc.d/rc.sysvinit /etc/rc.d/rc.local /etc/rc.d/rc.local_shutdown \
-			       /sbin/init
+			       /sbin/init /usr/sbin/logrotate
 do
     if test -f ${f}.init
     then
 	mv -f ${f}.init ${f}
-	echo "Unhook ${f} by force!"
+	echo "Unhooked ${f} by force!"
 	oops=1
     fi
 done
+
+rm -rf /etc/logrotate.conf.vera /etc/logrotate.d.vera
 
 if test "$oops" = 1
 then

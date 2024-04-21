@@ -1,0 +1,121 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+use IO::File;
+
+# Copy scripts from /etc/logrotate.d to /etc/logrotate.d.vera.
+#
+# Search through and replace /etc/rc.d/rc.* [restart|reload] with
+# "vlad restart".
+#
+# Gets called with the following parameters:
+
+my $etc_logrotate_conf       = shift @ARGV;   # /etc/logrotate.conf
+my $etc_logrotate_conf_vera  = shift @ARGV;   # /etc/logrotate.conf.vera
+my $logrotate_d              = shift @ARGV;   # /etc/logrotate.d
+my $logrotate_d_vera         = shift @ARGV;   # /etc/logrotate.d.vera
+my $etc_rc_d                 = shift @ARGV;   # /etc/rc.d
+my $etc_rc_M                 = shift @ARGV;   # system/rc.M directory
+
+my $dh;
+
+opendir($dh, $logrotate_d) || die "Cannot open $logrotate_d\n";
+
+my @conf_files = grep { ! /\./ } readdir($dh);
+
+closedir($dh);
+
+# Found an /etc/rc.d/<something> (start|reload)
+#
+# Make sure that <something> exists, as a system/rc.M/<something>
+#
+# If so, returns a vlad restart|reload command.
+#
+# Otherwise returns the unchanged command.
+
+sub fudge {
+    my ($s) = @_;
+
+    my @w=split(/\s+/, $s);
+
+    $w[0] =~ s@.*/@@;
+
+    return $s unless -f "$etc_rc_M/$w[0]";
+
+    return "vlad $w[1] system/rc.M/$w[0]";
+}
+
+# If the file exists and its contents are identical, leave it untouched, only
+# rewrite it if it's different.
+
+sub replace_with {
+    my ($filename, $contents) = @_;
+
+    my $ofh = IO::File->new($filename, "r") or undef;
+
+    return if $ofh && join("", <$ofh>) eq $contents;
+    close($ofh) if defined $ofh;
+
+    my $nfh = IO::File->new("$filename.new", "w")
+	or die "Cannot create $filename.new\n";
+
+    print $nfh $contents;
+    close($nfh) or die "Cannot write to $filename.new\n";
+
+    rename "$filename.new", $filename
+	or die "Cannot rename $filename.new to $filename.\n";
+}
+
+my %files;
+
+$etc_rc_d =~ s/\./\\./g;
+
+mkdir($logrotate_d_vera, 0700);
+
+foreach my $conf_file (@conf_files)
+{
+    $files{$conf_file} = 1;
+
+    my $fh = IO::File->new("$logrotate_d/$conf_file", "r")
+	or die "Cannot open $logrotate_d/$conf_file\n";
+
+    my $contents = join(
+	"",
+	map {
+	    s{
+	    (${etc_rc_d}/[^\s]+\s+(restart|reload)\b)
+	    }{
+	    fudge($1)
+	    }gex;
+
+	    $_;
+	} <$fh>);
+
+    replace_with("$logrotate_d_vera/$conf_file", $contents);
+}
+
+opendir($dh, $logrotate_d_vera) || die "Cannot open $logrotate_d_vera\n";
+unlink("$logrotate_d_vera/$_")
+    for grep { -f "$logrotate_d_vera/$_" && ! $files{$_} } readdir($dh);
+closedir($dh);
+
+my $fh = IO::File->new($etc_logrotate_conf, "r")
+    or die "Cannot open $etc_logrotate_conf\n";
+
+$logrotate_d =~ s/\./\\./g;
+
+my $contents = join(
+    "",
+    map {
+	s{
+		${logrotate_d}
+	}{
+		${logrotate_d_vera}
+        }gex;
+
+	$_;
+    } <$fh>);
+close($fh);
+
+replace_with($etc_logrotate_conf_vera, $contents);

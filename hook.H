@@ -2,7 +2,7 @@
 ** Copyright 2024 Double Precision, Inc.
 ** See COPYING for distribution information.
 */
-#ifndef hook_h
+#ifndef hook_H
 #define hook_H
 
 #include <string>
@@ -24,19 +24,27 @@ int try_create_vera_socket(const char *tmpname, const char *finalname);
 
 external_filedesc try_connect_vera_pub(const char *socketname);
 
+enum class hook_op {
+	once,
+	permanently,
+	rehook
+};
+
 //! Hook /etc/rc.sysvinit
 
 bool hook(std::string etc_sysinit_dir, //!< "/etc/rc.d"
 	  std::string sbindir,   //!< Directory with init
+	  std::string usr_sbindir,   //!< Directory with logrotate
 	  std::string vera_init, //!< Pathname to vera-init
 	  std::string pkgdatadir, //!< Directory with rc.sysvinit.vera
 	  std::string hookfile, //!< /etc/vera/hook
-	  bool hookonce
+	  hook_op op
 );
 
 //! Unhook /etc/rc.sysvinit
 void unhook(std::string etc_sysinit_dir, //!< "/etc/rc.d"
 	    std::string sbindir,   //!< Directory with init
+	    std::string usr_sbindir,  //!< Directory with logrotate
 	    std::string pubcmdsocket, //!< Connection attempt to pub socket
 	    std::string hookfile //!< /etc/vera/hook
 );
