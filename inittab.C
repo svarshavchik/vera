@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <string>
+#include <string_view>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -71,6 +72,12 @@ struct inittab_entry {
 
 	/*! Stopping command, if we know it */
 	std::string stopping_command;
+
+	/*! Restarting command, if we know it */
+	std::string restarting_command;
+
+	/*! Reload command, if we know it */
+	std::string reloading_command;
 
 	/*! The description that goes into the generated unit file */
 	std::string description;
@@ -281,6 +288,22 @@ yaml_write_map inittab_entry::create() const
 			std::move(stopping)
 		)
 	);
+
+	if (!restarting_command.empty())
+	{
+		unit.emplace_back(
+			std::make_shared<yaml_write_scalar>("restart"),
+			std::make_shared<yaml_write_scalar>(restarting_command)
+		);
+	}
+
+	if (!reloading_command.empty())
+	{
+		unit.emplace_back(
+			std::make_shared<yaml_write_scalar>("reload"),
+			std::make_shared<yaml_write_scalar>(reloading_command)
+		);
+	}
 
 	for (auto &rl:all_runlevels)
 		prev_commands[rl]=identifier;
@@ -1251,6 +1274,58 @@ fi
 
 				std::string launch="/etc/rc.d/" + script;
 
+				// See if there's a restart or a reload command
+
+				std::ifstream i{rcdir + "/" + script};
+				std::string line;
+
+				bool has_restart=false;
+				bool has_reload=false;
+
+				while (std::getline(i, line))
+				{
+					auto e=line.end();
+					auto b=std::find_if(
+						line.begin(),
+						e,
+						[]
+						(char c)
+						{
+							return c != ' ' &&
+								c != '\t' &&
+								c != '\'' &&
+								c != '"';
+						}
+					);
+
+					if (b == e)
+						continue;
+
+					auto p=std::find_if(
+						b,
+						e,
+						[]
+						(char c)
+						{
+							return c == '\'' ||
+								c == '"' ||
+								c == ')';
+						}
+					);
+
+					std::string_view word{b, p};
+
+					if (word == "restart")
+					{
+						has_restart=true;
+					}
+
+					if (word == "reload")
+					{
+						has_reload=true;
+					}
+				}
+
 				inittab_entry run_rc{
 					dummy,
 					none,
@@ -1268,6 +1343,18 @@ fi
 
 				run_rc.stopping_command=
 					launch + " stop";
+
+				if (has_restart)
+				{
+					run_rc.restarting_command=
+						launch + " restart";
+				}
+
+				if (has_reload)
+				{
+					run_rc.reloading_command=
+						launch + " reload";
+				}
 
 				run_rc.start_type="forking";
 				if (!last_rc_M_or_inet2.empty())

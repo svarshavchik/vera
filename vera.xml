@@ -3196,13 +3196,17 @@ version: 1
 	<cmdsynopsis>
 	  <command>vlad enable system/networkmanager-wait-online</command>
 	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad restart system/rc.M/rc.<replaceable>name</replaceable></command>
+	</cmdsynopsis>
       </refsynopsisdiv>
 
       <refsect1 id="extras_description">
 	<title>DESCRIPTION</title>
 
 	<para>
-	  This manual page describes optional <command>vera</command>
+	  This manual page describes additional <command>vera</command>
 	  features.
 	</para>
 
@@ -3218,8 +3222,8 @@ version: 1
 	  </para>
 
 	  <para>
-	    The <quote>system/networkmanager-wait-online</quote> unit
-	    can be enabled for
+	    The installed <quote>system/networkmanager-wait-online</quote> unit
+	    can be enabled, this unit gets enabled for
 	    <quote>system/network-online</quote>.
 	    This unit runs <command>/usr/bin/nm-online</command>
 	    when started.
@@ -3228,11 +3232,39 @@ version: 1
 	  <para>
 	    If a system uses <filename>/etc/rc.d/rc.networkmanager</filename>
 	    then enabling <quote>system/networkmanager-wait-online</quote>
-	    pauses system startup until NetworkManager initializes all
+	    delays system startup until NetworkManager initializes all
 	    network interfaces (all network interfaces come up with an
 	    active IP address). <quote>system/networkmanager-wait-online</quote>
 	    should not be enabled unless
 	    <quote>system/rc.M/rc.networkmanager</quote> is also enabled.
+	  </para>
+	</refsect2>
+
+	<refsect2 id="rc-restart-and-reload">
+	  <title><command>restart</command> and <command>reload</command>
+	  commands for <filename>/etc/rc.d</filename> units</title>
+
+	  <para>
+	    The <command>inittab</command> command installs a unit for every
+	    script in <filename>/etc/rc.d</filename> that gets started from
+	    <filename>/etc/rc.d/rc.M</filename> and
+	    <filename>/etc/rc.d/rc.inet2</filename>. Each unit is named
+	    <filename>system/rc.M/<replaceable>name</replaceable></filename>.
+	  </para>
+
+	  <para>
+	    Each <filename>/etc/rc.d</filename> script is scanned and
+	    heuristically determined if it implements a
+	    <quote>restart</quote> and/or a <quote>reload</quote> operation.
+	    If so, then a <quote>restart</quote> and/or a <quote>reload</quote>
+	    command gets included in the corresponding unit specification
+	    file.
+	  </para>
+
+	  <para>
+	    For example: <quote>vlad restart system/rc.M/rc.sshd</quote>
+	    executes <command>/etc/rc.d/rc.sshd restart</command> in this
+	    unit's container.
 	  </para>
 	</refsect2>
       </refsect1>

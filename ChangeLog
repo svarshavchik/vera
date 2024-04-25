@@ -1,3 +1,11 @@
+2024-04-25  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 0.94
+
+	* inittab.C: scan rc.D scripts to heuristically detect if they
+	implement "restart" or "reload", define the command in the converted
+	unit file.
+
 2024-04-21  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* hook.C: New container, system/update-logrotate, required by

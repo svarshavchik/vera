@@ -41,6 +41,15 @@ c2:12345:respawn:/sbin/agetty 38400 tty2 linux
 x1:4:respawn:/etc/rc.d/rc.4
 EOF
 
+cat >testinittab.dir/etc/rc.d/rc.M <<EOF
+-x /etc/rc.d/rc.httpd
+
+/etc/rc.d/rc.httpd start
+EOF
+cat >testinittab.dir/etc/rc.d/rc.httpd <<EOF
+ restart)
+ 'reload')
+EOF
 >testinittab.dir/etc/rc.d/rc3.d/S90http
 >testinittab.dir/etc/rc.d/rc3.d/S30xxx~
 >testinittab.dir/etc/rc.d/rc3.d/.S30xxx

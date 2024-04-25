@@ -432,6 +432,23 @@ Loading installed units
 system/powerok:start=oneshot:stop=target
 system/powerok:description=SIGPWR, /etc/powerstatus=O
 system/powerok:sigterm:notify=parents
+# system/rc.M.target
+Loading: testinittab.dir/vera/system/rc.M.target
+Loading installed units
+system/rc.M.target:start=oneshot:stop=manual
+system/rc.M.target:description=Dummy target that all rc.M/ units depend on
+system/rc.M.target:sigterm:notify=parents
+system/rc.M.target:required-by system/rc.M/rc.httpd
+# system/rc.M/rc.httpd
+Loading: testinittab.dir/vera/system/rc.M/rc.httpd
+Loading installed units
+system/rc.M/rc.httpd:start=forking:stop=manual
+system/rc.M/rc.httpd:description=/etc/rc.d/rc.httpd
+system/rc.M/rc.httpd:starting:/etc/rc.d/rc.httpd start
+system/rc.M/rc.httpd:stopping:/etc/rc.d/rc.httpd stop
+system/rc.M/rc.httpd:sigterm:notify=all
+system/rc.M/rc.httpd:restart:/etc/rc.d/rc.httpd restart
+system/rc.M/rc.httpd:reload:/etc/rc.d/rc.httpd reload
 # system/rc.a
 Loading: testinittab.dir/vera/system/rc.a
 Loading installed units

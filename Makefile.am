@@ -222,7 +222,7 @@ check-am:
 	$(VALGRIND) ./testcontroller3 testnoreexec
 	export VALGRIND='$(VALGRIND)'; \
 		export srcdir=$(srcdir); \
-		sh $(srcdir)/testinittab.sh "$(srcdir)"
+		sh $(srcdir)/testinittab.sh
 	./testhook
 	./testswitchlog
 	srcdir="$(srcdir)"; export srcdir; $(SHELL) $(srcdir)/testlogrotate.sh
