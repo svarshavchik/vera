@@ -126,10 +126,27 @@ void testhook()
 
 		std::error_code ec;
 
-		std::filesystem::copy(
-			"vera-logrotate",
-			"testhook.pkgdata/vera-logrotate"
-		);
+		std::ifstream ilr{"vera-logrotate"};
+		std::ofstream olr{"testhook.pkgdata/vera-logrotate"};
+
+		if (!ilr || !olr)
+			throw std::runtime_error("Cannot link vera-logrotate");
+
+		std::string lcpy;
+
+		while (std::getline(ilr, lcpy))
+		{
+			if (lcpy.substr(0, 3) == "if ")
+			{
+				lcpy="if true";
+			}
+
+			olr << lcpy << "\n";
+		}
+
+		olr.close();
+
+		if (!ilr.eof() || !olr)
 
 		if (ec)
 			throw std::runtime_error{"Cannot link vera-logrotate"};
