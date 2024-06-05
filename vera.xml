@@ -144,7 +144,8 @@
 
     <note>
       <para>
-	Do not update <command>sysvinit</command> after installing
+	Do not update <command>sysvinit</command> or
+	<command>logrotate</command> after installing
 	<command>vera</command>. If you would like to go back to
 	<command>init</command>, or to update:
       </para>
@@ -201,7 +202,7 @@
 	<para>
 	  Before using <command>removepkg</command> to uninstall
 	  <command>vera</command>, or before updating
-	  <command>sysvinit</command> or <command>vera</command>
+	  <command>sysvinit</command> or <command>logrotate</command>
 	  packages, the following command must be executed:
 	</para>
 
