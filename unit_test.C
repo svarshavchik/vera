@@ -103,6 +103,7 @@ bool proc_container_group::cgroups_try_rmdir(
 	auto dir=cgroups_dir();
 
 	unlink((dir + "/cgroup.procs").c_str());
+	unlink((dir + "/cgroup.kill").c_str());
 	unlink(cgroup_events().c_str());
 
 	if (rmdir(dir.c_str()) < 0)

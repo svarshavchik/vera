@@ -372,6 +372,20 @@ struct proc_container_group::cgroup_procs_file {
 
 void proc_container_group::cgroups_sendsig_all(int sig)
 {
+	if (sig == SIGKILL)
+	{
+		std::string s{cgroups_dir(container->name)
+			      + "/cgroup.kill"};
+		int fd=open(s.c_str(), O_WRONLY);
+
+		if (fd >= 0)
+		{
+			write(fd, "1", 1);
+			close(fd);
+		}
+		return;
+	}
+
 	cgroup_procs_file cp{container->name};
 
 	if (!cp.i)

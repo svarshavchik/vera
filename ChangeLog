@@ -1,3 +1,10 @@
+2024-06-22  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 1.0
+
+	* Use cgroup.kill to stop all processes in a container, instead of
+	manually sending SIGKILL to each process.
+
 2024-06-05  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* INSTALL: updated uninstallation/upgrade documentation.
