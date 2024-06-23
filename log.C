@@ -13,6 +13,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
 #include <syslog.h>
 
 void log_state_change(const proc_container &pc,

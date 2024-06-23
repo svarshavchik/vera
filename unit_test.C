@@ -23,6 +23,7 @@
 #include <fstream>
 #include <iostream>
 #include <locale>
+#include <algorithm>
 
 std::vector<std::string> logged_state_changes;
 struct timespec fake_time;

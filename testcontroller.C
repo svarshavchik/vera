@@ -13,6 +13,7 @@
 
 #include <iterator>
 #include <fstream>
+#include <algorithm>
 #include "proc_loader.H"
 #include <unistd.h>
 #include <sys/stat.h>

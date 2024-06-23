@@ -9,6 +9,7 @@
 #include "proc_loader.H"
 #include "log.H"
 #include "messages.H"
+#include <algorithm>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/signal.h>

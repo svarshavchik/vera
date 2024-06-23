@@ -14,6 +14,7 @@
 #include <optional>
 #include <filesystem>
 #include <unordered_set>
+#include <algorithm>
 #include <string>
 #include "messages.H"
 
