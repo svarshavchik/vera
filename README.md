@@ -1,7 +1,10 @@
 vera
 ====
 
-vera is an alternative init daemon supervisor (PID 1) that uses containers.
+vera is an init daemon supervisor (PID 1) that uses Linux kernel control
+groups (cgroupsv2, or lightweight containers). It is a replacement for
+/sbin/init.
+
 Containers allow reliable, foolproof shutdown and termination of started
 services.
 
@@ -41,7 +44,7 @@ https://github.com/svarshavchik/vera/releases
 - Download the latest release tarball, see the INSTALL file in the tarball
 for build instructions
 
-- Instead of compiling and building, the package for Slackware 15 is also
+- Instead of compiling and building, a package for Slackware 15 is also
 available, but see the INSTALL file as well for additional information
 
 - PGP verification keys: https://www.courier-mta.org/KEYS.bin

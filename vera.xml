@@ -412,6 +412,13 @@
 
 	<note>
 	  <para>
+	    The Slackware package takes care of running <quote>reexec</quote>
+	    when installing a package update.
+	  </para>
+	</note>
+
+	<note>
+	  <para>
 	    This can be a lengthy delay when there's a respawned unit that
 	    reached its maximum number of attempts and it's waiting until
 	    it's respawnable.
