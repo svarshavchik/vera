@@ -13,6 +13,7 @@
 #include <sstream>
 #include <fstream>
 #include <errno.h>
+#include <ios>
 #include <string.h>
 
 void loadtest(const std::string &name, bool enabled)
@@ -458,6 +459,48 @@ int main(int argc, char **argv)
 		    ))
 			exit(1);
 		return 0;
+	}
+
+	if (args.size() > 3 && args[1] == "edittest")
+	{
+		size_t n=3;
+
+		try {
+			proc_edit(
+				"globaldir",
+				"localdir",
+				"overridedir",
+				args[2],
+				[&]
+				(const std::string &filename)
+				{
+					if (n >= args.size())
+						return 1;
+
+					std::ofstream o{
+						filename,
+						std::ios_base::out |
+						std::ios_base::app
+					};
+
+					o << args[n++] << "\n";
+					o.close();
+					return 0;
+				},
+				[&]
+				()
+				{
+					if (n >= args.size())
+						return std::string{"A"};
+
+					return args[n++];
+				});
+		} catch (const std::exception &e)
+		{
+			std::cerr << e.what() << std::endl;
+			exit(1);
+		}
+		exit(0);
 	}
 	return 1;
 }

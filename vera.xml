@@ -1288,6 +1288,12 @@ multi-user                # Reverts to the previous default runlevel
 	  <arg choice='req'>filename</arg>
 	  <arg choice='opt'>path</arg>
 	</cmdsynopsis>
+
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>edit</arg>
+	  <arg choice='plain'><replaceable>unit</replaceable></arg>
+	</cmdsynopsis>
       </refsynopsisdiv>
 
       <refsect1 id="units_description">
@@ -1872,6 +1878,85 @@ vlad validate startup web/startup
 	      <quote>validate</quote>.
 	    </para>
 	  </note>
+
+	  <para>
+	    The <quote>edit</quote> command provides a way to manually edit
+	    a unit specification file safely, with error checking.
+	    The <quote>edit</quote> command does the following:
+	  </para>
+
+	  <itemizedlist>
+	    <listitem>
+	      <para>
+		The <quote>edit</quote> command makes a copy of any
+		existing modified unit specification file that already
+		exists in <filename>@LOCALCONFIGDIR@</filename>, otherwise
+		the original one gets copied from
+		<filename>@INSTALLCONFIGDIR@</filename>.
+	      </para>
+	    </listitem>
+	    <listitem>
+	      <para>
+		The copied file is opened in an editor. The
+		<envar>EDITOR</envar> environment variable specifies the
+		editor (defaults to
+		<command>vi</command>).
+	      </para>
+	    </listitem>
+	    <listitem>
+	      <para>
+		After the editor terminates, presumably after saving any
+		changes to the file, the <quote>validate</quote> command
+		verifies the modified unit specification file. If all
+		checks pass: the edited file gets installed in
+		<filename>@LOCALCONFIGDIR@</filename>, then the
+		<quote>edit</quote> command finishes.
+	      </para>
+	    </listitem>
+	    <listitem>
+	      <para>
+		Otherwise the <quote>edit</quote> commands offers three
+		options after showing all the error messages:
+	      </para>
+	      <variablelist>
+		<varlistentry>
+		  <term>Abort</term>
+		  <listitem>
+		    <para>
+		      The <quote>edit</quote> command finishes without
+		      making any changes, the temporary copy of the
+		      unit specification file gets removed.
+		    </para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term>Re-edit</term>
+		  <listitem>
+		    <para>
+		      The editor runs again, this offers the option to
+		      fix the errors, then try to validate it again.
+		    </para>
+		  </listitem>
+		</varlistentry>
+
+		<varlistentry>
+		  <term>Ignore</term>
+		  <listitem>
+		    <para>
+		      The edited unit specification file gets installed
+		      despite the reported errors.
+		      This option is available in case the errors come from
+		      other unit specification files and not the edited one's
+		      (the <quote>validate</quote> command checks all unit
+		      specification files that are currently installed).
+		    </para>
+		  </listitem>
+		</varlistentry>
+	      </variablelist>
+	    </listitem>
+	  </itemizedlist>
+
 	  <para>
 	    This is a slightly contrived example of a unit specification file
 	    that shows most of its possible settings:

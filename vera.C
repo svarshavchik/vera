@@ -30,6 +30,7 @@
 #include <sys/kd.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#include <sys/wait.h>
 #include <syslog.h>
 #include <iostream>
 #include <signal.h>
@@ -74,15 +75,21 @@ std::string exename;
 
 struct winsize console_winsize;
 
+// Unit specification files
+
 std::string installconfigdir()
 {
 	return INSTALLCONFIGDIR;
 }
 
+// Local overrides of unit specification files
+
 std::string localconfigdir()
 {
 	return LOCALCONFIGDIR;
 }
+
+// Overrides
 
 std::string overrideconfigdir()
 {
@@ -2296,6 +2303,73 @@ void vlad(std::vector<std::string> args)
 			std::cout << " " << entry.label
 				  << " " << entry.name << "\n";
 		}
+		exit(0);
+	}
+
+	if (args.size() == 2 && args[0] == "edit")
+	{
+		proc_edit(
+			installconfigdir(),
+			localconfigdir(),
+			overrideconfigdir(),
+			args[1],
+			[]
+			(const std::string &filename)
+			{
+				const char *p=getenv("EDITOR");
+
+				if (!p)
+					p="vi";
+
+				std::cout << "Hint: started " << p << " "
+					  << filename
+					  << std::endl << std::flush;
+
+				pid_t pid=fork();
+
+				if (pid < 0)
+				{
+					throw std::runtime_error{
+						_("fork failed")
+					};
+				}
+
+				if (pid == 0)
+				{
+					execlp(p, p, filename.c_str(), NULL);
+					_exit(1);
+				}
+
+				int s;
+
+				if (waitpid(pid, &s, 0) < 0)
+				{
+					throw std::runtime_error{
+						_("wait failed")
+					};
+				}
+
+				if (!WIFEXITED(s) || WEXITSTATUS(s) != 0)
+				{
+					std::cout << p
+						  << _(": command failed")
+						  << std::endl;
+					return 1;
+				}
+				return 0;
+			},
+			[]
+			{
+				std::string l;
+				std::cout << "A)bort, R)e-edit, I)gnore: "
+					  << std::flush;
+
+				if (!std::getline(std::cin, l))
+					l="A";
+
+				return l;
+			}
+		);
 		exit(0);
 	}
 	std::cerr << "Unknown command" << std::endl;

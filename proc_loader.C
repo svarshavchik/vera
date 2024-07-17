@@ -1104,12 +1104,15 @@ bool proc_set_runlevel_config(const std::string &configfile,
 	return true;
 }
 
-bool proc_validate(const std::string &unitfile,
-		   const std::string &relativepath_override,
-		   const std::string &installconfigdir,
-		   const std::string &localconfigdir,
-		   const std::string &overrideconfigdir,
-		   const std::function<void (const std::string &)> &log_message)
+static bool proc_validate_and_dump(
+	const std::string &unitfile,
+	const std::string &relativepath_override,
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::function<void (const std::string &)> &log_message,
+	const std::function<void (const proc_new_container_set &)> &dump
+)
 {
 	std::ifstream i{unitfile};
 
@@ -1153,9 +1156,9 @@ bool proc_validate(const std::string &unitfile,
 		std::cout << _("Loading installed units") << std::endl;
 
 		auto current_configs=proc_load_all(
-			installconfigdir,
-			localconfigdir,
-			overrideconfigdir,
+			config_global,
+			config_local,
+			config_override,
 			[&]
 			(const std::string &warning_message)
 			{
@@ -1185,7 +1188,7 @@ bool proc_validate(const std::string &unitfile,
 	if (error)
 		return false;
 
-	proc_load_dump(set);
+	dump(set);
 
 	for (auto &s:set)
 	{
@@ -1275,4 +1278,189 @@ bool proc_validate(const std::string &unitfile,
 	}
 
 	return true;
+}
+
+bool proc_validate(const std::string &unitfile,
+		   const std::string &relativepath_override,
+		   const std::string &config_global,
+		   const std::string &config_local,
+		   const std::string &config_override,
+		   const std::function<void (const std::string &)> &log_message)
+{
+	return proc_validate_and_dump(
+		unitfile,
+		relativepath_override,
+		config_global,
+		config_local,
+		config_override,
+		log_message,
+		proc_load_dump
+	);
+}
+
+namespace {
+	struct autoremove {
+
+		std::string &filename;
+
+		~autoremove()
+		{
+			unlink(filename.c_str());
+		}
+	};
+};
+
+void proc_edit(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::string &name,
+	const std::function<int (const std::string &)> &do_edit,
+	const std::function<std::string ()> &do_prompt
+)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+
+	auto filename=std::filesystem::path{config_global} / name;
+
+	std::error_code ec;
+	if (!std::filesystem::exists(filename, ec))
+		throw std::runtime_error{
+			name + _(": does not exist: ")
+			+ ec.message()
+		};
+
+	auto localfilename=std::filesystem::path{config_local} / name;
+
+	std::string tmpdir=std::filesystem::temp_directory_path() /
+		"vera.XXXXXXXX";
+
+	int fd=mkstemp(tmpdir.data());
+
+	if (fd < 0)
+		throw std::runtime_error{
+			_("Cannot create a temporary file")
+		};
+
+	autoremove do_autoremove{tmpdir};
+	close(fd);
+
+	if (!std::filesystem::copy_file(
+		    std::filesystem::exists(localfilename, ec)
+		    ? localfilename:filename,
+		    tmpdir,
+		    std::filesystem::copy_options::overwrite_existing,
+		    ec))
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(localfilename)
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+
+	while (1)
+	{
+		if (do_edit(tmpdir) != 0)
+			return;
+
+		std::vector<std::string> msgs;
+
+		if (proc_validate_and_dump(
+			    tmpdir, name, config_global,
+			    config_local,
+			    config_override,
+			    [&]
+			    (auto &msg)
+			    {
+				    msgs.push_back(msg);
+			    },
+			    []
+			    (const auto &)
+			    {
+			    }
+		    ))
+		{
+			break;
+		}
+		for (auto &m:msgs)
+		{
+			std::cout << m << std::endl;
+		}
+
+		std::string l;
+
+		while (1)
+		{
+			l=do_prompt();
+
+			switch (*l.c_str()) {
+			case 'a':
+			case 'A':
+			case 'r':
+			case 'R':
+			case 'i':
+			case 'I':
+				break;
+			default:
+				continue;
+			}
+			break;
+		}
+
+		switch (*l.c_str()) {
+		case 'a':
+		case 'A':
+			return;
+		case 'R':
+		case 'r':
+			continue;
+		}
+		break;
+	}
+
+	auto localfilenamedir=localfilename.parent_path();
+
+	ec={};
+	std::filesystem::create_directories(localfilenamedir, ec);
+
+	if (ec)
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(localfilenamedir)
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+
+	std::string tmplocalfilename=localfilename;
+
+	tmplocalfilename += "~";
+
+	if (!std::filesystem::copy_file(
+		    tmpdir,
+		    tmplocalfilename,
+		    std::filesystem::copy_options::overwrite_existing,
+		    ec))
+	{
+		throw std::runtime_error{
+			tmplocalfilename
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+
+	ec={};
+	std::filesystem::rename(tmplocalfilename, localfilename, ec);
+	if (ec)
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(localfilename)
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
 }

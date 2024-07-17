@@ -614,5 +614,43 @@ $VALGRIND ./testprocloader testupdatestatusoverrides name2 name2/a name2/b name3
 
 diff -U 3 loadtest.txt loadtest.out
 
+rm -rf globaldir localdir overridedir
+mkdir -p globaldir/subdir localdir overridedir
+
+cat >globaldir/subdir/name1 <<EOF
+name: name1
+version: 1
+EOF
+
+$VALGRIND ./testprocloader edittest subdir/name1 "description: name1"
+
+cat >loadtest.expected <<EOF
+name: name1
+version: 1
+description: name1
+EOF
+
+diff -U 3 loadtest.expected localdir/subdir/name1
+
+$VALGRIND ./testprocloader edittest subdir/name1 "description: name2"
+
+cat >>loadtest.expected <<EOF
+description: name2
+EOF
+
+diff -U 3 loadtest.expected localdir/subdir/name1
+
+$VALGRIND ./testprocloader edittest subdir/name1 "ZZ" R
+
+diff -U 3 loadtest.expected localdir/subdir/name1
+
+$VALGRIND ./testprocloader edittest subdir/name1 "YY" I
+
+cat >>loadtest.expected <<EOF
+YY
+EOF
+
+diff -U 3 loadtest.expected localdir/subdir/name1
+
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.expected

@@ -254,4 +254,24 @@ void proc_set_environconfig(
 	const std::function<void (const std::string &)> &error
 );
 
+/*! Edit a unit file
+
+  name: the unit file
+
+  do_edit: closure that forks off the editor, to edit the filename that's
+  passed in as a parameter. Returns the editor's exit code.
+
+  do_prompt: after successfully editing, prompt for A)bort, R)e-edit, I)gnore,
+  returned what was typed in.
+ */
+
+void proc_edit(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::string &name,
+	const std::function<int (const std::string &)> &do_edit,
+	const std::function<std::string ()> &do_prompt
+);
+
 #endif
