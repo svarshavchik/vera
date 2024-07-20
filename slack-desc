@@ -9,8 +9,8 @@
 vera: Linux process supervisor
 vera:
 vera: vera is an alternative init daemon supervisor (PID 1) that uses
-vera: containers. Containers allow reliable, foolproof shutdown and
-vera: termination of started services.
+vera: control groups (lightweight containers). Containers allow reliable,
+vera: foolproof shutdown and termination of started services.
 vera:
 vera:
 vera:

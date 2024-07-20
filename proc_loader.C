@@ -1329,8 +1329,8 @@ void proc_edit(
 	std::error_code ec;
 	if (!std::filesystem::exists(filename, ec))
 		throw std::runtime_error{
-			name + _(": does not exist: ")
-			+ ec.message()
+			name + _(": does not exist")
+			+ (ec ? std::string{": "} + ec.message():"")
 		};
 
 	auto localfilename=std::filesystem::path{config_local} / name;
