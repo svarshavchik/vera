@@ -153,6 +153,8 @@ public:
 
 	void cgroups_sendsig_parents(int);
 
+	//! Freeze it
+	bool freeze_thaw(std::string_view);
 private:
 
 	//! Recursive implementation function.

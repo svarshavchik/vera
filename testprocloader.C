@@ -502,5 +502,23 @@ int main(int argc, char **argv)
 		}
 		exit(0);
 	}
+
+	if (args.size() == 3 && args[1] == "reverttest")
+	{
+
+		try {
+			proc_revert(
+				"globaldir",
+				"localdir",
+				"overridedir",
+				args[2]
+			);
+		} catch (const std::exception &e)
+		{
+			std::cerr << e.what() << std::endl;
+			exit(1);
+		}
+		exit(0);
+	}
 	return 1;
 }

@@ -652,5 +652,13 @@ EOF
 
 diff -U 3 loadtest.expected localdir/subdir/name1
 
+$VALGRIND ./testprocloader reverttest subdir/name1
+
+if test -f localdir/subdir/name1
+then
+    echo "revert did not revert" >&2
+    exit 1
+fi
+
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.expected

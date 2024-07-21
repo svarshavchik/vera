@@ -271,4 +271,18 @@ void send_unsetenv(const external_filedesc &fd,
 
 int wait_setunsetenv(const external_filedesc &fd);
 
+// Request a freeze
+
+void request_freeze(const external_filedesc &efd,
+		    const std::string &name);
+
+// Request a thaw
+
+void request_thaw(const external_filedesc &efd,
+		  const std::string &name);
+
+// Status of the thaw command
+
+std::string get_freeze_thaw_status(const external_filedesc &efd);
+
 #endif

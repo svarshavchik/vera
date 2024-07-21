@@ -3694,6 +3694,70 @@ void testreexec_stopped()
 	}
 }
 
+void testfreezethaw()
+{
+	proc_new_container_set pcs;
+
+	auto a=std::make_shared<proc_new_containerObj>("a");
+
+	a->new_container->start_type=start_type_t::oneshot;
+	a->new_container->starting_command="/bin/true";
+	pcs.insert(a);
+	proc_containers_install(pcs, container_install::update);
+
+	auto err=proc_container_start("a");
+
+	if (!err.empty())
+		throw "proc_container_start(1): " + err;
+
+	std::string cgroup_freeze{
+		proc_container_group_data::get_cgroupfs_base_path()
+		+ std::string{"/:a/cgroup.freeze"}
+	};
+
+	{
+		auto [socketa, socketb] = create_fake_request();
+		request_freeze(socketa, "a");
+		proc_do_request(socketb);
+		socketb=nullptr;
+
+		if (!get_freeze_thaw_status(socketa).empty())
+			throw "request_freeze failed";
+
+		std::ifstream i{cgroup_freeze};
+
+		std::string s;
+
+		std::getline(i, s);
+
+		if (s != "1")
+		{
+			throw "cgroup.freeze does not contain \"1\"";
+		}
+	}
+
+	{
+		auto [socketa, socketb] = create_fake_request();
+		request_thaw(socketa, "a");
+		proc_do_request(socketb);
+		socketb=nullptr;
+
+		if (!get_freeze_thaw_status(socketa).empty())
+			throw "request_freeze failed";
+
+		std::ifstream i{cgroup_freeze};
+
+		std::string s;
+
+		std::getline(i, s);
+
+		if (s != "0")
+		{
+			throw "cgroup.freeze does not contain \"0\"";
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3890,6 +3954,9 @@ int main(int argc, char **argv)
 		test="testreexec_stopped";
 		testreexec_stopped();
 
+		test_reset();
+		test="testfreezethaw";
+		testfreezethaw();
 		test_finished();
 	} catch (const char *e)
 	{

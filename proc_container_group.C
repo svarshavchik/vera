@@ -461,3 +461,18 @@ std::vector<pid_t> proc_container_group::cgroups_getpids(
 
 	return pids;
 }
+
+bool proc_container_group::freeze_thaw(std::string_view what)
+{
+	std::ofstream o{cgroups_dir() + "/cgroup.freeze"};
+
+	if (o)
+	{
+		o << what;
+		o.close();
+
+		if (o)
+			return true;
+	}
+	return false;
+}

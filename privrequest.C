@@ -638,3 +638,20 @@ int wait_setunsetenv(const external_filedesc &fd)
 
 	return 0;
 }
+
+void request_freeze(const external_filedesc &efd,
+		    const std::string &name)
+{
+	efd->write_all(std::string{"freeze\n"} + name + "\n");
+}
+
+void request_thaw(const external_filedesc &efd,
+		  const std::string &name)
+{
+	efd->write_all(std::string{"thaw\n"} + name + "\n");
+}
+
+std::string get_freeze_thaw_status(const external_filedesc &efd)
+{
+	return efd->readln();
+}

@@ -1252,6 +1252,8 @@ multi-user                # Reverts to the previous default runlevel
 	    <arg choice='plain'>mask</arg>
 	    <arg choice='plain'>disable</arg>
 	    <arg choice='plain'>enable</arg>
+	    <arg choice='plain'>freeze</arg>
+	    <arg choice='plain'>thaw</arg>
 	  </group>
 	  <arg choice='plain'><replaceable>unit</replaceable></arg>
 	</cmdsynopsis>
@@ -1291,7 +1293,10 @@ multi-user                # Reverts to the previous default runlevel
 
 	<cmdsynopsis>
 	  <command>vlad</command>
-	  <arg choice='plain'>edit</arg>
+	  <group choice='req'>
+	    <arg choice='plain'>edit</arg>
+	    <arg choice='plain'>revert</arg>
+	  </group>
 	  <arg choice='plain'><replaceable>unit</replaceable></arg>
 	</cmdsynopsis>
       </refsynopsisdiv>
@@ -1319,10 +1324,10 @@ multi-user                # Reverts to the previous default runlevel
 	</para>
 
 	<para>
-	  Each unit runs in its own system container, see
-	  <citerefentry>
-	    <refentrytitle>cgroups</refentrytitle>
-	    <manvolnum>7</manvolnum>
+	  Each unit runs in its own control group (a lightweight container),
+	  see <citerefentry>
+	  <refentrytitle>cgroups</refentrytitle>
+	  <manvolnum>7</manvolnum>
 	  </citerefentry> for more information.
 	</para>
 
@@ -1412,6 +1417,13 @@ multi-user                # Reverts to the previous default runlevel
 	    ends up having the same result as with regular units.
 	  </para>
 	</note>
+
+	<para>
+	  The <quote>freeze</quote> command pauses all processes in the
+	  unit. The processes are not killed or removed, they just stop
+	  running. The <quote>thaw</quote> command resumes normal operation
+	  of the named unit.
+	</para>
 
 	<refsect2 id="envvars">
 	  <title>ENVIRONMENT VARIABLES</title>
@@ -1891,13 +1903,13 @@ vlad validate startup web/startup
 		The <quote>edit</quote> command makes a copy of any
 		existing modified unit specification file that already
 		exists in <filename>@LOCALCONFIGDIR@</filename>, otherwise
-		the original one gets copied from
+		the original unit specification file gets copied from
 		<filename>@INSTALLCONFIGDIR@</filename>.
 	      </para>
 	    </listitem>
 	    <listitem>
 	      <para>
-		The copied file is opened in an editor. The
+		The copied file gets opened in an editor. The
 		<envar>EDITOR</envar> environment variable specifies the
 		editor (defaults to
 		<command>vi</command>).
@@ -1905,9 +1917,10 @@ vlad validate startup web/startup
 	    </listitem>
 	    <listitem>
 	      <para>
-		After the editor terminates, presumably after saving any
-		changes to the file, the <quote>validate</quote> command
-		verifies the modified unit specification file. If all
+		After the editor terminates (presumably after saving all
+		changes to the edited file), the <quote>validate</quote>
+		command
+		checks the modified unit specification file. If all
 		checks pass: the edited file gets installed in
 		<filename>@LOCALCONFIGDIR@</filename>, then the
 		<quote>edit</quote> command finishes.
@@ -1956,6 +1969,13 @@ vlad validate startup web/startup
 	      </variablelist>
 	    </listitem>
 	  </itemizedlist>
+
+	  <para>
+	    For completeness' sake, the
+	    <quote>revert</quote> command deletes the custom
+	    unit specification file for the named unit, from
+	    <filename>@LOCALCONFIGDIR@</filename>.
+	  </para>
 
 	  <para>
 	    This is a slightly contrived example of a unit specification file

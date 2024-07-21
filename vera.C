@@ -1528,6 +1528,40 @@ static void vlad_switch(const std::string &runlevel)
 		wait_runlevel(conn);
 }
 
+// freeze request
+
+static void vlad_freeze(const std::string &name)
+{
+	auto conn=connect_vera_priv();
+
+	request_freeze(conn, name);
+
+	auto ret=get_freeze_thaw_status(conn);
+
+	if (!ret.empty())
+	{
+		std::cerr << ret << std::endl;
+		exit(1);
+	}
+}
+
+// thaw request
+
+static void vlad_thaw(const std::string &name)
+{
+	auto conn=connect_vera_priv();
+
+	request_thaw(conn, name);
+
+	auto ret=get_freeze_thaw_status(conn);
+
+	if (!ret.empty())
+	{
+		std::cerr << ret << std::endl;
+		exit(1);
+	}
+}
+
 namespace {
 #if 0
 }
@@ -2370,6 +2404,26 @@ void vlad(std::vector<std::string> args)
 				return l;
 			}
 		);
+		exit(0);
+	}
+	if (args.size() == 2 && args[0] == "revert")
+	{
+		proc_revert(
+			installconfigdir(),
+			localconfigdir(),
+			overrideconfigdir(),
+			args[1]
+		);
+		exit(0);
+	}
+	if (args.size() == 2 && args[0] == "freeze")
+	{
+		vlad_freeze(args[1]);
+		exit(0);
+	}
+	if (args.size() == 2 && args[0] == "thaw")
+	{
+		vlad_thaw(args[1]);
 		exit(0);
 	}
 	std::cerr << "Unknown command" << std::endl;

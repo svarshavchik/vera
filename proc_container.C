@@ -1983,6 +1983,28 @@ void proc_do_request(std::string ln,
 		efd->write_all(last_errmsg);
 		return;
 	}
+
+	if (ln == "freeze")
+	{
+		auto name=efd->readln();
+
+		get_containers_info(nullptr)->freeze(
+			name,
+			efd
+		);
+		return;
+	}
+
+	if (ln == "thaw")
+	{
+		auto name=efd->readln();
+
+		get_containers_info(nullptr)->thaw(
+			name,
+			efd
+		);
+		return;
+	}
 }
 
 void proc_do_status_request(const external_filedesc &req,
@@ -4469,4 +4491,46 @@ void current_containers_infoObj::alternate_runmodes_t::reloaded(
 			upcoming=*iter;
 		}
 	}
+}
+
+void current_containers_infoObj::freeze(
+	const std::string &name,
+	external_filedesc requester
+)
+{
+	auto iter=containers.find(name);
+
+	if (iter == containers.end() ||
+	    iter->first->type != proc_container_type::loaded)
+	{
+		if (requester)
+			requester->write_all(name + _(": unknown unit\n"));
+		return;
+	}
+
+	if (iter->second.group && iter->second.group->freeze_thaw("1"))
+		return;
+
+	requester->write_all(name + _(": no processes to freeze\n"));
+}
+
+void current_containers_infoObj::thaw(
+	const std::string &name,
+	external_filedesc requester
+)
+{
+	auto iter=containers.find(name);
+
+	if (iter == containers.end() ||
+	    iter->first->type != proc_container_type::loaded)
+	{
+		if (requester)
+			requester->write_all(name + _(": unknown unit\n"));
+		return;
+	}
+
+	if (iter->second.group && iter->second.group->freeze_thaw("0"))
+		return;
+
+	requester->write_all(name + _(": no processes to thaw\n"));
 }

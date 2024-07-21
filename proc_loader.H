@@ -274,4 +274,31 @@ void proc_edit(
 	const std::function<std::string ()> &do_prompt
 );
 
+/*!
+  Remove the local override for a unit specification.
+*/
+
+void proc_revert(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::string &name
+);
+
+/*!
+  Freeze a container
+*/
+
+void proc_freeze(
+	const std::string &name
+);
+
+/*!
+  Thaw a container
+*/
+
+void proc_thaw(
+	const std::string &name
+);
+
 #endif

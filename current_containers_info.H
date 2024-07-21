@@ -524,6 +524,14 @@ private:
 public:
 	//! Return the pids in the container
 	std::vector<pid_t> container_pids(const proc_container &pc);
+
+	//! Freeze a container
+	void freeze(const std::string &name,
+		    external_filedesc requester);
+
+	//! Freeze a container
+	void thaw(const std::string &name,
+		  external_filedesc requester);
 };
 
 //! Information used by callback from timers and processes

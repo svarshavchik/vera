@@ -1464,3 +1464,53 @@ void proc_edit(
 		};
 	}
 }
+
+void proc_revert(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::string &name
+)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+
+	auto filename=std::filesystem::path{config_local} / name;
+
+	std::error_code ec;
+	if (!std::filesystem::exists(filename, ec))
+		throw std::runtime_error{
+			name + _(": does not exist")
+			+ (ec ? std::string{": "} + ec.message():"")
+		};
+
+	if (!std::filesystem::remove(filename, ec))
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(filename) + ": "
+			+ ec.message()
+		};
+	}
+}
+
+void proc_freeze(
+	const std::string &name
+)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+}
+
+void proc_thaw(
+	const std::string &name
+)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+}
