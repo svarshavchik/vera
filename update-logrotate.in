@@ -1,0 +1,15 @@
+# Update migrated logrotate scripts
+name: update-logrotate
+description: update logrotate scripts
+required-by:
+  - boot
+starting:
+  type: forking
+  command: ~PKGDATADIR~/vera-logrotate-migrate
+     /etc/logrotate.conf
+     /etc/logrotate.conf.vera
+     /etc/logrotate.d
+     /etc/logrotate.d.vera
+     /etc/rc.d
+     /usr/local/vera/lib/vera/system/rc.M
+version: 1

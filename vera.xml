@@ -3313,6 +3313,10 @@ version: 1
 	</cmdsynopsis>
 
 	<cmdsynopsis>
+	  <command>vlad enable system/v2-controllers</command>
+	</cmdsynopsis>
+
+	<cmdsynopsis>
 	  <command>vlad restart system/rc.M/rc.<replaceable>name</replaceable></command>
 	</cmdsynopsis>
       </refsynopsisdiv>
@@ -3355,6 +3359,32 @@ version: 1
 	  </para>
 	</refsect2>
 
+	<refsect2 id="v2-controllers">
+	  <title>Enabling cgroup v2 controllers</title>
+
+	  <para>
+	    Slackware's default <filename>/etc/rc.d/rc.S</filename> script
+	    mounts all cgroups version 1 controllers in
+	    <filename>/sys/fs/cgroup</filename>.
+	  </para>
+
+	  <para>
+	    Enabling the <quote>system/v2-controllers</quote> unit
+	    runs a script at system boot that enables cgroups version 2
+	    controllers after shutting down the
+	    cgroups version 1 controllers. This makes controllers
+	    available to cgroups version 2 containers. The cgroups
+	    version 2 controllers get enabled
+	    for <command>vera</command>'s units.
+	  </para>
+
+	  <para>
+	    If version 1 controllers are turned off via a kernel boot
+	    parameter, the cgroups version 2 controllers are still enabled
+	    for <command>vera</command>'s units.
+	  </para>
+	</refsect2>
+
 	<refsect2 id="rc-restart-and-reload">
 	  <title><command>restart</command> and <command>reload</command>
 	  commands for <filename>/etc/rc.d</filename> units</title>
@@ -3382,6 +3412,23 @@ version: 1
 	    unit's container.
 	  </para>
 	</refsect2>
+      </refsect1>
+      <refsect1 id="extras_files">
+	<title>FILES</title>
+
+	<variablelist>
+	  <varlistentry>
+	    <term><filename>@CONFIGDIR@/cgroup.controllers</filename></term>
+
+	    <listitem>
+	      <para>
+		This configuration file lists which group version 2 controllers
+		get enabled, for <command>vera</command>, by the
+		<quote>system/v2-controllers</quote> unit.
+	      </para>
+	    </listitem>
+	  </varlistentry>
+	</variablelist>
       </refsect1>
       <refsect1 id="extras_seealso">
 	<title>SEE ALSO</title>

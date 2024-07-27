@@ -118,5 +118,6 @@ AC_CONFIG_FILES([
 	rc.local.vera
 	rc.local_shutdown.vera
 	vera-logrotate
+	rc.controllers
 ])
 AC_OUTPUT

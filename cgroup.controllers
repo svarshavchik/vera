@@ -1,0 +1,10 @@
+# Which v2 cgroups controllers get enabled (and v1 cgroups are turned off)
+#
+# v2=v1 means: turn off this "v1" controller to get the "v2" one,
+# otherwise both v1 and v2 have the same name.
+#
+# Default setting:
+#
+# controllers="cpuset cpu io=blkio memory pids misc"
+
+controllers="cpuset cpu io=blkio memory pids misc"

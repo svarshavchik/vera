@@ -9,7 +9,9 @@ sbin_PROGRAMS=vera vera-init
 noinst_SCRIPTS=vlad
 
 pkgdata_SCRIPTS=rc.sysvinit.vera rc.local.vera rc.local_shutdown.vera \
-	vera-logrotate vera-logrotate-migrate vera-rcm vera-rck
+	rc.controllers \
+	vera-logrotate vera-logrotate-migrate vera-rcm vera-rck \
+	update-logrotate
 
 noinst_PROGRAMS=\
 	testcontroller						\
@@ -25,6 +27,7 @@ noinst_PROGRAMS=\
 	testswitchlog
 
 EXTRA_DIST= 							\
+	cgroup.controllers					\
 	packaging/slackware/doinst.sh				\
 	packaging/slackware/uninst.sh				\
 	packaging/slackware/networkmanager-wait-online		\
@@ -150,27 +153,34 @@ testhook_LDADD=libvera.a
 testswitchlog_SOURCES=testswitchlog.C
 testswitchlog_LDADD=libvera.a
 
+UNITFILES=update-logrotate v2-controllers
+
+EXTRA_DIST += $(patsubst %,%.in,$(UNITFILES))
+
+all: $(UNITFILES)
+
+define unitfile_dependency
+
+$(1): $(1).in
+	sed 's@~PKGDATADIR~@'"`echo $(pkgdatadir)`"'@' <$(srcdir)/$$@.in >$$@
+
+endef
+
+$(eval $(foreach F,$(UNITFILES),	 \
+	$(call unitfile_dependency,$(F)) \
+	)				 \
+)
+
 install-exec-hook:
 	rm -f $(DESTDIR)$(sbindir)/vlad
 	ln $(DESTDIR)$(sbindir)/vera $(DESTDIR)$(sbindir)/vlad
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system
-	echo '# Update migrated logrotate scripts' >$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo 'name: update-logrotate' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo 'description: update logrotate scripts' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo 'required-by:' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '  - boot' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo 'starting:' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '  type: forking' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '  command: $(pkgdatadir)/vera-logrotate-migrate' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '     /etc/logrotate.conf' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '     /etc/logrotate.conf.vera' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '     /etc/logrotate.d' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '     /etc/logrotate.d.vera' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '     /etc/rc.d' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo '     $(INSTALLCONFIGDIR)/system/rc.M' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
-	echo 'version: 1' >>$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	$(INSTALL_DATA) update-logrotate \
+		$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
+	$(INSTALL_DATA) v2-controllers \
+		$(DESTDIR)$(INSTALLCONFIGDIR)/system/v2-controllers
 	$(MKDIR_P) $(DESTDIR)$(CONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(localstatedir)
 	$(MKDIR_P) $(DESTDIR)$(SWITCHLOGDIR)
@@ -179,6 +189,8 @@ install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(OVERRIDECONFIGDIR)
 	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)
 	chmod 755 $(DESTDIR)$(CONFIGDIR)
+	$(INSTALL_DATA) $(srcdir)/cgroup.controllers $(DESTDIR)$(CONFIGDIR)/cgroup.controllers
+	chmod 644 $(DESTDIR)$(CONFIGDIR)/cgroup.controllers
 	chmod 755 $(DESTDIR)$(LOCALCONFIGDIR)
 	chmod 755 $(DESTDIR)$(OVERRIDECONFIGDIR)
 	umask 022; ./testprocloader genrunlevels \
@@ -236,12 +248,12 @@ EXTRA_DIST += init.8 vlad.8 vera.8.in \
 	vera.units.8.in
 
 MANEXPAND = \
-	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~;   \
-	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~;                \
-	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~;          \
-	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~;                \
-	     s~@''ENVIRONCONFIG@''~$(ENVIRONCONFIG)~;                  \
-	     s~@''CONFIGDIR@''~$(CONFIGDIR)~'
+	set -vx; sed 's~@''INSTALLCONFIGDIR@''~$(INSTALLCONFIGDIR)~g;   \
+	     s~@''LOCALCONFIGDIR@''~$(LOCALCONFIGDIR)~g;                \
+	     s~@''OVERRIDECONFIGDIR@''~$(OVERRIDECONFIGDIR)~g;          \
+	     s~@''RUNLEVELCONFIG@''~$(RUNLEVELCONFIG)~g;                \
+	     s~@''ENVIRONCONFIG@''~$(ENVIRONCONFIG)~g;                  \
+	     s~@''CONFIGDIR@''~$(CONFIGDIR)~g'
 
 vera.8: vera.8.in Makefile
 	$(MANEXPAND) <$(srcdir)/vera.8.in >vera.8.tmp

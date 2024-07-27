@@ -1,0 +1,9 @@
+# Mount cgroup2 controllers
+name: v2-controllers
+description: enable cgroup2 controllers
+enabled:
+  - boot
+starting:
+  type: forking
+  command: ~PKGDATADIR~/rc.controllers
+version: 1

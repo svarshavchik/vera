@@ -1,0 +1,62 @@
+#! /bin/sh
+#
+# rc.S mounts all cgroups controllers in the V1 hierarchy
+#
+# I am rude: I will move them to the V2 hierarchy
+
+prefix="@prefix@"
+exec_prefix="@exec_prefix@"
+sysconfdir="@sysconfdir@"
+
+if test ! -f "@CONFIGDIR@/cgroup.controllers"
+then
+    exit 0
+fi
+
+. @CONFIGDIR@/cgroup.controllers
+
+v2controllers=""
+v1controllers=""
+
+for c in $controllers
+do
+    v2="`echo $c | cut -d= -f1`"
+    v1="`echo $c | cut -d= -f2`"
+    v2controllers="$v2controllers $v2"
+
+    if test "$v1" = ""
+    then
+	v1="$v2"
+    fi
+
+    if test -d /sys/fs/cgroup/$v1
+    then
+	v1controllers="$v1controllers $v1"
+
+	if umount /sys/fs/cgroup/$v1
+	then
+	    rmdir /sys/fs/cgroup/$v1
+	else
+	    echo "Cannot turn off $v1 controller in cgroups version 1" >&2
+	fi
+    fi
+done
+
+# It seems that after unmounting the controller isn't immediately available
+# for V2. We need to introduce an artificial delay.
+
+if test "$v1controllers" != ""
+then
+    echo "Stopped the following cgroups 1 controllers:$v1controllers"
+    sleep 2
+fi
+
+for c in $v2controllers
+do
+    if echo "+$c" >/sys/fs/cgroup/vera/cgroup.subtree_control 2>/dev/null
+    then
+	echo "$c controller enabled"
+    else
+	echo "Cannot enable the $c controller" >&2
+    fi
+done
