@@ -67,13 +67,13 @@ echo "" >testconfoverride/.invalid
 echo "" >testconfglobal/sub1/keep1
 echo "" >testconfglobal/sub1/keep2
 echo "" >testconflocal/sub1/keep1
-echo "" >testconfoverride/sub1/keep2
+echo "state: enabled" >testconfoverride/sub1/keep2
 
 echo "" >testconflocal/goaway1
-echo "" >testconfoverride/goaway1
+echo "state: enabled" >testconfoverride/goaway1
 
 echo "" >testconflocal/goaway2
-echo "" >testconfoverride/sub3/goaway3
+echo "state::enabled" >testconfoverride/sub3/goaway3
 
 echo "" >testconfglobal/otherdir1
 mkdir testconflocal/otherdir1
@@ -81,7 +81,7 @@ echo "" >testconflocal/otherdir1/otherdir1goaway
 
 mkdir testconfglobal/otherdir2
 echo "" >testconfglobal/otherdir2/otherdir2keep
-echo "" >testconfoverride/otherdir2
+echo "state: enabled" >testconfoverride/otherdir2
 
 $VALGRIND ./testprocloader gc testconfglobal testconflocal testconfoverride
 
@@ -458,6 +458,14 @@ EOF
 diff -U 3 loadtest.txt overridedir/sub/dir
 
 echo 'masked' >overridedir/sub/dir
+$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
+echo 'masked' >loadtest.txt
+diff -U 3 loadtest.txt loadtest.out
+
+$VALGRIND ./testprocloader gc globaldir globaldir overridedir
+echo 'state: masked' >loadtest.txt
+diff -U 3 loadtest.txt overridedir/sub/dir
+
 $VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
 echo 'masked' >loadtest.txt
 diff -U 3 loadtest.txt loadtest.out

@@ -85,6 +85,7 @@ libvera_a_SOURCES=						\
 	proc_loader.C						\
 	proc_loader.H						\
 	proc_loader2.C						\
+	proc_loader3.C						\
 	switchlog.C						\
 	switchlog.H						\
 	unit_test.H						\

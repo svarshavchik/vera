@@ -23,6 +23,9 @@
 #include <errno.h>
 #include <sys/stat.h>
 
+static proc_override read_override(const std::string &filename,
+				   std::ifstream &i, bool &legacy);
+
 static void proc_find(const std::filesystem::path &config_global,
 		      const std::filesystem::path &config_local,
 		      const std::filesystem::path &config_override,
@@ -162,12 +165,38 @@ void proc_gc(const std::string &config_global,
 	     const std::function<void (const std::string &message)> &message)
 {
 	proc_find(config_global, config_local, config_override, ".",
-		  []
-		  (const auto &,
+		  [&]
+		  (const auto &l,
 		   const auto &,
-		   const auto &,
-		   const auto &)
+		   const auto &override_path,
+		   const auto &relpath)
 		  {
+			  if (!override_path)
+				  return;
+
+			  std::ifstream i{*override_path};
+
+			  if (!i.is_open())
+				  return;
+
+			  bool legacy;
+
+			  auto o=read_override(*override_path, i,
+					       legacy);
+
+			  if (!legacy)
+				  return;
+
+			  proc_set_override(
+				  config_override,
+				  relpath,
+				  o,
+				  []
+				  (const auto &error)
+				  {
+					  std::cerr << error << std::endl;
+				  }
+			  );
 		  },
 		  [&]
 		  (const std::filesystem::path &path,
@@ -797,9 +826,10 @@ bool parsed_yaml::starting_or_stopping(
 }
 
 static proc_override read_override(const std::string &filename,
-				   std::ifstream &i)
+				   std::ifstream &i, bool &legacy)
 {
 	proc_override o;
+	legacy=false;
 
 	std::string s;
 
@@ -862,6 +892,10 @@ static proc_override read_override(const std::string &filename,
 			);
 		}
 	}
+	else
+	{
+		legacy=true;
+	}
 	if (s == "masked")
 		o.set_state(proc_override::state_t::masked);
 
@@ -896,7 +930,9 @@ proc_override proc_get_override(const std::string &config_global,
 	if (!i)
 		return {};
 
-	return read_override(filename, i);
+	bool ignore;
+
+	return read_override(filename, i, ignore);
 }
 
 proc_new_container_set proc_load_all(
@@ -933,7 +969,8 @@ proc_new_container_set proc_load_all(
 					  return;
 				  }
 
-				  o=read_override(*override_path, i);
+				  bool ignore;
+				  o=read_override(*override_path, i, ignore);
 
 				  if (o.get_state() ==
 				      proc_override::state_t::masked)
@@ -1110,8 +1147,10 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 			  if (!i.is_open())
 				  return;
 
+			  bool ignore;
 			  ret.emplace(relative_path,
-				      read_override(*override_path, i));
+				      read_override(*override_path, i,
+						    ignore));
 		  },
 		  [&]
 		  (const auto &, const auto &)
