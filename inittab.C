@@ -882,6 +882,9 @@ struct inittab_converter {
 
 		all_runlevels_t all_runlevels;
 
+		bool ondemand=false;
+		bool inrunlevel=false;
+
 		/*
 		** Map certain actions to specific runlevels. The new unit
 		** declares that it's required-by these runlevels.
@@ -968,18 +971,21 @@ struct inittab_converter {
 					generator.all_single_multi_runlevels
 						.insert("a");
 					all_runlevels.insert("a");
+					ondemand=true;
 					continue;
 				case 'b':
 				case 'B':
 					generator.all_single_multi_runlevels
 						.insert("b");
 					all_runlevels.insert("b");
+					ondemand=true;
 					continue;
 				case 'c':
 				case 'C':
 					generator.all_single_multi_runlevels
 						.insert("c");
 					all_runlevels.insert("c");
+					ondemand=true;
 					continue;
 				}
 				auto iter=generator.runlevel_lookup.find(
@@ -996,10 +1002,20 @@ struct inittab_converter {
 				}
 				else
 				{
+					inrunlevel=true;
 					all_runlevels.insert(
 						iter->second);
 				}
 			}
+			if (ondemand && inrunlevel)
+			{
+				std::cerr << "Line " << linenum
+					  << ": specifies both an on-demand "
+					"and a system runlevel, "
+					"simultaneously" << std::endl;
+				generator.error=true;
+			}
+
 			for (auto &rl:all_runlevels)
 				required_by_runlevel.insert(rl);
 		}
@@ -1030,6 +1046,10 @@ struct inittab_converter {
 		for (auto &rl : required_by_runlevel)
 			new_entry.required_by_runlevel(rl);
 
+		if (inrunlevel)
+		{
+			new_entry.this_requires.push_back("../boot");
+		}
 		bool is_local_after=
 			new_entry.starting_command == "/etc/rc.d/rc.M";
 

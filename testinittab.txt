@@ -63,6 +63,7 @@ system/inittab/c1:start=respawn:stop=manual
 system/inittab/c1:description=c1: /sbin/agetty 38400 tty1 linux
 system/inittab/c1:starting:/sbin/agetty 38400 tty1 linux
 system/inittab/c1:sigterm:notify=parents
+system/inittab/c1:requires system/boot
 system/inittab/c1:required-by system/custom
 system/inittab/c1:required-by system/graphical
 system/inittab/c1:required-by system/multi-user
@@ -79,6 +80,7 @@ system/inittab/c2:start=respawn:stop=manual
 system/inittab/c2:description=c2: /sbin/agetty 38400 tty2 linux
 system/inittab/c2:starting:/sbin/agetty 38400 tty2 linux
 system/inittab/c2:sigterm:notify=parents
+system/inittab/c2:requires system/boot
 system/inittab/c2:required-by system/custom
 system/inittab/c2:required-by system/graphical
 system/inittab/c2:required-by system/multi-user
@@ -109,6 +111,7 @@ system/inittab/l0:start=forking:stop=manual
 system/inittab/l0:description=l0: /etc/rc.d/rc.0
 system/inittab/l0:starting:vlad sysdown 0 /etc/rc.d/rc.0
 system/inittab/l0:sigterm:notify=parents
+system/inittab/l0:requires system/boot
 system/inittab/l0:required-by system/shutdown
 system/inittab/l0:starting_after system/inittab/l0-started-shutdown
 system/inittab/l0:stopping_before system/inittab/l0-started-shutdown
@@ -142,6 +145,7 @@ system/inittab/l6:start=forking:stop=manual
 system/inittab/l6:description=l6: /etc/rc.d/rc.6
 system/inittab/l6:starting:vlad sysdown 6 /etc/rc.d/rc.6
 system/inittab/l6:sigterm:notify=parents
+system/inittab/l6:requires system/boot
 system/inittab/l6:required-by system/reboot
 system/inittab/l6:starting_after system/inittab/l6-started-reboot
 system/inittab/l6:stopping_before system/inittab/l6-started-reboot
@@ -209,6 +213,7 @@ system/inittab/rc:starting:testinittab.dir/share/vera-rcm testinittab.dir/vera /
 system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/rc:starting_timeout 300
 system/inittab/rc:sigterm:notify=all
+system/inittab/rc:requires system/boot
 system/inittab/rc:required-by system/custom
 system/inittab/rc:required-by system/graphical
 system/inittab/rc:required-by system/multi-user
@@ -354,6 +359,7 @@ system/inittab/su:start=forking:stop=manual
 system/inittab/su:description=su: /etc/rc.d/rc.K
 system/inittab/su:starting:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/su:sigterm:notify=parents
+system/inittab/su:requires system/boot
 system/inittab/su:required-by system/single-user
 # system/inittab/su-start-single-user
 Loading: testinittab.dir/vera/system/inittab/su-start-single-user
@@ -389,6 +395,7 @@ system/inittab/x1:start=respawn:stop=manual
 system/inittab/x1:description=x1: /etc/rc.d/rc.4
 system/inittab/x1:starting:/etc/rc.d/rc.4
 system/inittab/x1:sigterm:notify=parents
+system/inittab/x1:requires system/boot
 system/inittab/x1:required-by system/graphical
 system/inittab/x1:starting_after system/inittab/c2
 system/inittab/x1:stopping_before system/inittab/c2
