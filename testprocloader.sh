@@ -453,9 +453,14 @@ $VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.o
 diff -U 3 loadtest.txt loadtest.out
 
 cat >loadtest.txt <<EOF
-enabled
+state: enabled
 EOF
 diff -U 3 loadtest.txt overridedir/sub/dir
+
+echo 'masked' >overridedir/sub/dir
+$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
+echo 'masked' >loadtest.txt
+diff -U 3 loadtest.txt loadtest.out
 
 rm -rf overridedir globaldir localdir
 

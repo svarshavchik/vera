@@ -531,7 +531,8 @@ void update_status_overrides(
 
 	for (auto &[name, override_status] : overrides)
 	{
-		if (override_status.state == proc_override::state_t::masked)
+		if (override_status.get_state() ==
+		    proc_override::state_t::masked)
 		{
 			status[name].state="masked";
 		}
@@ -546,7 +547,7 @@ void update_status_overrides(
 			auto iter=overrides.find(path);
 
 			if (iter != overrides.end())
-				switch (iter->second.state) {
+				switch (iter->second.get_state()) {
 				case proc_override::state_t::masked:
 					break;
 				case proc_override::state_t::none:

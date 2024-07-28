@@ -1457,7 +1457,7 @@ void do_override(const std::string &name,
 
 	int exit_code=0;
 
-	o.state=state;
+	o.set_state(state);
 
 	proc_set_override(overrideconfigdir(), name, o,
 			  [&]

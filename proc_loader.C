@@ -513,7 +513,8 @@ static bool proc_load_container(
 	// to "required-by".
 
 	if ((key == "required-by" ||
-	     (key == "enabled" && o.state == proc_override::state_t::enabled)
+	     (key == "enabled" &&
+	      o.get_state() == proc_override::state_t::enabled)
 	    ) &&
 	    !parsed.parse_requirements(
 		    n,
@@ -795,7 +796,8 @@ bool parsed_yaml::starting_or_stopping(
 		error);
 }
 
-static proc_override read_override(std::istream &i)
+static proc_override read_override(const std::string &filename,
+				   std::ifstream &i)
 {
 	proc_override o;
 
@@ -803,11 +805,68 @@ static proc_override read_override(std::istream &i)
 
 	std::getline(i, s);
 
+	if (s.find(':') != s.npos)
+	{
+		s.clear();
+		i.seekg(0);
+		// Before 1.2 this was a single, plain line with the override
+		// state. It is now a YAML document.
+
+		yaml_parser_info parser_info{i};
+
+		if (!parser_info.initialized)
+		{
+			std::cerr << filename
+				  << _(": YAML parser initialization failure")
+				  << std::endl;
+		}
+		else
+		{
+			std::function<void (const std::string &)> error=[&]
+				(const std::string &error)
+				{
+					std::cerr << filename
+						  << ": "
+						  << error
+						  << std::endl;
+				};
+
+			parsed_yaml parsed{parser_info,
+				filename,
+				error
+			};
+
+			(void)parsed.parse_map(
+				yaml_document_get_root_node(&parsed.doc),
+				true,
+				filename,
+				[&]
+				(const std::string &key,
+				 yaml_node_t *n,
+				 const auto &error)
+				{
+					if (key == "state")
+					{
+						auto value=parsed.parse_scalar(
+							n,
+							filename,
+							error
+						);
+
+						if (value)
+							s=*value;
+					}
+					return true;
+				},
+				error
+			);
+		}
+	}
 	if (s == "masked")
-		o.state=proc_override::state_t::masked;
+		o.set_state(proc_override::state_t::masked);
 
 	if (s == "enabled")
-		o.state=proc_override::state_t::enabled;
+		o.set_state(proc_override::state_t::enabled);
 
 	return o;
 }
@@ -837,7 +896,7 @@ proc_override proc_get_override(const std::string &config_global,
 	if (!i)
 		return {};
 
-	return read_override(i);
+	return read_override(filename, i);
 }
 
 proc_new_container_set proc_load_all(
@@ -874,9 +933,10 @@ proc_new_container_set proc_load_all(
 					  return;
 				  }
 
-				  o=read_override(i);
+				  o=read_override(*override_path, i);
 
-				  if (o.state == proc_override::state_t::masked)
+				  if (o.get_state() ==
+				      proc_override::state_t::masked)
 					  return;
 			  }
 
@@ -1050,7 +1110,8 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 			  if (!i.is_open())
 				  return;
 
-			  ret.emplace(relative_path, read_override(i));
+			  ret.emplace(relative_path,
+				      read_override(*override_path, i));
 		  },
 		  [&]
 		  (const auto &, const auto &)
@@ -1168,7 +1229,7 @@ static bool proc_validate_and_dump(
 	try {
 		proc_override o;
 
-		o.state=proc_override::state_t::enabled;
+		o.set_state(proc_override::state_t::enabled);
 
 		set=proc_load(i, unitfile, relative_path, o,
 			      [&]

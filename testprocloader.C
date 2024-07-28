@@ -21,7 +21,7 @@ void loadtest(const std::string &name, bool enabled)
 	proc_override o;
 
 	if (enabled)
-		o.state=proc_override::state_t::enabled;
+		o.set_state(proc_override::state_t::enabled);
 
 	proc_load_dump(
 		proc_load(std::cin, "(built-in)", name, o,
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 		try {
 			auto o=proc_get_override(args[2], args[3], args[4]);
 
-			switch (o.state) {
+			switch (o.get_state()) {
 			case proc_override::state_t::none:
 				std::cout << "none\n";
 				break;
@@ -166,11 +166,11 @@ int main(int argc, char **argv)
 
 		if (args[4] == "masked")
 		{
-			o.state=proc_override::state_t::masked;
+			o.set_state(proc_override::state_t::masked);
 		}
 		if (args[4] == "enabled")
 		{
-			o.state=proc_override::state_t::enabled;
+			o.set_state(proc_override::state_t::enabled);
 		}
 		proc_set_override(args[2], args[3], o,
 				  []

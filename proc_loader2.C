@@ -1,13 +1,12 @@
 /*
 ** Copyright 2024 Double Precision, Inc.
-** See COPYING for distribution information.
+a** See COPYING for distribution information.
 */
 #include "config.h"
 #include "proc_loader.H"
 #include "messages.H"
 #include "yaml_writer.H"
 #include "parsed_yaml.H"
-#include "yaml_writer.H"
 #include "privrequest.H"
 #include <algorithm>
 #include <filesystem>
@@ -17,6 +16,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <optional>
 #include <memory>
@@ -40,15 +40,43 @@ void proc_set_override(
 
 	std::string contents;
 
-	switch (o.state) {
-	case proc_override::state_t::none:
-		break;
-	case proc_override::state_t::enabled:
-		contents="enabled\n";
-		break;
-	case proc_override::state_t::masked:
-		contents="masked\n";
-		break;
+	{
+		std::ostringstream yaml_stream;
+
+		yaml_map_t yaml_contents;
+
+		switch (o.get_state()) {
+		case proc_override::state_t::none:
+			break;
+		case proc_override::state_t::enabled:
+			yaml_contents.emplace_back(
+				std::make_shared<yaml_write_scalar>(
+					"state"
+				),
+				std::make_shared<yaml_write_scalar>(
+					"enabled"
+				)
+			);
+			break;
+		case proc_override::state_t::masked:
+			yaml_contents.emplace_back(
+				std::make_shared<yaml_write_scalar>(
+					"state"
+				),
+				std::make_shared<yaml_write_scalar>(
+					"masked"
+				)
+			);
+			break;
+		}
+
+		if (!yaml_contents.empty())
+		{
+			yaml_writer{yaml_stream}.write(
+				yaml_write_map{yaml_contents}
+			);
+		}
+		contents=yaml_stream.str();
 	}
 
 	// Create any parent directories, first.

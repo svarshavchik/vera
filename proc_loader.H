@@ -6,12 +6,14 @@
 #define proc_loader_h
 
 #include "proc_container.H"
+#include "parsed_yaml.H"
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <iostream>
+#include <map>
 #include <optional>
 
 /*! Find pathnames to load
@@ -100,6 +102,10 @@ struct proc_override {
 		enabled, //!< Container is enabled (in its runlevel, presumably).
 	};
 
+	state_t get_state() const { return state; }
+	void set_state(state_t s) { state=s; }
+
+private:
 	//! State override value
 	state_t state{state_t::none};
 };
