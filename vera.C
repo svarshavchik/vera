@@ -1997,6 +1997,9 @@ void vlad(std::vector<std::string> args)
 		request_fd_wait(fd);
 		request_send_fd(fd, fileno(fpfd));
 
+		if (args.size() >= 2)
+			stopped_flag=1;
+
 		auto status=get_status(fd, fileno(fpfd));
 
 		update_status_overrides(

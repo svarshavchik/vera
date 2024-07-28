@@ -1502,6 +1502,8 @@ multi-user                # Reverts to the previous default runlevel
 	    <quote>--stopped</quote> option also includes stopped
 	    units (so <quote>--all</quote> is not really all of them, the
 	    stopped processes are not included).
+	    The <quote>--stopped</quote> option is impled if any units are
+	    given as parameters.
 	  </para>
 
 	  <para>
