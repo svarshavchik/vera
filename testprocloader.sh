@@ -454,6 +454,7 @@ diff -U 3 loadtest.txt loadtest.out
 
 cat >loadtest.txt <<EOF
 state: enabled
+version: 1
 EOF
 diff -U 3 loadtest.txt overridedir/sub/dir
 
@@ -464,7 +465,15 @@ diff -U 3 loadtest.txt loadtest.out
 
 $VALGRIND ./testprocloader gc globaldir globaldir overridedir
 echo 'state: masked' >loadtest.txt
+echo 'version: 1' >>loadtest.txt
 diff -U 3 loadtest.txt overridedir/sub/dir
+
+echo 'state: masked' >overridedir/sub/dir
+
+$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out 2>&1
+echo 'overridedir/sub/dir: did not see a "version: 1" tag' >loadtest.txt
+echo 'masked' >>loadtest.txt
+diff -U 3 loadtest.txt loadtest.out
 
 $VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
 echo 'masked' >loadtest.txt

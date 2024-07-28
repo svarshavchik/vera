@@ -418,6 +418,31 @@ struct parsed_yaml {
 		return true;
 	}
 
+	bool parse_version_1(
+		yaml_node_t *n,
+		const std::string &keypath,
+		const std::function<void (const std::string &)> &error,
+		bool &found_version_tag
+	)
+	{
+		return parse_sequence(
+			n,
+			keypath,
+			[&]
+			(auto n, auto &error)
+			{
+				auto s=parse_scalar(n, keypath, error);
+
+				if (!s)
+					return false;
+
+				if (*s == "1")
+					found_version_tag=true;
+				return true;
+			},
+			error
+		);
+	}
 	/* Parse starting/stopping section in a unit specification */
 	bool starting_or_stopping(
 		yaml_node_t *n,

@@ -72,6 +72,15 @@ void proc_set_override(
 
 		if (!yaml_contents.empty())
 		{
+			yaml_contents.emplace_back(
+				std::make_shared<yaml_write_scalar>(
+					"version"
+				),
+				std::make_shared<yaml_write_scalar>(
+					"1"
+				)
+			);
+
 			yaml_writer{yaml_stream}.write(
 				yaml_write_map{yaml_contents}
 			);

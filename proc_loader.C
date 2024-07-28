@@ -23,8 +23,11 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-static proc_override read_override(const std::string &filename,
-				   std::ifstream &i, bool &legacy);
+static proc_override read_override(
+	const std::string &filename,
+	std::ifstream &i, bool &legacy,
+	const std::function<void (const std::string &)> &error
+);
 
 static void proc_find(const std::filesystem::path &config_global,
 		      const std::filesystem::path &config_local,
@@ -182,7 +185,8 @@ void proc_gc(const std::string &config_global,
 			  bool legacy;
 
 			  auto o=read_override(*override_path, i,
-					       legacy);
+					       legacy,
+					       message);
 
 			  if (!legacy)
 				  return;
@@ -387,28 +391,9 @@ proc_new_container_set proc_load(
 				    if (key != "version")
 					    return true;
 
-				    return parsed.parse_sequence(
-					    n,
-					    keypath,
-					    [&]
-					    (yaml_node_t *n,
-					     const std::function<
-					     void (const
-						   std::string &)> &error)
-					    {
-						    auto s=parsed.parse_scalar(
-							    n,
-							    keypath,
-							    error);
-						    if (!s)
-							    return false;
-
-						    if (*s == "1")
-							    found_version_tag=
-								    true;
-						    return true;
-					    },
-					    error
+				    return parsed.parse_version_1(
+					    n, keypath, error,
+					    found_version_tag
 				    );
 			    },
 			    error))
@@ -825,8 +810,10 @@ bool parsed_yaml::starting_or_stopping(
 		error);
 }
 
-static proc_override read_override(const std::string &filename,
-				   std::ifstream &i, bool &legacy)
+static proc_override read_override(
+	const std::string &filename,
+	std::ifstream &i, bool &legacy,
+	const std::function<void (const std::string &)> &error)
 {
 	proc_override o;
 	legacy=false;
@@ -866,6 +853,8 @@ static proc_override read_override(const std::string &filename,
 				error
 			};
 
+			bool found_version_tag=false;
+
 			(void)parsed.parse_map(
 				yaml_document_get_root_node(&parsed.doc),
 				true,
@@ -886,10 +875,21 @@ static proc_override read_override(const std::string &filename,
 						if (value)
 							s=*value;
 					}
+
+					if (key == "version")
+						return parsed.parse_version_1(
+							n, key, error,
+							found_version_tag
+						);
 					return true;
 				},
 				error
 			);
+
+			if (!found_version_tag)
+			{
+				error(_("did not see a \"version: 1\" tag"));
+			}
 		}
 	}
 	else
@@ -932,7 +932,14 @@ proc_override proc_get_override(const std::string &config_global,
 
 	bool ignore;
 
-	return read_override(filename, i, ignore);
+	return read_override(filename, i, ignore,
+			     [&]
+			     (const std::string &error)
+			     {
+				     throw std::runtime_error{
+					     name + ": " + error
+				     };
+			     });
 }
 
 proc_new_container_set proc_load_all(
@@ -970,7 +977,8 @@ proc_new_container_set proc_load_all(
 				  }
 
 				  bool ignore;
-				  o=read_override(*override_path, i, ignore);
+				  o=read_override(*override_path, i, ignore,
+						  error);
 
 				  if (o.get_state() ==
 				      proc_override::state_t::masked)
@@ -1150,7 +1158,12 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 			  bool ignore;
 			  ret.emplace(relative_path,
 				      read_override(*override_path, i,
-						    ignore));
+						    ignore,
+						    []
+						    (const auto &)
+						    {
+						    }
+				      ));
 		  },
 		  [&]
 		  (const auto &, const auto &)
