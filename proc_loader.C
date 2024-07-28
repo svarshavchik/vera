@@ -812,6 +812,34 @@ static proc_override read_override(std::istream &i)
 	return o;
 }
 
+proc_override proc_get_override(const std::string &config_global,
+				const std::string &config_override,
+				const std::string &name)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+
+	std::error_code ec;
+
+	if (!std::filesystem::exists(
+		    std::filesystem::path{config_global} / name, ec))
+		throw std::runtime_error{
+			name + _(": does not exist")
+			+ (ec ? std::string{": "} + ec.message():"")
+		};
+
+	auto filename=std::filesystem::path{config_override} / name;
+
+	std::ifstream i{filename};
+
+	if (!i)
+		return {};
+
+	return read_override(i);
+}
+
 proc_new_container_set proc_load_all(
 	const std::string &config_global,
 	const std::string &config_local,

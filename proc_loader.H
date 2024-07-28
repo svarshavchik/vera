@@ -112,14 +112,14 @@ struct proc_override {
 //!
 //! - the relative path in the override directory
 //!
-//! - "none", "mask", or "enabled".
+//! - new overrides
 //!
 //! - a callback that gets invoked to report errors.
 
 void proc_set_override(
 	const std::string &config_override,
 	const std::string &path,
-	const std::string &override_type,
+	const proc_override &o,
 	const std::function<void (const std::string &)> &error);
 
 /*! Load all container specifications
@@ -142,12 +142,18 @@ proc_new_container_set proc_load_all(
 	const std::function<void (const std::string &)> &error
 );
 
-//! Return the current overrides
+//! Return all current overrides
 
 std::unordered_map<std::string, proc_override> proc_get_overrides(
 	const std::string &config_global,
 	const std::string &config_local,
 	const std::string &config_override);
+
+//! Return a specific override
+
+proc_override proc_get_override(const std::string &config_global,
+				const std::string &config_override,
+				const std::string &name);
 
 //! Dump the loaded process containers to std::cout
 

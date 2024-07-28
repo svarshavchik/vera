@@ -410,17 +410,33 @@ built-in:required-by one
 EOF
 diff -U 3 loadtest.expected loadtest.out
 
+rm -rf globaldir
+mkdir -p globaldir
 mkdir -p overridedir
 
-$VALGRIND ./testprocloader setoverride overridedir .bad mask >loadtest.out
-cat >loadtest.txt <<EOF
-.bad: non-compliant filename
-EOF
+echo 'file: does not exist' >loadtest.txt
+$VALGRIND ./testprocloader getoverride globaldir overridedir file >loadtest.out
+
 diff -U 3 loadtest.txt loadtest.out
 
-$VALGRIND ./testprocloader setoverride overridedir sub/dir masked
+cat >globaldir/file <<EOF
+name: file
+version: 1
+EOF
+echo 'none' >loadtest.txt
+$VALGRIND ./testprocloader getoverride globaldir overridedir file >loadtest.out
+diff -U 3 loadtest.txt loadtest.out
 
-test -f overridedir/sub/dir
+mkdir -p globaldir/sub
+cat >globaldir/sub/dir <<EOF
+name: dir
+version: 1
+EOF
+
+$VALGRIND ./testprocloader setoverride overridedir sub/dir masked
+echo 'masked' >loadtest.txt
+$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
+diff -U 3 loadtest.txt loadtest.out
 
 $VALGRIND ./testprocloader setoverride overridedir sub/dir none
 
@@ -431,6 +447,10 @@ test ! -d overridedir/sub
 test -d overridedir
 
 $VALGRIND ./testprocloader setoverride overridedir sub/dir enabled
+
+echo 'enabled' >loadtest.txt
+$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
+diff -U 3 loadtest.txt loadtest.out
 
 cat >loadtest.txt <<EOF
 enabled

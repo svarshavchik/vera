@@ -137,9 +137,42 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (args.size() == 5 && args[1] == "getoverride")
+	{
+		try {
+			auto o=proc_get_override(args[2], args[3], args[4]);
+
+			switch (o.state) {
+			case proc_override::state_t::none:
+				std::cout << "none\n";
+				break;
+			case proc_override::state_t::enabled:
+				std::cout << "enabled\n";
+				break;
+			case proc_override::state_t::masked:
+				std::cout << "masked\n";
+				break;
+			}
+		} catch (const std::exception &e)
+		{
+			std::cout << e.what() << std::endl;
+		}
+		return 0;
+	}
+
 	if (args.size() == 5 && args[1] == "setoverride")
 	{
-		proc_set_override(args[2], args[3], args[4],
+		proc_override o;
+
+		if (args[4] == "masked")
+		{
+			o.state=proc_override::state_t::masked;
+		}
+		if (args[4] == "enabled")
+		{
+			o.state=proc_override::state_t::enabled;
+		}
+		proc_set_override(args[2], args[3], o,
 				  []
 				  (const std::string &error)
 				  {

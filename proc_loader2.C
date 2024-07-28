@@ -29,7 +29,7 @@ std::unordered_map<std::string, std::string> environconfigvars;
 void proc_set_override(
 	const std::string &config_override,
 	const std::string &path,
-	const std::string &override_type,
+	const proc_override &o,
 	const std::function<void (const std::string &)> &error)
 {
 	if (!proc_validpath(path))
@@ -38,11 +38,24 @@ void proc_set_override(
 		return;
 	}
 
+	std::string contents;
+
+	switch (o.state) {
+	case proc_override::state_t::none:
+		break;
+	case proc_override::state_t::enabled:
+		contents="enabled\n";
+		break;
+	case proc_override::state_t::masked:
+		contents="masked\n";
+		break;
+	}
+
 	// Create any parent directories, first.
 
 	std::filesystem::path fullpath{config_override};
 
-	if (override_type == "none")
+	if (contents.empty())
 	{
 		unlink( (fullpath / path).c_str());
 
@@ -59,12 +72,6 @@ void proc_set_override(
 				break;
 		}
 
-		return;
-	}
-
-	if (override_type != "masked" && override_type != "enabled")
-	{
-		error(override_type + _(": unknown override type"));
 		return;
 	}
 
@@ -86,7 +93,7 @@ void proc_set_override(
 		return;
 	}
 
-	o << override_type << "\n";
+	o << contents;
 	o.close();
 
 	if (o.fail() ||

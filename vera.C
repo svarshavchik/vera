@@ -1327,7 +1327,7 @@ external_filedesc connect_vera_priv()
 
 bool do_chmod_override(std::string configname,
 		       const std::string &overridename,
-		       std::string_view override_type,
+		       proc_override::state_t state,
 		       const std::function<void (const std::string &)> &error)
 {
 	std::ifstream i{overridename};
@@ -1407,7 +1407,7 @@ bool do_chmod_override(std::string configname,
 
 	int mode=stat_buf.st_mode & 0777;
 
-	if (override_type == "enabled")
+	if (state == proc_override::state_t::enabled)
 	{
 		mode |= S_IXUSR;
 
@@ -1417,7 +1417,7 @@ bool do_chmod_override(std::string configname,
 		if (mode & S_IROTH)
 			mode |= S_IXOTH;
 	}
-	else if (override_type == "none")
+	else if (state == proc_override::state_t::none)
 	{
 		mode &= ~(S_IXUSR|S_IXGRP|S_IXOTH);
 	}
@@ -1437,33 +1437,29 @@ bool do_chmod_override(std::string configname,
 	return true;
 }
 
-void do_override(const std::string &name, const char *type)
+void do_override(const std::string &name,
+		 proc_override::state_t state)
 {
-	struct stat stat_buf;
+	auto o=proc_get_override(installconfigdir(),
+				 localconfigdir(),
+				 name);
 
-	std::string configname{INSTALLCONFIGDIR "/" + name};
-
-	if (stat(configname.c_str(), &stat_buf) ||
-	    !S_ISREG(stat_buf.st_mode))
-	{
-		std::cerr << name << " is not an existing unit,"
-			  << std::endl;
-		exit(1);
-	}
-
-	if (do_chmod_override(configname,
-			      LOCALCONFIGDIR "/" + name,
-			      type,
-			      [&]
-			      (const std::string &s)
-			      {
-				      std::cerr << s << "\n";
-			      }))
+	if (do_chmod_override(
+		    std::filesystem::path{installconfigdir()} / name,
+		    std::filesystem::path{localconfigdir()} / name,
+		    state,
+		    [&]
+		    (const std::string &s)
+		    {
+			    std::cerr << s << "\n";
+		    }))
 		exit(0);
 
 	int exit_code=0;
 
-	proc_set_override(OVERRIDECONFIGDIR, name, type,
+	o.state=state;
+
+	proc_set_override(overrideconfigdir(), name, o,
 			  [&]
 			  (const std::string &s)
 			  {
@@ -2101,17 +2097,17 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "enable")
 	{
-		do_override(args[1], "enabled");
+		do_override(args[1], proc_override::state_t::enabled);
 	}
 
 	if (args.size() == 2 && args[0] == "disable")
 	{
-		do_override(args[1], "none");
+		do_override(args[1], proc_override::state_t::none);
 	}
 
 	if (args.size() == 2 && args[0] == "mask")
 	{
-		do_override(args[1], "masked");
+		do_override(args[1], proc_override::state_t::masked);
 	}
 
 	if (args.size() >= 1 && args[0] == "default")
