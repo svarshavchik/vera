@@ -250,7 +250,7 @@ static bool proc_load_container(
 	const proc_new_container &nc,
 	const std::string &key,
 	yaml_node_t *n,
-	bool enabled,
+	const proc_override &o,
 	bool &parsed_sigterm_notify,
 	const std::function<void (const std::string &)> &error);
 
@@ -258,7 +258,7 @@ proc_new_container_set proc_load(
 	std::istream &input_file,
 	const std::string &filename,
 	const std::filesystem::path &relative_path,
-	bool enabled,
+	const proc_override &o,
 	const std::function<void (const std::string &)> &error)
 {
 	proc_new_container_set results;
@@ -423,7 +423,7 @@ proc_new_container_set proc_load(
 					    nc,
 					    key,
 					    n,
-					    enabled,
+					    o,
 					    parsed_sigterm_notify,
 					    error);
 			    },
@@ -461,7 +461,7 @@ static bool proc_load_container(
 	const proc_new_container &nc,
 	const std::string &key,
 	yaml_node_t *n,
-	bool enabled,
+	const proc_override &o,
 	bool &parsed_sigterm_notify,
 	const std::function<void (const std::string &)> &error)
 {
@@ -513,7 +513,7 @@ static bool proc_load_container(
 	// to "required-by".
 
 	if ((key == "required-by" ||
-	     (key == "enabled" && enabled)
+	     (key == "enabled" && o.state == proc_override::state_t::enabled)
 	    ) &&
 	    !parsed.parse_requirements(
 		    n,
@@ -797,17 +797,19 @@ bool parsed_yaml::starting_or_stopping(
 
 static proc_override read_override(std::istream &i)
 {
+	proc_override o;
+
 	std::string s;
 
 	std::getline(i, s);
 
 	if (s == "masked")
-		return proc_override::masked;
+		o.state=proc_override::state_t::masked;
 
 	if (s == "enabled")
-		return proc_override::enabled;
+		o.state=proc_override::state_t::enabled;
 
-	return proc_override::none;
+	return o;
 }
 
 proc_new_container_set proc_load_all(
@@ -830,7 +832,7 @@ proc_new_container_set proc_load_all(
 		   const auto &override_path,
 		   const auto &relative_path)
 		  {
-			  bool enabled=false;
+			  proc_override o;
 
 			  if (override_path)
 			  {
@@ -844,16 +846,10 @@ proc_new_container_set proc_load_all(
 					  return;
 				  }
 
-				  switch (read_override(i)) {
-				  case proc_override::masked:
-					  return;
+				  o=read_override(i);
 
-				  case proc_override::enabled:
-					  enabled=true;
-					  break;
-				  case proc_override::none:
-					  break;
-				  }
+				  if (o.state == proc_override::state_t::masked)
+					  return;
 			  }
 
 			  std::string name{
@@ -869,7 +865,7 @@ proc_new_container_set proc_load_all(
 			  }
 			  containers.merge(
 				  proc_load(i, name, relative_path,
-					    enabled, error)
+					    o, error)
 			  );
 		  },
 		  [&]
@@ -1026,10 +1022,7 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 			  if (!i.is_open())
 				  return;
 
-			  auto o=read_override(i);
-
-			  if (o != proc_override::none)
-				  ret.emplace(relative_path, o);
+			  ret.emplace(relative_path, read_override(i));
 		  },
 		  [&]
 		  (const auto &, const auto &)
@@ -1145,7 +1138,11 @@ static bool proc_validate_and_dump(
 	bool error=false;
 
 	try {
-		set=proc_load(i, unitfile, relative_path, true,
+		proc_override o;
+
+		o.state=proc_override::state_t::enabled;
+
+		set=proc_load(i, unitfile, relative_path, o,
 			      [&]
 			      (const auto &msg)
 			      {

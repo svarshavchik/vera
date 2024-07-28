@@ -63,6 +63,8 @@ void proc_gc(const std::string &config_global,
 	     const std::string &config_override,
 	     const std::function<void (const std::string &message)> &message);
 
+struct proc_override;
+
 //! Attempt to load a container configuration
 
 //! Parameters:
@@ -84,15 +86,22 @@ proc_new_container_set proc_load(
 	std::istream &input_file,
 	const std::string &filename,
 	const std::filesystem::path &relative_path,
-	bool enabled,
+	const proc_override &o,
 	const std::function<void (const std::string &)> &error);
 
-//! Different kinds of overrides.
+//! Container overrides
 
-enum class proc_override {
-	none,	 //!< No overrides
-	masked,	 //!< Container masked, as if it does not exist.
-	enabled, //!< Container is enabled (in its runlevel, presumably).
+struct proc_override {
+
+	//! Overridden container state
+	enum class state_t {
+		none,	 //!< No state overrides
+		masked,	 //!< Container masked, as if it does not exist.
+		enabled, //!< Container is enabled (in its runlevel, presumably).
+	};
+
+	//! State override value
+	state_t state{state_t::none};
 };
 
 //! Install an override entry.

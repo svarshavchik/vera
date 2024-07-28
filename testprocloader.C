@@ -18,8 +18,13 @@
 
 void loadtest(const std::string &name, bool enabled)
 {
+	proc_override o;
+
+	if (enabled)
+		o.state=proc_override::state_t::enabled;
+
 	proc_load_dump(
-		proc_load(std::cin, "(built-in)", name, enabled,
+		proc_load(std::cin, "(built-in)", name, o,
 			  []
 			  (const std::string &error)
 			  {
