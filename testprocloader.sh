@@ -470,7 +470,9 @@ diff -U 3 loadtest.txt overridedir/sub/dir
 
 echo 'state: masked' >overridedir/sub/dir
 
-$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out 2>&1
+$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir 2>&1 | tee loadtest.out
+sed '/^==/d' <loadtest.out >loadtest.out2
+mv loadtest.out2 loadtest.out
 echo 'overridedir/sub/dir: did not see a "version: 1" tag' >loadtest.txt
 echo 'masked' >>loadtest.txt
 diff -U 3 loadtest.txt loadtest.out
