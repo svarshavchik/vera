@@ -6,5 +6,16 @@
 # Default setting:
 #
 # controllers="cpuset cpu io=blkio memory pids misc"
+#
+# NOTE: this configuration file just happens to be a valid shell script,
+# but it's also parsed directly, so no variables or other shell constructs,
+# please.
 
 controllers="cpuset cpu io=blkio memory pids misc"
+
+# This is a sample template that's used as a model for validating resource
+# names. We look at this container in order to obtain a list of valid
+# resources that are settable (might be). This should be a container that
+# always get started at system boot.
+
+template="system/update-logrotate"

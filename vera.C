@@ -46,6 +46,7 @@
 #include <set>
 #include <algorithm>
 #include <charconv>
+#include <iterator>
 
 #define PUB_PROCESS_SIGNATURE "[public process]"
 
@@ -1441,7 +1442,7 @@ void do_override(const std::string &name,
 		 proc_override::state_t state)
 {
 	auto o=proc_get_override(installconfigdir(),
-				 localconfigdir(),
+				 overrideconfigdir(),
 				 name);
 
 	if (do_chmod_override(
@@ -1809,6 +1810,160 @@ static bool rehook()
 	return rehook_sbin_init("/sbin",
 				SBINDIR "/vera-init") &&
 		vera_hook(hook_op::rehook);
+}
+
+static void set_or_add_resource(
+	std::vector<std::string> &args,
+	const std::function<void (proc_override &,
+				  const std::string &,
+				  std::vector<std::string> &)> callback)
+{
+	std::ifstream i{CONFIGDIR "/cgroup.controllers"};
+
+	if (!i)
+	{
+		std::cerr << _("Cannot open configuration file: ")
+			  << CONFIGDIR "/cgroup.controllers" << std::endl;
+		exit(1);
+	}
+
+	std::string s;
+
+	std::unordered_set<std::string> controllers;
+
+	std::string template_container;
+
+	while (std::getline(i, s))
+	{
+		if (std::string_view{s.begin(),
+					s.begin()+sizeof("template=")-1}
+			== "template=")
+		{
+			auto b=std::find_if(
+				s.begin()+sizeof("template=")-1,
+				s.end(),
+				[]
+				(auto c)
+				{
+					return c != '"' && c != ' ';
+				});
+
+			auto e=std::find_if(
+				b, s.end(),
+				[]
+				(auto c)
+				{
+					return c == '"';
+				});
+
+			template_container=std::string{b, e};
+
+		}
+		if (std::string_view{s.begin(),
+				     s.begin()+sizeof("controllers=")-1}
+			!= "controllers=")
+			continue;
+		for (auto b=s.begin()+sizeof("controllers="),
+			     e=s.end();
+		     (b=std::find_if(b, e,
+				     []
+				     (char c)
+				     {
+					     return c != '"' &&
+						     c != ' ';
+				     })) != e;)
+		{
+			auto p=b;
+
+			b=std::find_if(b, e,
+				       []
+				       (char c)
+				       {
+					       return c == '"' || c == ' ';
+				       });
+			auto q=std::find(p, b, '=');
+
+			controllers.insert({p, q});
+		}
+	}
+
+	if (controllers.find(std::string{args[2].begin(),
+					std::find(args[2].begin(),
+						  args[2].end(), '.')})
+		== controllers.end())
+	{
+		std::cerr << args[2] << _(": no such resource") << "\n";
+		exit(1);
+	}
+
+	if (!template_container.empty())
+	{
+		auto s=proc_container_group_data::cgroups_dir(
+			template_container
+		);
+
+		std::error_code ec;
+
+		if (std::filesystem::exists(s, ec))
+		{
+			if (!std::filesystem::exists(
+				    std::filesystem::path{s}
+				    / args[2], ec))
+			{
+				std::cerr << args[2]
+					  << _(": no such resource") << "\n";
+				exit(1);
+			}
+		}
+		else
+		{
+			template_container.clear();
+		}
+	}
+
+	if (template_container.empty())
+	{
+		std::cout << _("Warning: cannot check resource name validity,"
+			       " proceed at your own risk!") << "\n";
+	}
+
+	auto o=proc_get_override(installconfigdir(),
+				 overrideconfigdir(),
+				 args[1]);
+	std::vector<std::string> values{args.begin()+3, args.end()};
+	callback(o, args[2], values);
+
+	proc_set_override(overrideconfigdir(),
+			  args[1],
+			  o,
+			  []
+			  (const std::string &s)
+			  {
+				  throw std::runtime_error{s};
+			  });
+}
+
+static void get_resource(const std::string &name,
+			 const std::string &resource)
+{
+	(void)proc_get_override(installconfigdir(),
+				overrideconfigdir(),
+				name); // This validates the name
+
+	std::ifstream i{
+		std::filesystem::path{
+			proc_container_group_data::cgroups_dir(name)
+		} / resource
+	};
+
+	if (!i)
+	{
+		throw std::runtime_error{_("Resource not found")};
+	}
+
+	std::copy(std::istreambuf_iterator<char>{i},
+		  std::istreambuf_iterator<char>{},
+		  std::ostreambuf_iterator<char>(std::cout));
 }
 
 void vlad(std::vector<std::string> args)
@@ -2424,6 +2579,39 @@ void vlad(std::vector<std::string> args)
 	{
 		vlad_thaw(args[1]);
 		exit(0);
+	}
+
+	if (args.size() >= 3 && args[0] == "set-resource")
+	{
+		set_or_add_resource(
+			args,
+			[]
+			(proc_override &o,
+			 const std::string &key,
+			 std::vector<std::string> &v)
+			{
+				o.set_resource(key, std::move(v));
+			});
+		exit (0);
+	}
+	if (args.size() >= 3 && args[0] == "add-resource")
+	{
+		set_or_add_resource(
+			args,
+			[]
+			(proc_override &o,
+			 const std::string &key,
+			 std::vector<std::string> &v)
+			{
+				o.add_resource(key, std::move(v));
+			});
+		exit (0);
+	}
+
+	if (args.size() == 3 && args[0] == "get-resource")
+	{
+		get_resource(args[1], args[2]);
+		exit (0);
 	}
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);

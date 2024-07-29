@@ -62,6 +62,122 @@ std::vector<std::string> find_default_runlevel(const std::string &configfile)
 	);
 }
 
+void testresources(const std::string &config_global,
+		   const std::string &config_override,
+		   const std::string &name)
+{
+	proc_override o;
+
+	o.set_resource("k", { "1", "2", "3" });
+	o.set_resource("j", { "4", "5", "6" });
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "1"},
+			{"k", "2"},
+			{"k", "3"},
+			{"j", "4"},
+			{"j", "5"},
+			{"j", "6"}
+		})
+		throw std::runtime_error{"testresources test 1 failed"};
+
+	o.set_resource("k", { "0", "1", "2", "3"});
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "0"},
+			{"k", "1"},
+			{"k", "2"},
+			{"j", "4"},
+			{"j", "5"},
+			{"j", "6"},
+			{"k", "3"}
+		})
+		throw std::runtime_error{"testresources test 2 failed"};
+
+	o.set_resource("k", { "1", "2"} );
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "1"},
+			{"k", "2"},
+			{"j", "4"},
+			{"j", "5"},
+			{"j", "6"}
+		})
+		throw std::runtime_error{"testresources test 3 failed"};
+
+	o.set_resource("j", { "4", "5", "6", "7"} );
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "1"},
+			{"k", "2"},
+			{"j", "4"},
+			{"j", "5"},
+			{"j", "6"},
+			{"j", "7"}
+		})
+		throw std::runtime_error{"testresources test 4 failed"};
+
+	o.set_resource("j", { "4", "5"} );
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "1"},
+			{"k", "2"},
+			{"j", "4"},
+			{"j", "5"}
+		})
+		throw std::runtime_error{"testresources test 5 failed"};
+
+	o.add_resource("k", {"7", "8"});
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "1"},
+			{"k", "2"},
+			{"j", "4"},
+			{"j", "5"},
+			{"k", "7"},
+			{"k", "8"}
+		})
+		throw std::runtime_error{"testresources test 6 failed"};
+
+	o.add_resource("k", {"9", "10"}, 0);
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"k", "9"},
+			{"k", "10"},
+			{"k", "1"},
+			{"k", "2"},
+			{"j", "4"},
+			{"j", "5"},
+			{"k", "7"},
+			{"k", "8"}
+		})
+		throw std::runtime_error{"testresources test 7 failed"};
+
+	o.set_resource("k", {});
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"j", "4"},
+			{"j", "5"}
+		})
+		throw std::runtime_error{"testresources test 8 failed"};
+
+	proc_set_override(config_override, name, o,
+			  []
+			  (const auto &error)
+			  {
+				  std::cout << error << "\n";
+			  });
+
+	o=proc_get_override(config_global, config_override, name);
+
+	if (o.get_resources() != proc_override::resources_t{
+			{"j", "4"},
+			{"j", "5"}
+		})
+		throw std::runtime_error{"testresources test 9 failed"};
+}
+
+
 int main(int argc, char **argv)
 {
 	std::vector<std::string> args{argv, argv+argc};
@@ -552,6 +668,18 @@ int main(int argc, char **argv)
 				args[2]
 			);
 		} catch (const std::exception &e)
+		{
+			std::cerr << e.what() << std::endl;
+			exit(1);
+		}
+		exit(0);
+	}
+
+	if (args.size() == 5 && args[1] == "testresources")
+	{
+		try {
+			testresources(args[2], args[3], args[4]);
+		}  catch (const std::exception &e)
 		{
 			std::cerr << e.what() << std::endl;
 			exit(1);

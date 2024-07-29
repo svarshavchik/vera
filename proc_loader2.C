@@ -70,6 +70,34 @@ void proc_set_override(
 			break;
 		}
 
+		auto &resources=o.get_resources();
+
+		if (!resources.empty())
+		{
+			yaml_map_t yaml_resources;
+
+			for (auto &[key, value]:resources)
+			{
+				yaml_resources.emplace_back(
+					std::make_shared<yaml_write_scalar>(
+						key
+					),
+					std::make_shared<yaml_write_scalar>(
+						value
+					)
+				);
+			}
+
+			yaml_contents.emplace_back(
+				std::make_shared<yaml_write_scalar>(
+					"resources"
+				),
+				std::make_shared<yaml_write_map>(
+					std::move(yaml_resources)
+				)
+			);
+
+		}
 		if (!yaml_contents.empty())
 		{
 			yaml_contents.emplace_back(

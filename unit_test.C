@@ -41,6 +41,11 @@ std::string environconfig()
 	return "testenviron";
 }
 
+std::string overrideconfigdir()
+{
+	return "testoverrides";
+}
+
 current_containers_infoObj::current_containers_infoObj()
 	: current_containers_infoObj{
 			std::tuple{default_runlevels(), false}

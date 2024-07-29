@@ -1,18 +1,21 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022-2024 Double Precision, Inc.
 ** See COPYING for distribution information.
 */
 #ifndef proc_loader_h
 #define proc_loader_h
 
+#include "proc_loaderfwd.H"
 #include "proc_container.H"
 #include "parsed_yaml.H"
+#include "messages.H"
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <iostream>
+#include <exception>
 #include <map>
 #include <optional>
 
@@ -65,7 +68,7 @@ void proc_gc(const std::string &config_global,
 	     const std::string &config_override,
 	     const std::function<void (const std::string &message)> &message);
 
-struct proc_override;
+extern std::string overrideconfigdir();
 
 //! Attempt to load a container configuration
 
@@ -90,25 +93,6 @@ proc_new_container_set proc_load(
 	const std::filesystem::path &relative_path,
 	const proc_override &o,
 	const std::function<void (const std::string &)> &error);
-
-//! Container overrides
-
-struct proc_override {
-
-	//! Overridden container state
-	enum class state_t {
-		none,	 //!< No state overrides
-		masked,	 //!< Container masked, as if it does not exist.
-		enabled, //!< Container is enabled (in its runlevel, presumably).
-	};
-
-	state_t get_state() const { return state; }
-	void set_state(state_t s) { state=s; }
-
-private:
-	//! State override value
-	state_t state{state_t::none};
-};
 
 //! Install an override entry.
 
@@ -160,6 +144,10 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 proc_override proc_get_override(const std::string &config_global,
 				const std::string &config_override,
 				const std::string &name);
+
+//! Return a specific override, the passed in name is verified to be valid.
+proc_override proc_get_validated_override(const std::string &config_override,
+					  const std::string &name);
 
 //! Dump the loaded process containers to std::cout
 

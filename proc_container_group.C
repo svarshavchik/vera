@@ -16,6 +16,7 @@
 #include <fstream>
 #include <fcntl.h>
 #include <iostream>
+#include <filesystem>
 
 std::string proc_container_group_data::cgroups_dir() const
 {
@@ -121,7 +122,8 @@ bool proc_container_group_data::is_populated(int fd, std::string &buffer)
 	return populated;
 }
 
-bool proc_container_group::create(const group_create_info &create_info)
+bool proc_container_group::create(const group_create_info &create_info,
+				  const proc_override::resources_t &resources)
 {
 	container=create_info.cc->first;
 
@@ -154,6 +156,25 @@ bool proc_container_group::create(const group_create_info &create_info)
 		return false;
 	}
 
+	std::filesystem::path p{cgroups_dir()};
+
+	for (const auto &[key, val] : resources)
+	{
+		std::ofstream o{p / key};
+
+		if (o)
+		{
+			o << val << "\n";
+			o.close();
+			if (!o.fail())
+				continue;
+		}
+
+		log_container_error(container,
+				    key + ": " +
+				    _("cannot set to value: ") + ": "
+				    + val);
+	}
 	return install(cgroup_events(), create_info);
 }
 

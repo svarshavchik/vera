@@ -107,6 +107,9 @@ void test_reset(bool keep_cgroupfs=false)
 	{
 		throw "unexpected call to reexec.";
 	};
+
+	std::filesystem::remove_all(overrideconfigdir());
+	std::filesystem::create_directory(overrideconfigdir());
 }
 
 void test_finished()
@@ -116,6 +119,7 @@ void test_finished()
 	std::filesystem::remove_all(
 		proc_container_group_data::get_cgroupfs_base_path()
 	);
+	std::filesystem::remove_all(overrideconfigdir());
 }
 
 void test_advance(time_t interval)

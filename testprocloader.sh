@@ -473,12 +473,7 @@ echo 'state: masked' >overridedir/sub/dir
 $VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir 2>&1 | tee loadtest.out
 sed '/^==/d' <loadtest.out >loadtest.out2
 mv loadtest.out2 loadtest.out
-echo 'overridedir/sub/dir: did not see a "version: 1" tag' >loadtest.txt
-echo 'masked' >>loadtest.txt
-diff -U 3 loadtest.txt loadtest.out
-
-$VALGRIND ./testprocloader getoverride globaldir overridedir sub/dir >loadtest.out
-echo 'masked' >loadtest.txt
+echo 'sub/dir: did not see a "version: 1" tag' >loadtest.txt
 diff -U 3 loadtest.txt loadtest.out
 
 rm -rf overridedir globaldir localdir
@@ -703,6 +698,16 @@ then
     echo "revert did not revert" >&2
     exit 1
 fi
+$VALGRIND ./testprocloader testresources globaldir overridedir subdir/name1 >loadtest.out
+>loadtest.txt
+diff -U 3 loadtest.out loadtest.txt
+cat >loadtest.txt <<EOF
+resources:
+  j: 4
+  j: 5
+version: 1
+EOF
+diff -U 3 overridedir/subdir/name1 loadtest.txt
 
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.expected

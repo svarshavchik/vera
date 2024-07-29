@@ -7,6 +7,7 @@
 
 #include "poller.H"
 #include "proc_containerfwd.H"
+#include "proc_loaderfwd.H"
 #include "privrequest.H"
 #include <tuple>
 #include <string>
@@ -128,7 +129,8 @@ public:
 
 	 */
 
-	bool create(const group_create_info &);
+	bool create(const group_create_info &,
+		    const proc_override::resources_t &);
 
 	/*! This is a new child process
 

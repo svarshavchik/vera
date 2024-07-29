@@ -179,7 +179,12 @@ proc_container_runner create_runner(
 	{
 		auto &new_group=cc->second.group.emplace();
 
-		if (!new_group.create({all_containers, cc}))
+		auto o=proc_get_validated_override(
+			overrideconfigdir(),
+			container->name
+		);
+
+		if (!new_group.create({all_containers, cc}, o.get_resources()))
 		{
 			cc->second.group.reset();
 			return {};

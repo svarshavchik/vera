@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include <set>
 #include <errno.h>
+#include <ranges>
 #include <sys/stat.h>
 
 static proc_override read_override(
@@ -810,6 +811,84 @@ bool parsed_yaml::starting_or_stopping(
 		error);
 }
 
+static void parse_override_file(
+	proc_override &o,
+	std::string &state_str,
+	parsed_yaml &parsed,
+	const std::string &filename,
+	std::function<void (const std::string &)> error)
+{
+	bool found_version_tag=false;
+
+	proc_override::resources_t resources;
+
+	(void)parsed.parse_map(
+		yaml_document_get_root_node(&parsed.doc),
+		true,
+		filename,
+		[&]
+		(const std::string &key,
+		 yaml_node_t *n,
+		 const auto &error)
+		{
+			if (key == "state")
+			{
+				auto value=parsed.parse_scalar(
+					n,
+					filename,
+					error
+				);
+
+				if (value)
+					state_str=*value;
+			}
+
+			if (key == "resources")
+			{
+				return parsed.parse_map(
+					n,
+					true,
+					filename,
+					[&]
+					(const std::string &key,
+					 yaml_node_t *n,
+					 const auto &error)
+					{
+						auto value=parsed.parse_scalar(
+							n,
+							filename,
+							error
+						);
+
+						if (!value)
+							return false;
+
+						resources.emplace_back(key,
+								       *value);
+						return true;
+					},
+					error);
+
+
+			}
+			if (key == "version")
+				return parsed.parse_version_1(
+					n, key, error,
+					found_version_tag
+				);
+			return true;
+		},
+		error
+	);
+
+	o.install_resources(std::move(resources));
+
+	if (!found_version_tag)
+	{
+		error(_("did not see a \"version: 1\" tag"));
+	}
+}
+
 static proc_override read_override(
 	const std::string &filename,
 	std::ifstream &i, bool &legacy,
@@ -839,13 +918,12 @@ static proc_override read_override(
 		}
 		else
 		{
-			std::function<void (const std::string &)> error=[&]
-				(const std::string &error)
+			std::function<void (const std::string &)> ferror=[&]
+				(const std::string &msg)
 				{
-					std::cerr << filename
-						  << ": "
-						  << error
-						  << std::endl;
+					error(filename
+					      + ": "
+					      + msg);
 				};
 
 			parsed_yaml parsed{parser_info,
@@ -853,43 +931,7 @@ static proc_override read_override(
 				error
 			};
 
-			bool found_version_tag=false;
-
-			(void)parsed.parse_map(
-				yaml_document_get_root_node(&parsed.doc),
-				true,
-				filename,
-				[&]
-				(const std::string &key,
-				 yaml_node_t *n,
-				 const auto &error)
-				{
-					if (key == "state")
-					{
-						auto value=parsed.parse_scalar(
-							n,
-							filename,
-							error
-						);
-
-						if (value)
-							s=*value;
-					}
-
-					if (key == "version")
-						return parsed.parse_version_1(
-							n, key, error,
-							found_version_tag
-						);
-					return true;
-				},
-				error
-			);
-
-			if (!found_version_tag)
-			{
-				error(_("did not see a \"version: 1\" tag"));
-			}
+			parse_override_file(o, s, parsed, filename, error);
 		}
 	}
 	else
@@ -923,6 +965,12 @@ proc_override proc_get_override(const std::string &config_global,
 			+ (ec ? std::string{": "} + ec.message():"")
 		};
 
+	return proc_get_validated_override(config_override, name);
+}
+
+proc_override proc_get_validated_override(const std::string &config_override,
+					  const std::string &name)
+{
 	auto filename=std::filesystem::path{config_override} / name;
 
 	std::ifstream i{filename};
@@ -1651,4 +1699,21 @@ void proc_thaw(
 	{
 		throw std::runtime_error(name + _(": invalid name"));
 	}
+}
+
+void proc_override::resources_insert(
+	resources_t::iterator insert_pos,
+	const std::string &key,
+	std::vector<std::string>::iterator begin_iter,
+	std::vector<std::string>::iterator end_iter)
+{
+	auto r=std::ranges::subrange{begin_iter, end_iter}
+		| std::views::transform(
+			[&]
+			(std::string &v)
+			{
+				return std::tuple{key, std::move(v)};
+			});
+
+	resources.insert(insert_pos, r.begin(), r.end());
 }
