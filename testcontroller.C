@@ -3758,6 +3758,71 @@ void testfreezethaw()
 	}
 }
 
+void testbootorder()
+{
+	auto boot=std::make_shared<proc_new_containerObj>("boot");
+	auto multiuser=std::make_shared<proc_new_containerObj>("multi-user");
+
+	boot->new_container->stop_type=stop_type_t::target;
+	multiuser->new_container->stop_type=stop_type_t::target;
+	multiuser->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
+	multiuser->dep_requires_first.insert("boot");
+
+	auto bootprog=std::make_shared<proc_new_containerObj>("bootprog");
+	auto multiuserprog=
+		std::make_shared<proc_new_containerObj>("multiuserprog");
+
+	bootprog->new_container->starting_command="/bin/true";
+
+	multiuser->dep_requires.insert("boot");
+	bootprog->dep_required_by.insert("boot");
+	multiuserprog->dep_required_by.insert("multi-user");
+
+	multiuserprog->new_container->starting_command="/bin/true";
+
+	proc_containers_install({boot, multiuser, bootprog, multiuserprog},
+				container_install::update);
+
+	if (!proc_container_runlevel("multi-user").empty())
+		throw "Unexpected error starting multi-user";
+
+	if (logged_state_changes != std::vector<std::string>{
+			"Starting system/runlevel multi-user",
+			"multiuserprog: start pending",
+			"boot: start pending",
+			"bootprog: start pending",
+			"multi-user: start pending",
+			"bootprog: cgroup created",
+			"bootprog: starting"
+		})
+	{
+		throw "Unexpected state changes when starting multi-user";
+	}
+
+	logged_state_changes.clear();
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"bootprog: started",
+			"boot: started",
+			"multiuserprog: cgroup created",
+			"multiuserprog: starting",
+		})
+	{
+		throw "Unexpected state changes after boot was started";
+	}
+	logged_state_changes.clear();
+	runner_finished(2, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+			"multiuserprog: started",
+			"multi-user: started",
+		})
+	{
+		throw "Unexpected state changes after multi-user was started";
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3957,6 +4022,11 @@ int main(int argc, char **argv)
 		test_reset();
 		test="testfreezethaw";
 		testfreezethaw();
+
+		test_reset();
+		test="testbootorder";
+		testbootorder();
+
 		test_finished();
 	} catch (const char *e)
 	{

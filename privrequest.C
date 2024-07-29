@@ -360,6 +360,10 @@ std::unordered_map<std::string, container_state_info> get_status(
 			{
 				info.dep_requires.emplace(++p, e);
 			}
+			if (keyword == "requires-first" && p != e)
+			{
+				info.dep_requires_first.emplace(++p, e);
+			}
 			if (keyword == "required-by" && p != e)
 			{
 				info.dep_required_by.emplace(++p, e);

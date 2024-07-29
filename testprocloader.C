@@ -498,7 +498,7 @@ int main(int argc, char **argv)
 
 			if (!runlevel.runlevel_requires.empty())
 			{
-				o << "requires:\n";
+				o << "requires-first:\n";
 
 				for (auto &f:runlevel.runlevel_requires)
 				{

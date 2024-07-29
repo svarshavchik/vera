@@ -506,6 +506,17 @@ static bool proc_load_container(
 		return false;
 	}
 
+	if (key == "requires-first" &&
+	    !parsed.parse_requirements(
+		    n,
+		    name,
+		    error,
+		    unit_path,
+		    nc->dep_requires_first))
+	{
+		return false;
+	}
+
 	if (key == "alternative-group")
 	{
 
@@ -1151,9 +1162,11 @@ void proc_load_dump(const proc_new_container_set &set)
 			     std::array<
 			     std::tuple<std::unordered_set<std::string>
 			     proc_new_containerObj::*,
-			     const char *>, 6>{{
+			     const char *>, 7>{{
 				     {&proc_new_containerObj::dep_requires,
-				      "requires"},
+					   "requires"},
+				     {&proc_new_containerObj::dep_requires_first,
+						     "requires-first"},
 				     {&proc_new_containerObj::dep_required_by,
 				      "required-by"},
 				     {&proc_new_containerObj::starting_before,
@@ -1385,6 +1398,8 @@ static bool proc_validate_and_dump(
 		} dependencies[]={
 			{"requires",
 			 &proc_new_containerObj::dep_requires},
+			{"requires-first",
+			 &proc_new_containerObj::dep_requires_first},
 			{"required-by",
 			 &proc_new_containerObj::dep_required_by},
 			{"starting: before",

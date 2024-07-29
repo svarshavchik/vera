@@ -1700,9 +1700,12 @@ void dump_readable(const std::string &name,
 			     std::unordered_set<std::string>
 			     container_state_info::*,
 			     const char *>,
-			     4>{{{&container_state_info
+			     5>{{{&container_state_info
 					     ::dep_requires,
 					     _("Requires:")},
+				 {&container_state_info
+				  ::dep_requires_first,
+				  _("Requires First:")},
 				 {&container_state_info
 				  ::dep_required_by,
 				  _("Required By:")},
@@ -1716,6 +1719,9 @@ void dump_readable(const std::string &name,
 			     }})
 		{
 			auto &set=info.*setptr;
+
+			if (set.empty())
+				continue;
 
 			std::cout << "    "
 				  << label << "\n";

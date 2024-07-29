@@ -253,6 +253,9 @@ public:
 	//! What other process containers this one requires
 	std::unordered_set<std::string> dep_requires;
 
+	//! What others this one requires, and must be started first.
+	std::unordered_set<std::string> dep_requires_first;
+
 	//! What other process containers require this one.
 	std::unordered_set<std::string> dep_required_by;
 

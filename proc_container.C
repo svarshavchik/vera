@@ -1085,6 +1085,17 @@ struct propagate_dependencies_t {
 		all_dependencies extra_dependency_info::*backward_dependency
 	);
 
+	void doit2(
+		const proc_new_container **requiring_ptr,
+		const proc_new_container **requirement_ptr,
+		bool disallow_for_runlevel,
+		bool skip_for_runlevel,
+		const std::unordered_set<std::string>
+		proc_new_containerObj::*dependency_list,
+		all_dependencies extra_dependency_info::*forward_dependency,
+		all_dependencies extra_dependency_info::*backward_dependency
+	);
+
 	void forward(
 		bool disallow_for_runlevel,
 		bool skip_for_runlevel,
@@ -1119,6 +1130,37 @@ struct propagate_dependencies_t {
 };
 
 void propagate_dependencies_t::doit(
+	const proc_new_container **requiring_ptr,
+	const proc_new_container **requirement_ptr,
+	bool disallow_for_runlevel,
+	bool skip_for_runlevel,
+	const std::unordered_set<std::string>
+	proc_new_containerObj::*dependency_list,
+	all_dependencies extra_dependency_info::*forward_dependency,
+	all_dependencies extra_dependency_info::*backward_dependency)
+{
+	doit2(requiring_ptr, requirement_ptr,
+	      disallow_for_runlevel,
+	      skip_for_runlevel,
+	      dependency_list,
+	      forward_dependency,
+	      backward_dependency);
+
+	// Automatically add requires-first dependencies together
+	// with required.
+
+	if (dependency_list == &proc_new_containerObj::dep_requires)
+	{
+		doit2(requiring_ptr, requirement_ptr,
+		      disallow_for_runlevel,
+		      skip_for_runlevel,
+		      &proc_new_containerObj::dep_requires_first,
+		      forward_dependency,
+		      backward_dependency);
+	}
+}
+
+void propagate_dependencies_t::doit2(
 	const proc_new_container **requiring_ptr,
 	const proc_new_container **requirement_ptr,
 	bool disallow_for_runlevel,
@@ -1482,6 +1524,91 @@ void current_containers_infoObj::install(
 			&extra_dependency_info::all_stopping_first,
 			&extra_dependency_info::all_stopping_first_by
 		);
+	}
+
+	for (const auto &c:new_containers)
+	{
+		DEP_DEBUG("Calculating requires-first for "
+			  << c->new_container->name);
+
+		auto c_info=new_all_dependency_info.find(c);
+
+		if (c_info == new_all_dependency_info.end())
+			continue;
+
+		// Calculate: this container's all direct and indirect
+		// requires dependencies (which already includes requires_first)
+
+		auto all_requires=c_info->second.all_requires;
+
+		DEP_DEBUG( ({
+					std::ostringstream o;
+
+					o << "Requires:";
+
+					for (auto r:all_requires)
+						o << " " << r->name;
+
+					o.str();
+				}));
+		// Now, go through all the requires_first dependencies, and
+		// remove their direct or indirect dependencies.
+		//
+		// This ends up calculating all of this container's requirements
+		// except the ones that come from the requires-first
+		//`dependencies.
+		for (auto r_first:c->dep_requires_first)
+		{
+			DEP_DEBUG("Requires-First: " << r_first);
+			auto p=all_requires.find(r_first);
+
+			if (p != all_requires.end())
+				all_requires.erase(p);
+
+			auto r_first_info=new_all_dependency_info.find(r_first);
+
+			if (r_first_info == new_all_dependency_info.end())
+				continue;
+
+			for (auto r_first_req:r_first_info->second.all_requires)
+			{
+				all_requires.erase(r_first_req);
+				DEP_DEBUG("Requires-First: "
+					  << r_first_req->name);
+			}
+		}
+
+		// Now take these immediate requirements, and specify that
+		// the required_first targets should start before, and stop
+		// after.
+		for (auto immediate_require:all_requires)
+		{
+			auto dep_info=
+				new_all_dependency_info.find(immediate_require);
+
+			if (dep_info == new_all_dependency_info.end())
+				continue;
+
+			for (auto r_first:c->dep_requires_first)
+			{
+				auto info=new_all_dependency_info.find(r_first);
+				if (info == new_all_dependency_info.end())
+					continue;
+
+				DEP_DEBUG("Requires-First: " <<
+					  dep_info->first->name <<
+					  ": starts first: " <<
+					  info->first->name);
+
+				dep_info->second.all_starting_first.insert(
+					info->first
+				);
+
+				info->second.all_stopping_first.insert(
+					dep_info->first
+				);
+			}
+		}
 	}
 
 	// We now take the existing containers we have, and copy over their

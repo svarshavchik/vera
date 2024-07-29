@@ -10,7 +10,7 @@ Loading installed units
 system/custom:start=forking:stop=target
 system/custom:description=processes for runlevel custom
 system/custom:sigterm:notify=parents
-system/custom:requires system/boot
+system/custom:requires-first system/boot
 system/custom:required-by system/runlevel custom
 # system/graphical
 Loading: testinittab.dir/vera/system/graphical
@@ -18,7 +18,7 @@ Loading installed units
 system/graphical:start=forking:stop=target
 system/graphical:description=processes for runlevel graphical
 system/graphical:sigterm:notify=parents
-system/graphical:requires system/boot
+system/graphical:requires-first system/boot
 system/graphical:required-by system/runlevel graphical
 # system/inittab/a1
 Loading: testinittab.dir/vera/system/inittab/a1
@@ -63,7 +63,6 @@ system/inittab/c1:start=respawn:stop=manual
 system/inittab/c1:description=c1: /sbin/agetty 38400 tty1 linux
 system/inittab/c1:starting:/sbin/agetty 38400 tty1 linux
 system/inittab/c1:sigterm:notify=parents
-system/inittab/c1:requires system/boot
 system/inittab/c1:required-by system/custom
 system/inittab/c1:required-by system/graphical
 system/inittab/c1:required-by system/multi-user
@@ -80,7 +79,6 @@ system/inittab/c2:start=respawn:stop=manual
 system/inittab/c2:description=c2: /sbin/agetty 38400 tty2 linux
 system/inittab/c2:starting:/sbin/agetty 38400 tty2 linux
 system/inittab/c2:sigterm:notify=parents
-system/inittab/c2:requires system/boot
 system/inittab/c2:required-by system/custom
 system/inittab/c2:required-by system/graphical
 system/inittab/c2:required-by system/multi-user
@@ -111,7 +109,6 @@ system/inittab/l0:start=forking:stop=manual
 system/inittab/l0:description=l0: /etc/rc.d/rc.0
 system/inittab/l0:starting:vlad sysdown 0 /etc/rc.d/rc.0
 system/inittab/l0:sigterm:notify=parents
-system/inittab/l0:requires system/boot
 system/inittab/l0:required-by system/shutdown
 system/inittab/l0:starting_after system/inittab/l0-started-shutdown
 system/inittab/l0:stopping_before system/inittab/l0-started-shutdown
@@ -145,7 +142,6 @@ system/inittab/l6:start=forking:stop=manual
 system/inittab/l6:description=l6: /etc/rc.d/rc.6
 system/inittab/l6:starting:vlad sysdown 6 /etc/rc.d/rc.6
 system/inittab/l6:sigterm:notify=parents
-system/inittab/l6:requires system/boot
 system/inittab/l6:required-by system/reboot
 system/inittab/l6:starting_after system/inittab/l6-started-reboot
 system/inittab/l6:stopping_before system/inittab/l6-started-reboot
@@ -213,7 +209,6 @@ system/inittab/rc:starting:testinittab.dir/share/vera-rcm testinittab.dir/vera /
 system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/rc:starting_timeout 300
 system/inittab/rc:sigterm:notify=all
-system/inittab/rc:requires system/boot
 system/inittab/rc:required-by system/custom
 system/inittab/rc:required-by system/graphical
 system/inittab/rc:required-by system/multi-user
@@ -359,7 +354,6 @@ system/inittab/su:start=forking:stop=manual
 system/inittab/su:description=su: /etc/rc.d/rc.K
 system/inittab/su:starting:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/su:sigterm:notify=parents
-system/inittab/su:requires system/boot
 system/inittab/su:required-by system/single-user
 # system/inittab/su-start-single-user
 Loading: testinittab.dir/vera/system/inittab/su-start-single-user
@@ -395,7 +389,6 @@ system/inittab/x1:start=respawn:stop=manual
 system/inittab/x1:description=x1: /etc/rc.d/rc.4
 system/inittab/x1:starting:/etc/rc.d/rc.4
 system/inittab/x1:sigterm:notify=parents
-system/inittab/x1:requires system/boot
 system/inittab/x1:required-by system/graphical
 system/inittab/x1:starting_after system/inittab/c2
 system/inittab/x1:stopping_before system/inittab/c2
@@ -405,7 +398,7 @@ Loading installed units
 system/multi-user:start=forking:stop=target
 system/multi-user:description=processes for runlevel multi-user
 system/multi-user:sigterm:notify=parents
-system/multi-user:requires system/boot
+system/multi-user:requires-first system/boot
 system/multi-user:required-by system/runlevel multi-user
 # system/network-online
 Loading: testinittab.dir/vera/system/network-online
@@ -419,7 +412,7 @@ Loading installed units
 system/networking:start=forking:stop=target
 system/networking:description=processes for runlevel networking
 system/networking:sigterm:notify=parents
-system/networking:requires system/boot
+system/networking:requires-first system/boot
 system/networking:required-by system/runlevel networking
 # system/powerfail
 Loading: testinittab.dir/vera/system/powerfail
@@ -571,5 +564,5 @@ Loading installed units
 system/single-user:start=forking:stop=target
 system/single-user:description=processes for runlevel single-user
 system/single-user:sigterm:notify=parents
-system/single-user:requires system/boot
+system/single-user:requires-first system/boot
 system/single-user:required-by system/runlevel single-user

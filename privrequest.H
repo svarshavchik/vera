@@ -194,8 +194,8 @@ struct container_state_info {
 	hier_pids processes;
 
 	// The dependencies
-	std::unordered_set<std::string> dep_requires, dep_required_by,
-		dep_starting_first, dep_stopping_first;
+	std::unordered_set<std::string> dep_requires, dep_requires_first,
+		dep_required_by, dep_starting_first, dep_stopping_first;
 
 
 	bool operator==(const container_state_info &) const=default;

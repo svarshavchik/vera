@@ -1990,6 +1990,9 @@ vlad validate startup web/startup
 Name: scheduler
 Description: "System Scheduler"
 
+Requires-First:
+    - boot
+
 Requires:
     - time_service
     - synchronization_service
@@ -2701,6 +2704,17 @@ Version: 1
 		<command>B</command> (if it's installed and not masked);
 		the opposite is not true.
 	      </para>
+	      <note>
+		<para>
+		  <quote>Required</quote> dependencies are transitive.
+		  If unit <command>A</command> requires
+		  <command>B</command> and
+		  <command>B</command> requires
+		  <command>C</command>, then
+		  <command>A</command> also requires
+		  <command>C</command>.
+		</para>
+	      </note>
 	    </listitem>
 	  </varlistentry>
 	  <varlistentry>
@@ -2712,6 +2726,12 @@ Version: 1
 		<quote>Required-By: B</quote>, then:
 		starting <command>B</command> automatically
 		starts <command>A</command>; the opposite is not true.
+	      </para>
+
+	      <para>
+		The <quote>Required-By: B</quote> dependency is logically
+		equivalent to <quote>B</quote> specifying a
+		<quote>Requires: A</quote>, this has the same result.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -2754,6 +2774,10 @@ Version: 1
 		The actual order in
 		which they get started gets defined by their
 		<quote>before</quote> and <quote>after</quote> dependencies.
+		Additionally, a
+		<quote>requires-first</quote> dependency (see below) creates
+		a <quote>before</quote> and <quote>after</quote> dependencies
+		automatically.
 	      </para>
 	    </listitem>
 	  </varlistentry>
@@ -2817,6 +2841,7 @@ Version: 1
 		    dependency automatically creates the appropriate
 		    <quote>Before</quote> and <quote>After</quote> dependencies.
 		    A unit <command>A</command> that requires
+		    (or requires first, see below)
 		    <command>B</command> (directly
 		    by it's <quote>Requires</quote> or the other one's
 		    <quote>Required-By</quote>) implies that <command>A</command>
@@ -2850,6 +2875,63 @@ Version: 1
 		  </para>
 		</listitem>
 	      </itemizedlist>
+	    </listitem>
+	  </varlistentry>
+	  <varlistentry>
+	    <term>The <quote>Requires-First</quote> dependency</term>
+	    <listitem>
+	      <para>
+		A <quote>Requires-First</quote> dependency combines
+		<quote>Requires</quote> together with <quote>Before</quote>
+		and <quote>After</quote> dependencies.
+		A <quote>Requires-First</quote> dependency, first, is
+		equivalent to a <quote>Requires</quote> dependency,
+		and additionally:
+	      </para>
+
+	      <orderedlist>
+		<listitem>
+		  <para>
+		    The transitive set of <quote>Requires</quote> and
+		    <quote>Requires-First</quote> dependencies get calculated.
+		    For the purposes of this calculation all
+		    <quote>Required-By</quote> dependencies are logically
+		    the same as specifying the equivalent
+		    <quote>Requires</quote> dependencies.
+		  </para>
+		</listitem>
+		<listitem>
+		  <para>
+		    A second set of transitive dependencies get calculated from
+		    <quote>Requires-First</quote> dependencies, only.
+		  </para>
+		</listitem>
+		<listitem>
+		  <para>
+		    Any units that are present in both sets get removed from
+		    the first set. The first set now contains only units that
+		    come from <quote>Requires</quote> and
+		    <quote>Required-By</quote> depedencnies.
+		  </para>
+		</listitem>
+		<listitem>
+		  <para>
+		    Every unit in the first set gets a
+		    <quote>Starting/After</quote> and a
+		    <quote>Stopping/Before</quote> dependency on each
+		    <quote>Requires-First</quote> unit.
+		  </para>
+		</listitem>
+	      </orderedlist>
+
+	      <para>
+		The end result is that all <quote>Required-First</quote> units
+		get started before any of the <quote>Required</quote> units
+		(and they get stopped after them). Otherwise,
+		<quote>Required-First</quote> and
+		<quote>Required</quote> units get started concurrently,
+		subject to any other before and after dependencies.
+	      </para>
 	    </listitem>
 	  </varlistentry>
 	</variablelist>
