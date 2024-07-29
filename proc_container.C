@@ -3435,6 +3435,7 @@ void current_containers_infoObj::do_start_runner(
 		// Log the runner.
 
 		starting.starting_runner=runner;
+		starting.delayed_depopulation=false;
 
 		if (is_oneshot_like(pc->start_type))
 		{
@@ -3497,6 +3498,8 @@ void current_containers_infoObj::starting_command_finished(
 	if (!succeeded)
 		log_container_failed_process(cc->first, status);
 
+	bool delayed_depopulation=false;
+
 	std::visit(
 		[&]
 		(auto &current_state)
@@ -3508,6 +3511,8 @@ void current_containers_infoObj::starting_command_finished(
 				     decltype(current_state)>,
 				     state_starting>) {
 				for_dependency=current_state.dependency;
+				delayed_depopulation=
+					current_state.delayed_depopulation;
 			}
 			else if constexpr(std::is_same_v<std::remove_cvref_t<
 					  decltype(current_state)>,
@@ -3562,6 +3567,13 @@ void current_containers_infoObj::starting_command_finished(
 	if (succeeded)
 	{
 		started(cc, for_dependency);
+
+		if (delayed_depopulation)
+		{
+			auto name=cc->first->name;
+
+			stopped(cc->first->name);
+		}
 	}
 	else
 	{
@@ -4184,10 +4196,13 @@ void current_containers_infoObj::populated(const std::string &s,
 		{
 		}
 
-		void operator()(const state_starting &state)
+		void operator()(state_starting &state)
 		{
 			if (state.starting_runner)
+			{
 				runner=true;
+				state.delayed_depopulation=true;
+			}
 		}
 
 		void operator()(const state_stopping &state)
@@ -4207,6 +4222,10 @@ void current_containers_infoObj::populated(const std::string &s,
 	std::visit(helper, cc->second.state);
 
 	if (helper.runner)
+		// If this is because a forking starting runner finished
+		// and we just haven't received the SIGCHLD, we'll bail out
+		// for now, and set the delayed_depopulation flag, above.
+		// We'll go back here from startng_commmand_finished().
 		return;
 
 	stopped(cc->first->name);

@@ -86,6 +86,9 @@ struct state_starting : state_requester_stdout {
 	//! Running start process's timeout
 	proc_container_timer starting_runner_timeout;
 
+	//! Received is_populated=false before the runner stopped
+	bool delayed_depopulation{false};
+
 	//! Human readable label.
 	const STATE_LABEL &get_label() const;
 

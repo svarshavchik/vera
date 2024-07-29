@@ -3158,6 +3158,7 @@ void testunpopulated1st()
 
 	if (logged_state_changes != std::vector<std::string>{
 			"unpopulated1std: " + STATE_STARTED::label.label_str(),
+			"unpopulated1std: cgroup removed",
 			"unpopulated1stc: cgroup created",
 			"unpopulated1stc: " + STATE_STARTING::label.label_str(),
 		})

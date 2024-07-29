@@ -1,5 +1,8 @@
 2024-07-29  Sam Varshavchik  <mrsam@courier-mta.com>
 
+	* Fix race condition that prevents an empty cgroup from getting
+	removed, in some circumstances.
+
 	* Implement "Requires-First" dependencies, to improve the semantics
 	of boot dependencies.
 
