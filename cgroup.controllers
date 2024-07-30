@@ -18,4 +18,4 @@ controllers="cpuset cpu io=blkio memory pids misc"
 # resources that are settable (might be). This should be a container that
 # always get started at system boot.
 
-template="system/update-logrotate"
+template="system/rc.M/rc.syslog"
