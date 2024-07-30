@@ -1278,6 +1278,7 @@ multi-user                # Reverts to the previous default runlevel
 	  </group>
 	  <group choice='opt'>
 	    <arg choice='plain'>--dependencies</arg>
+	    <arg choice='plain'>--resources</arg>
 	    <arg choice='plain'>--terse</arg>
 	  </group>
 	  <arg choice='plain'>status</arg>
@@ -1514,6 +1515,17 @@ multi-user                # Reverts to the previous default runlevel
 	    The <quote>--terse</quote> produces a compact status, one container
 	    per line, in a parsable format.
 	  </para>
+
+	  <para>
+	    <quote>--resources</quote> also shows the unit's set resources,
+	    see <link linkend="vera.extras.8">
+	    <citerefentry>
+              <refentrytitle>vera.extras</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link> for more information.
+	  </para>
+
 	  <para>
 	    <quote>status</quote> reads unit specifications from their
 	    directories (see <xref linkend="units" />), the output may be
@@ -3398,6 +3410,14 @@ version: 1
 	  <command>vlad enable system/v2-controllers</command>
 	</cmdsynopsis>
 
+	  <cmdsynopsis>
+	    <command>vlad set-resource <replaceable>unit</replaceable> <replaceable>resource</replaceable> <replaceable>value</replaceable></command>
+	  </cmdsynopsis>
+
+	  <cmdsynopsis>
+	    <command>vlad delete-resource <replaceable>unit</replaceable> <replaceable>resource</replaceable></command>
+	  </cmdsynopsis>
+
 	<cmdsynopsis>
 	  <command>vlad restart system/rc.M/rc.<replaceable>name</replaceable></command>
 	</cmdsynopsis>
@@ -3442,7 +3462,7 @@ version: 1
 	</refsect2>
 
 	<refsect2 id="v2-controllers">
-	  <title>Enabling cgroup v2 controllers</title>
+	  <title>Enabling cgroup v2 controllers and setting resources</title>
 
 	  <para>
 	    Slackware's default <filename>/etc/rc.d/rc.S</filename> script
@@ -3465,6 +3485,138 @@ version: 1
 	    parameter, the cgroups version 2 controllers are still enabled
 	    for <command>vera</command>'s units.
 	  </para>
+
+	  <para>
+	    With enabled version 2 controllers it is possible to set
+	    controller-managed resources using the <quote>set-resource</quote>
+	    command.
+	  </para>
+
+	  <para>
+	    The <quote>set-resource</quote> command sets the given
+	    <replaceable>unit</replaceable>'s
+	    <replaceable>resource</replaceable> to a
+	    <replaceable>value</replaceable>, example:
+	  </para>
+
+	  <para>
+	    <command>vlad set-resource system/rc.M/rc.sshd pids.max 100</command>
+	  </para>
+
+	  <para>
+	    This limits <quote>system/rc.M/rc.sshd</quote> to 100
+	    processes .
+	    The <quote>delete-resource</quote> command removes the
+	    <replaceable>unit</replaceable>'s
+	    <replaceable>resource</replaceable>, reverting it to the
+	    Linux kernel's default.
+	  </para>
+
+	  <para>
+	    The resources actually get set when a unit starts. The
+	    <quote>set-resource</quote> and <quote>delete-resource</quote>
+	    commands update the saved list of resources for each unit, and
+	    they take effect when the unit starts. If the unit is already
+	    running the new resources take effect the next time the unit
+	    starts.
+	  </para>
+
+	  <para>
+	    See the <ulink url="https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers">Linux kernel's control group V2 documentation</ulink>
+	    for a list of settable resources.
+	  </para>
+
+	  <refsect3>
+	    <title>Advanced resource control</title>
+	    <para>
+	      The <quote>set-resource</quote> command implements a generic
+	      interface to control group resources.
+	      <command>vlad</command> does not have any specific knowledge
+	      of any specific resource and what it does.
+	      <quote>set-resource</quote> does a sanity check that only
+	      verifies that the specified resource interface file exists, and
+	      accepts any <replaceable>value</replaceable>.
+	      When a unit starts the each resource is set to its value, one by
+	      one.
+	    </para>
+
+	    <para>
+	      Each resource is set by opening the interface file, of the same
+	      name, as described
+	      in the Linux kernel's documentation, and writing the given
+	      <replaceable>value</replaceable> to it. Note that not every
+	      interface file described in the kernel's documentation is
+	      settable.
+	    </para>
+
+	    <para>
+	      <quote>set-resource</quote> takes multiple values.
+	      Multiple values get written to the interface file one at a time.
+	      Whether or not this has any effect is up to the controller,
+	      otherwise the last value becomes the effective one.
+	      If a resource value, or values are already set,
+	      <quote>set-resource</quote> replaces the values.
+	      There's also an <quote>add-resource</quote> command that sets
+	      additional values without removing any existing ones.
+	    </para>
+
+	    <para>
+	      A newly-created container's resources get set
+	      in the <quote>set-resource</quote>d order. The
+	      <command>status</command> command with the
+	      <option>--resources</option> option lists a unit's resources
+	      in the order they were set.
+	    </para>
+	  </refsect3>
+	  <refsect3>
+	    <title>Summary of common resources</title>
+
+	    <para>
+	      This is a summary of most common resources from the Linux
+	      kernel documentation. Consult the kernel's documentation for
+	      more information.
+	    </para>
+
+	    <variablelist>
+	      <varlistentry>
+		<term>cpu.idle</term>
+		<listitem>
+		  <para>
+		    Setting <quote>cpu.idle</quote> to 1 schedules this
+		    unit at a lowest possible priority.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	      <varlistentry>
+		<term>memory.max</term>
+		<listitem>
+		  <para>
+		    <quote>memory.max</quote> is the maximum memory used
+		    by the unit, in bytes.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	      <varlistentry>
+		<term>memory.oom.group</term>
+		<listitem>
+		  <para>
+		    Setting <quote>memory.oom.group</quote> to 1 results
+		    in all processes in the unit getting killed by the OOM
+		    killer, instead of individual processes.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	      <varlistentry>
+		<term>pids.max</term>
+		<listitem>
+		  <para>
+		    <quote>pids.max</quote> sets an upper limit on the
+		    number of processes that can be created in the unit.
+		  </para>
+		</listitem>
+	      </varlistentry>
+	    </variablelist>
+	  </refsect3>
 	</refsect2>
 
 	<refsect2 id="rc-restart-and-reload">

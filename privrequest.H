@@ -6,6 +6,7 @@
 #define privrequest_h
 
 #include "external_filedesc.H"
+#include "proc_loaderfwd.H"
 #include <sys/stat.h>
 #include <string>
 #include <vector>
@@ -148,6 +149,7 @@ external_filedesc create_stdoutcc(const external_filedesc &efd);
 
 struct container_state_info {
 	std::string state;
+	proc_override::resources_t resources;
 
 	std::string elapsed;
 

@@ -551,6 +551,7 @@ void update_status_overrides(
 			auto iter=overrides.find(path);
 
 			if (iter != overrides.end())
+			{
 				switch (iter->second.get_state()) {
 				case proc_override::state_t::masked:
 					break;
@@ -560,6 +561,9 @@ void update_status_overrides(
 					info.enabled=true;
 					break;
 				}
+
+				info.resources=iter->second.get_resources();
+			}
 			path=path.parent_path();
 		}
 	}

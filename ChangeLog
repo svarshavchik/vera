@@ -1,3 +1,9 @@
+2024-07-30  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Release 1.2
+
+	* Implement support for setting cgroups v2 resources.
+
 2024-07-29  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Fix race condition that prevents an empty cgroup from getting

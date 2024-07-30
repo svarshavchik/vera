@@ -57,12 +57,14 @@ int terse_flag;
 int waitrunlevel_flag;
 int nowait_flag;
 int override_flag;
+int resources_flag;
 const char slashprocslash[] = "/proc/";
 
 const struct option options[]={
 	{"all", 0, &all_flag, 1},
 	{"stopped", 0, &stopped_flag, 1},
 	{"dependencies", 0, &dependencies_flag, 1},
+	{"resources", 0, &resources_flag, 1},
 	{"terse", 0, &terse_flag, 1},
 	{"wait", 0, &waitrunlevel_flag, 1},
 	{"nowait", 0, &nowait_flag, 1},
@@ -1738,6 +1740,15 @@ void dump_readable(const std::string &name,
 		}
 	}
 
+	if (resources_flag && !info.resources.empty())
+	{
+		std::cout << "Resources:\n";
+
+		for (const auto &[key,value]:info.resources)
+		{
+			std::cout << "  " << key << ": " << value << "\n";
+		}
+	}
 	dump_processes(info.processes, 0);
 }
 
@@ -1912,12 +1923,25 @@ static void set_or_add_resource(
 
 		if (std::filesystem::exists(s, ec))
 		{
-			if (!std::filesystem::exists(
-				    std::filesystem::path{s}
-				    / args[2], ec))
+			auto status=std::filesystem::status(
+				std::filesystem::path{s} / args[2],
+				ec
+			);
+
+			if (ec)
+			{
+				std::cerr << args[2] << ": "
+					  << ec.message() << "\n";
+				exit(1);
+			}
+
+			auto perms=status.permissions();
+
+			if ((perms & std::filesystem::perms::owner_write)
+			    == std::filesystem::perms::none)
 			{
 				std::cerr << args[2]
-					  << _(": no such resource") << "\n";
+					  << _(": not settable") << "\n";
 				exit(1);
 			}
 		}
@@ -2587,7 +2611,8 @@ void vlad(std::vector<std::string> args)
 		exit(0);
 	}
 
-	if (args.size() >= 3 && args[0] == "set-resource")
+	if ((args.size() >= 3 && args[0] == "set-resource") ||
+	    (args.size() == 3 && args[1] == "delete-resource"))
 	{
 		set_or_add_resource(
 			args,

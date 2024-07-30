@@ -156,6 +156,7 @@ testswitchlog_SOURCES=testswitchlog.C
 testswitchlog_LDADD=libvera.a
 
 UNITFILES=update-logrotate v2-controllers
+CLEANFILES += $(UNITFILES)
 
 EXTRA_DIST += $(patsubst %,%.in,$(UNITFILES))
 
