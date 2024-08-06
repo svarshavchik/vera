@@ -84,7 +84,7 @@ void test_start_and_stop()
 
 	err=proc_container_start("a");
 
-	if (err != "a: cannot be started because it's not stopped")
+	if (err != "a: cannot start because it's not stopped")
 		throw "proc_container_start(2): did not get expected error: "
 			+ err;
 
@@ -942,7 +942,7 @@ void test_requires4()
 	logged_state_changes.clear();
 	auto err=proc_container_start("requires4c");
 
-	if (err != "requires4c: cannot be started because it's not stopped")
+	if (err != "requires4c: cannot start because it's not stopped")
 		throw "unexpected proc_container_start error(3): "
 			+ err;
 
@@ -1010,7 +1010,7 @@ void test_requires5()
 	logged_state_changes.clear();
 	auto err=proc_container_start("requires5c");
 
-	if (err !="requires5c: cannot be started because it's not stopped")
+	if (err !="requires5c: cannot start because it's not stopped")
 		throw "unexpected proc_container_start error(3): "
 			+ err;
 
@@ -2398,14 +2398,11 @@ void testmultiplestart()
 
 	err=get_start_status(socketa);
 
-	if (!err.empty())
+	if (err != "multiplestart: cannot start because it's not stopped")
 		throw "proc_container_start(2): " + err;
 
 	logged_state_changes.clear();
 	runner_finished(1, 0);
-
-	if (!get_start_result(socketa))
-		throw "unexpected starting failure";
 }
 
 proc_new_container commonrespawn()

@@ -206,7 +206,7 @@ Loading installed units
 system/inittab/rc:start=forking:stop=manual
 system/inittab/rc:description=rc: /etc/rc.d/rc.M
 system/inittab/rc:starting:testinittab.dir/share/vera-rcm testinittab.dir/vera /etc/rc.d/rc.M | /bin/bash
-system/inittab/rc:stopping:testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
+system/inittab/rc:stopping:vlad stop system/rc.M.target; testinittab.dir/share/vera-rck /etc/rc.d/rc.K | /bin/bash
 system/inittab/rc:starting_timeout 300
 system/inittab/rc:sigterm:notify=all
 system/inittab/rc:required-by system/custom
@@ -296,8 +296,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-custom
 Loading installed units
 system/inittab/rc-started-custom:start=oneshot:stop=target
 system/inittab/rc-started-custom:description=rc: started rc.d scripts
-system/inittab/rc-started-custom:stopping:vlad --nowait stop system/rc.M.target
-system/inittab/rc-started-custom:sigterm:notify=all
+system/inittab/rc-started-custom:sigterm:notify=parents
 system/inittab/rc-started-custom:required-by system/custom
 system/inittab/rc-started-custom:starting_after system/inittab/rc
 system/inittab/rc-started-custom:starting_after system/rc
@@ -310,8 +309,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-graphical
 Loading installed units
 system/inittab/rc-started-graphical:start=oneshot:stop=target
 system/inittab/rc-started-graphical:description=rc: started rc.d scripts
-system/inittab/rc-started-graphical:stopping:vlad --nowait stop system/rc.M.target
-system/inittab/rc-started-graphical:sigterm:notify=all
+system/inittab/rc-started-graphical:sigterm:notify=parents
 system/inittab/rc-started-graphical:required-by system/graphical
 system/inittab/rc-started-graphical:starting_after system/inittab/rc
 system/inittab/rc-started-graphical:starting_after system/rc
@@ -324,8 +322,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-multi-user
 Loading installed units
 system/inittab/rc-started-multi-user:start=oneshot:stop=target
 system/inittab/rc-started-multi-user:description=rc: started rc.d scripts
-system/inittab/rc-started-multi-user:stopping:vlad --nowait stop system/rc.M.target
-system/inittab/rc-started-multi-user:sigterm:notify=all
+system/inittab/rc-started-multi-user:sigterm:notify=parents
 system/inittab/rc-started-multi-user:required-by system/multi-user
 system/inittab/rc-started-multi-user:starting_after system/inittab/rc
 system/inittab/rc-started-multi-user:starting_after system/rc
@@ -338,8 +335,7 @@ Loading: testinittab.dir/vera/system/inittab/rc-started-networking
 Loading installed units
 system/inittab/rc-started-networking:start=oneshot:stop=target
 system/inittab/rc-started-networking:description=rc: started rc.d scripts
-system/inittab/rc-started-networking:stopping:vlad --nowait stop system/rc.M.target
-system/inittab/rc-started-networking:sigterm:notify=all
+system/inittab/rc-started-networking:sigterm:notify=parents
 system/inittab/rc-started-networking:required-by system/networking
 system/inittab/rc-started-networking:starting_after system/inittab/rc
 system/inittab/rc-started-networking:starting_after system/rc

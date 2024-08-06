@@ -1979,6 +1979,21 @@ void proc_do_request(external_filedesc efd)
 	if (!requester_stdout)
 		return;
 
+	// We get a request. We redirect everyone's stdout to the requester's
+	// stdout.
+	//
+	// A unit executes a command that
+	static std::weak_ptr<external_filedescObj> active_requester;
+
+	if (!active_requester.lock())
+	{
+		active_requester=requester_stdout;
+	}
+	else
+	{
+		requester_stdout={};
+	}
+
 	auto cmd=efd->readln();
 
 	proc_do_request(std::move(cmd), std::move(efd),
@@ -2369,50 +2384,12 @@ void current_containers_infoObj::start(
 
 	std::visit(eligibility, iter->second.state);
 
-	if (!eligibility.not_stopped_containers.empty())
+	if (!eligibility.not_stopped_containers.empty()
+	    || eligibility.containers.empty())
 	{
 		requester->write_all(
 			pc->name +
 			_(": cannot start because it's not stopped\n"));
-		return;
-	}
-
-	if (eligibility.containers.empty())
-	{
-		// Maybe because this container is in starting state, and
-		// we can piggy-back on it?
-
-		if (std::visit(
-			    [&]
-			    (auto &state)
-			    {
-				    if constexpr(std::is_same_v<
-						 std::remove_cvref_t<
-						 decltype(state)>,
-					 state_starting>) {
-
-					    requester->write_all("\n");
-
-					    state.requesters.push_back(
-						    std::move(
-							    requester
-						    ));
-					    return true;
-				    }
-				    else
-				    {
-					    return false;
-				    }
-			    }, run_info.state))
-		{
-			// The container is already getting started,
-			// but we can piggy-back on it.
-
-			return;
-		}
-
-		requester->write_all(name + _(": cannot be started because"
-					      " it's not stopped\n"));
 		return;
 	}
 
@@ -2593,6 +2570,31 @@ void current_containers_infoObj::log_output(const std::string &name)
 		);
 	}
 }
+
+/*
+  Helper visitor for attaching requester to the container getting stopped.
+
+  This is visited just once.
+*/
+
+struct attach_requester_to_stopping_container {
+
+	const external_filedesc requester;
+	const external_filedesc requester_stdout;
+
+	void operator()(state_stopping &state)
+	{
+		if (requester)
+			state.requesters.push_back(std::move(requester));
+
+		state.requester_stdout = std::move(requester_stdout);
+	}
+
+	template<typename T>
+	void operator()(T &)
+	{
+	}
+};
 
 //////////////////////////////////////////////////////////////////////////
 //
@@ -2834,28 +2836,18 @@ void current_containers_infoObj::stop_with_all_requirements(
 	do_stop_or_terminate(iter);
 
 	// Revalidate, don't take anything for granted.
-	//
-	// If the container is now stopping, register the requester with it.
 
 	iter=containers.find(pc);
 
 	if (iter != containers.end())
-		std::visit(
-			[&]
-			(auto &state)
-			{
-				if constexpr(std::is_same_v<std::remove_cvref_t<
-					     decltype(state)>,
-					     state_stopping>) {
-					if (requester)
-						state.requesters.push_back(
-							requester
-						);
-					state.requester_stdout = std::move(
-						requester_stdout
-					);
-				}
-			}, iter->second.state);
+	{
+		attach_requester_to_stopping_container attach{
+			std::move(requester),
+			std::move(requester_stdout),
+		};
+
+		std::visit(attach, iter->second.state);
+	}
 
 	eligibility.containers.erase(pc);
 

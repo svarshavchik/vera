@@ -402,11 +402,7 @@ struct convert_inittab {
 		const std::string &comment,
 
 		//! Which runlevels the /etc/rc.d entries are started for
-		all_runlevels_t &all_runlevels,
-
-		//! Additional command to run from the "started" unit
-
-		const char *extra_stopping_command_for_started);
+		all_runlevels_t &all_runlevels);
 
 	//! Generate target for running /etc/rc.d/rc.local
 
@@ -611,8 +607,7 @@ void convert_inittab::cleanup()
 void convert_inittab::start_rc(const std::string &identifier,
 			       size_t linenum,
 			       const std::string &comment,
-			       all_runlevels_t &all_runlevels,
-			       const char *extra_stopping_command_for_started)
+			       all_runlevels_t &all_runlevels)
 {
 	// Generate a "start" unit after this one, for
 	// every runlevel that rc.K and rc.M is in, one
@@ -691,8 +686,6 @@ void convert_inittab::start_rc(const std::string &identifier,
 
 		run_rc_started.description=identifier +
 			": started rc.d scripts";
-		run_rc_started.stopping_command=
-			extra_stopping_command_for_started;
 		add_inittab(run_rc_started,
 			    comment + " (rc started)");
 	}
@@ -1013,7 +1006,7 @@ struct inittab_converter {
 			generator.start_rc(new_entry_identifier,
 					   linenum,
 					   s,
-					   all_runlevels, "");
+					   all_runlevels);
 		}
 
 		std::string description=new_entry_identifier+": "
@@ -1051,9 +1044,10 @@ struct inittab_converter {
 			new_entry.starting_command =
 				pkgdata_dir + "/vera-rcm "
 				+ unit_dir + " /etc/rc.d/rc.M | /bin/bash";
-
 			// Run rc.K to stop rc.M. Makes sense.
+
 			new_entry.stopping_command =
+				"vlad stop system/rc.M.target; " +
 				pkgdata_dir + "/vera-rck "
 				"/etc/rc.d/rc.K | /bin/bash";
 		}
@@ -1088,9 +1082,7 @@ struct inittab_converter {
 				new_entry.identifier,
 				linenum,
 				s,
-				all_runlevels,
-				is_local_after ?
-				"vlad --nowait stop system/rc.M.target":""
+				all_runlevels
 			);
 		}
 
