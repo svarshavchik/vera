@@ -3,6 +3,8 @@
 	* Fix converted inittab dependencies. Fixes erroneous rc.M stops when
 	switching between runlevels.
 
+	* Employ a lock file when setting resources or overrides.
+
 2024-07-30  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Release 1.2

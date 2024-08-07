@@ -19,10 +19,13 @@ a** See COPYING for distribution information.
 #include <sstream>
 #include <algorithm>
 #include <optional>
+#include <system_error>
 #include <memory>
 #include <unordered_set>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/file.h>
+#include <fcntl.h>
 
 std::unordered_map<std::string, std::string> environconfigvars;
 
@@ -116,6 +119,18 @@ void proc_set_override(
 		contents=yaml_stream.str();
 	}
 
+	int fd=open(static_cast<std::string>(config_override).c_str(),
+		    O_RDONLY|O_DIRECTORY);
+
+	if (fd < 0)
+		throw std::system_error{ {errno, std::system_category()},
+					 config_override};
+
+	auto efd=std::make_shared<external_filedescObj>(fd);
+
+	if (flock(fd, LOCK_EX) < 0)
+		throw std::system_error{ {errno, std::system_category()},
+					 config_override};
 	// Create any parent directories, first.
 
 	std::filesystem::path fullpath{config_override};
