@@ -311,6 +311,10 @@ void showing_verbose_progress_off()
 {
 }
 
+void update_verbose_progress_immediately()
+{
+}
+
 const char slashprocslash[] = "testslashproc/";
 
 void create_fake_cgroup(const proc_container &pc,

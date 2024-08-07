@@ -34,6 +34,7 @@
 const char system_runlevel[]="system/runlevel";
 
 extern void showing_verbose_progress_off();
+extern void update_verbose_progress_immediately();
 
 #define DEP_DEBUG(x) (std::cout << x << "\n")
 
@@ -540,6 +541,7 @@ struct signal_poller {
 					break;
 
 				runner_finished(pid, wstatus);
+				update_verbose_progress_immediately();
 			}
 			return;
 		case SIGHUP:

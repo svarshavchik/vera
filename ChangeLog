@@ -1,3 +1,9 @@
+2024-08-07  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Improve logic for showing status of in-progress feedback when
+	starting runlevels. Fix a spurious "unknown command" after processing
+	a compatibility "init X" command.
+
 2024-08-06  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Fix converted inittab dependencies. Fixes erroneous rc.M stops when

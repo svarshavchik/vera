@@ -367,7 +367,12 @@ struct showing_verbose_progress_t {
 	 */
 	void update(const active_units_t &containers, time_t timestamp)
 	{
-		if (timestamp == index_timestamp)
+		/*
+		** Update the progress only once a second, or when something
+		** was started or terminated.
+		*/
+		if (timestamp == index_timestamp &&
+		    !something_was_stopped)
 			return;
 
 		index_timestamp=timestamp;
@@ -377,6 +382,21 @@ struct showing_verbose_progress_t {
 
 	void update(const active_units_t &containers)
 	{
+		// If we got here because another second has ticked by,
+		// we want to show_next_update
+		bool show_next_update=true;
+
+		// But if something_was_stopped, we want to slow down a
+		// little bit, to avoid jumping through hoops many times
+		// in rapid succession. Things can happen fast, many times
+		// a second...
+
+		if (something_was_stopped)
+		{
+			something_was_stopped=false; // Reset
+			show_next_update=false;
+		}
+
 		if (containers.size() == 0)
 			return;
 
@@ -386,7 +406,10 @@ struct showing_verbose_progress_t {
 				containers[next_index_to_update].container
 			);
 
-			if (++next_pid_to_show < pids.size())
+			if (show_next_update)
+				++next_pid_to_show;
+
+			if (next_pid_to_show < pids.size())
 			{
 				std::sort(pids.begin(), pids.end());
 
@@ -522,6 +545,14 @@ struct showing_verbose_progress_t {
 	*/
 
 	time_t index_timestamp=log_current_timespec().tv_sec;
+
+	/*! Something was started
+
+	  If so, we'll update the display even if current time is still
+	  index_timestamp
+	*/
+	bool something_was_stopped=false;
+
 };
 
 #if 0
@@ -539,6 +570,12 @@ static std::optional<showing_verbose_progress_t> showing_verbose_progress;
 void showing_verbose_progress_off()
 {
 	showing_verbose_progress.reset();
+}
+
+void update_verbose_progress_immediately()
+{
+	if (showing_verbose_progress)
+		showing_verbose_progress->something_was_stopped=true;
 }
 
 void log_to_real_syslog(int level, const char *program,
@@ -2429,6 +2466,7 @@ void vlad(std::vector<std::string> args)
 		}
 
 		vlad_switch(args[0]);
+		exit(0);
 	}
 
 	if (args.size() == 1 && args[0] == "logs")
