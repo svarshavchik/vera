@@ -3466,23 +3466,23 @@ version: 1
 
 	  <para>
 	    Slackware's default <filename>/etc/rc.d/rc.S</filename> script
-	    mounts all cgroups version 1 controllers in
+	    mounts all cgroup version 1 controllers in
 	    <filename>/sys/fs/cgroup</filename>.
 	  </para>
 
 	  <para>
 	    Enabling the <quote>system/v2-controllers</quote> unit
-	    runs a script at system boot that enables cgroups version 2
+	    runs a script at system boot that enables cgroup version 2
 	    controllers after shutting down the
-	    cgroups version 1 controllers. This makes controllers
-	    available to cgroups version 2 containers. The cgroups
+	    cgroup version 1 controllers. This makes controllers
+	    available to cgroup version 2 containers. The cgroup
 	    version 2 controllers get enabled
 	    for <command>vera</command>'s units.
 	  </para>
 
 	  <para>
 	    If version 1 controllers are turned off via a kernel boot
-	    parameter, the cgroups version 2 controllers are still enabled
+	    parameter, the cgroup version 2 controllers are still enabled
 	    for <command>vera</command>'s units.
 	  </para>
 
