@@ -166,6 +166,7 @@ define unitfile_dependency
 
 $(1): $(1).in
 	sed 's@~PKGDATADIR~@'"`echo $(pkgdatadir)`"'@' <$(srcdir)/$$@.in >$$@
+	sed 's@~INSTALLCONFIGDIR~@'"`echo $(INSTALLCONFIGDIR)`"'@' <$(srcdir)/$$@.in >$$@
 
 endef
 

@@ -11,5 +11,5 @@ starting:
      /etc/logrotate.d
      /etc/logrotate.d.vera
      /etc/rc.d
-     /usr/local/vera/lib/vera/system/rc.M
+     ~INSTALLCONFIGDIR~/system/rc.M
 version: 1
