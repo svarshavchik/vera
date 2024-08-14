@@ -1,3 +1,7 @@
+2024-08-14  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Version 1.3.1
+
 2024-08-13  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* update-logrotate.in: Fix typo.
