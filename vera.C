@@ -261,22 +261,30 @@ struct showing_verbose_progress_t {
 			std::string(bottom_size+1, '\n') <<
 			// Move back up to the separator row
 			"\e[" << bottom_size << "A"
+			// Save cursor position and attributes
+			"\e7"
+			// Default graphic rendition
+			"\e[0m"
+			// Erase to the end of the display
+			"\e[J"
+			// Bold
+			"\e[1m"
+			// Reverse video
+			"\e[7m"
 			// Disable autowrap
 			"\e[?7l" <<
-			std::string(console_winsize.ws_col, '_') <<
+			std::string(console_winsize.ws_col, '-') <<
+			// Reverse video off
+			"\e[27m"
 			// Enable autowrap
 			"\e[?7h"
 			// Column 1
 			"\e[1G"
-			// Up one row, last row in the top half.
+			// Restore cursor position (to the separator row)
+			"\e8"
+			// Up one row, to the last line before the separator row
 			"\e[1A"
-			// Save cursor position
-			"\e[s"
-			// Set scrolling region, this apparently moves the
-			// cursor, hence the need for save/restore position
-			"\e[1;" << separator_row << "r"
-			// Restore cursor position
-			"\e[u";
+			;
 
 		emit();
 	}
@@ -316,9 +324,16 @@ struct showing_verbose_progress_t {
 			"\e[" << (separator_row+2) << ";"
 			      << (console_winsize.ws_row-1) << "r"
 			// First column of the last row in the bottom half
-			"\e[" << (console_winsize.ws_row-1) << ";1f" <<
+			"\e[" << (console_winsize.ws_row-1) << ";1f"
 
-			program << ": " << message << "\n"
+			// Bold, brown (yellow):
+			"\e[1;33m"
+		  <<
+			program << ": "
+
+			// Reset colors to normal
+			"\e[0m"
+		  << message << "\n"
 			// Restore scroll area to the top half
 			"\e[1;" << separator_row << "r"
 			// Restore cursor position
@@ -344,7 +359,7 @@ struct showing_verbose_progress_t {
 	{
 		o <<
 			// Save cursor position.
-			"\e[s"
+			"\e7"
 			// Start of last row, column 1
 			"\e[" << console_winsize.ws_row << ";1f"
 
@@ -354,7 +369,7 @@ struct showing_verbose_progress_t {
 			"\e[?7h"			// autowrap on
 
 			// Restore cursor position
-			"\e[u";
+			"\e8";
 
 		emit();
 	}
@@ -457,9 +472,14 @@ struct showing_verbose_progress_t {
 			{
 				std::string filename=link.filename();
 
-				pid += " [";
+				pid += " ["
+					// Red color
+					"\e[31m";
 				pid += filename;
-				pid += "]";
+				// Brown color, what we were originally,
+				// see below.
+				pid += "\e[33m"
+					"]";
 			}
 		}
 
@@ -471,15 +491,25 @@ struct showing_verbose_progress_t {
 
 		if (!pid.empty())
 		{
-			o << " pid " << pid;
+			// Bold, brown (yellow):
+			o << "\e[1;33m"
+				" pid " << pid
+
+				// Normal colors
+			  << "\e[0m"
+				;
 		}
 
 		if (n > 1)
 		{
-			o << paren_pfix;
+			o << paren_pfix
+				// Bold, cyan
+			  << "\e[1;36m";
 			paren_pfix=", ";
 			o << (next_index_to_update+1)
-			  << "/" << (n+1);
+			  << "/" << (n+1)
+				// Normal colors
+			  << "\e[0m";
 		}
 
 		auto current_time=log_current_timespec().tv_sec;
@@ -494,8 +524,12 @@ struct showing_verbose_progress_t {
 			// Sanity check
 			current_time=container_info.time_end;
 
-		o << paren_pfix << log_elapsed(
-			current_time-container_info.time_start);
+		o << paren_pfix <<
+			// Bold, green
+			"\e[1;32m" <<
+			log_elapsed(
+				current_time-container_info.time_start
+			);
 
 		if (container_info.time_end > container_info.time_start)
 		{
@@ -503,22 +537,46 @@ struct showing_verbose_progress_t {
 				container_info.time_end-
 				container_info.time_start);
 		}
-		o << ")";
+		// Normal colors
+		o << "\e[0m"
+			")";
 
 		auto paren=o.str();
 		o.str("");
 
+		// Calculate paren's size, excluding all SGR sequences
+
+		size_t paren_size=0;
+
+		for (auto b=paren.begin(), e=paren.end(); b != e; )
+		{
+			if (*b != '\e')
+			{
+				++b;
+				++paren_size;
+				continue;
+			}
+
+			b=std::find(b, e, 'm');
+			if (b != e)
+				++b;
+		}
+
 		o <<
 			_("In progress: ") <<
 			container_info.state <<
-			" " <<
+
+			// Space, then bold.
+			" \e[1m" <<
 			container_info.container->description <<
+			// Reset colors to normal
+			"\e[0m"
 			// Erase to EOL
 			"\e[K"
 			// Bottom right corner.
 			"\e[" << console_winsize.ws_col << "`" <<
 			// Then backspace back.
-			std::string(paren.size(), '\x08') <<
+			std::string(paren_size, '\x08') <<
 			paren;
 
 		shown_progress = o.str();
@@ -604,7 +662,16 @@ void log_to_real_syslog(int level, const char *program,
 void log_to_stdout(int level, const char *program,
 		   const char *message)
 {
-	std::cout << program << ": " << message << "\n" << std::flush;
+	std::cout <<
+		// Bold, brown (yellow):
+		"\e[1;33m" <<
+
+		program << ": "
+
+			// Reset colors to normal
+			"\e[0m"
+
+		  << message << "\n" << std::flush;
 }
 
 static std::optional<std::ofstream> current_switchlog;
