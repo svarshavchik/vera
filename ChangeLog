@@ -1,3 +1,9 @@
+2024-10-12  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Version 1.4
+
+	* Add color to the messages on the system console.
+
 2024-08-14  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Version 1.3.1
