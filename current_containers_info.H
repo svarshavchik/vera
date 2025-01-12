@@ -523,7 +523,7 @@ private:
 
 public:
 	//! Return the pids in the container
-	std::vector<pid_t> container_pids(const proc_container &pc);
+	std::vector<pid_t> container_child_pids(const proc_container &pc);
 
 	//! Freeze a container
 	void freeze(const std::string &name,
@@ -590,8 +590,8 @@ const current_containers_info &get_containers_info(
 //! Internal data. Only available when switching runlevels.
 const active_units_t &proc_container_inprogress();
 
-//! When reporting on progress of a container, return its pits
+//! When reporting on progress of a container, return its pids
 
-std::vector<pid_t> proc_container_pids(const proc_container &pc);
+std::vector<pid_t> proc_container_child_pids(const proc_container &pc);
 
 #endif

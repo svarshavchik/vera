@@ -173,12 +173,21 @@ public:
 	static void cgroups_sendsig(pid_t p, int sig);
 
 	//! Return a list of processes in this container group
+	//!
+	//! The child_only flag returns only those processes that do not have
+	//! a parent process in the same container group.
 
-	std::vector<pid_t> cgroups_getpids() const;
+	std::vector<pid_t> cgroups_getpids(bool child_only) const;
 
 	//! Return a list of processes in the given container group
+	//!
+	//! The child_only flag returns only those processes that do not have
+	//! a parent process in the same container group.
 
-	static std::vector<pid_t> cgroups_getpids(const std::string &name);
+	static std::vector<pid_t> cgroups_getpids(
+		const std::string &name,
+		bool child_only
+	);
 
 	//! Record an updated container definition.
 

@@ -3009,12 +3009,12 @@ const active_units_t &proc_container_inprogress()
 	return get_containers_info(nullptr)->verbose_logging.active_units;
 }
 
-std::vector<pid_t> proc_container_pids(const proc_container &pc)
+std::vector<pid_t> proc_container_child_pids(const proc_container &pc)
 {
-	return get_containers_info(nullptr)->container_pids(pc);
+	return get_containers_info(nullptr)->container_child_pids(pc);
 }
 
-std::vector<pid_t> current_containers_infoObj::container_pids(
+std::vector<pid_t> current_containers_infoObj::container_child_pids(
 	const proc_container &pc
 )
 {
@@ -3023,7 +3023,7 @@ std::vector<pid_t> current_containers_infoObj::container_pids(
 	if (iter != containers.end() &&
 	    iter->second.group)
 	{
-		return iter->second.group->cgroups_getpids();
+		return iter->second.group->cgroups_getpids(true);
 	}
 	return {};
 }

@@ -1,6 +1,11 @@
-2024-10-12  Sam Varshavchik  <mrsam@courier-mta.com>
+2025-01-12  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Version 1.4
+
+	* Better heuristic for showing which processes are starting, when
+	switching runmodes.
+
+2024-10-12  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Add color to the messages on the system console.
 

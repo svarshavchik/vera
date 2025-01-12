@@ -405,7 +405,9 @@ void get_pid_status(const std::string &container_name,
 		    std::unordered_map<pid_t,
 		    container_state_info::pid_info> &processes)
 {
-	for (auto p:proc_container_group::cgroups_getpids(container_name))
+	for (auto p:proc_container_group::cgroups_getpids(
+		     container_name, false
+	     ))
 	{
 		auto &pid_info=processes[p];
 

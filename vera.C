@@ -417,7 +417,7 @@ struct showing_verbose_progress_t {
 
 		if (next_index_to_update < containers.size())
 		{
-			auto pids=proc_container_pids(
+			auto pids=proc_container_child_pids(
 				containers[next_index_to_update].container
 			);
 
@@ -440,7 +440,7 @@ struct showing_verbose_progress_t {
 		if (++next_index_to_update >= containers.size())
 			next_index_to_update=0;
 
-		auto pids=proc_container_pids(
+		auto pids=proc_container_child_pids(
 			containers[next_index_to_update].container
 		);
 

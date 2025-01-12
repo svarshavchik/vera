@@ -10,6 +10,7 @@
 #include "messages.H"
 #include "privrequest.H"
 #include <algorithm>
+#include <unordered_set>
 #include <unistd.h>
 #include <string.h>
 #include <sstream>
@@ -459,16 +460,19 @@ void proc_container_group::cgroups_sendsig_parents(
 
 // Return all processes in a container.
 
-std::vector<pid_t> proc_container_group::cgroups_getpids() const
+std::vector<pid_t> proc_container_group::cgroups_getpids(bool child_only) const
 {
-	return cgroups_getpids(container->name);
+	return cgroups_getpids(container->name, child_only);
 }
 
 std::vector<pid_t> proc_container_group::cgroups_getpids(
-	const std::string &name
+	const std::string &name,
+	bool child_only
 )
 {
 	std::vector<pid_t> pids;
+
+	std::unordered_set<pid_t> parent_pids;
 
 	cgroup_procs_file cp{name};
 
@@ -477,9 +481,74 @@ std::vector<pid_t> proc_container_group::cgroups_getpids(
 		pid_t p;
 
 		while (cp.i >> p)
+		{
 			pids.push_back(p);
+
+			// Leave parent_pids empty when asking for all pids.
+
+			if (!child_only)
+				continue;
+
+			std::ostringstream o;
+
+			o.imbue(std::locale{"C"});
+
+			o << slashprocslash << p << "/status";
+
+			std::ifstream i{o.str()};
+
+			if (!i)
+				continue;
+
+			i.imbue(std::locale{"C"});
+
+			std::string l;
+
+			while (std::getline(i, l).good())
+			{
+				std::istringstream iline{l};
+
+				iline.imbue(std::locale{"C"});
+
+				std::string w;
+
+				iline >> w;
+
+				if (w != "PPid:")
+					continue;
+
+				pid_t ppid;
+
+				if (iline >> ppid)
+				{
+					parent_pids.insert(ppid);
+				}
+				break;
+			}
+		}
 	}
 
+	// Remove the parent_pids from the pids array.
+
+	auto b=pids.begin(), e=pids.end();
+
+	if (auto p=std::find_if(b, e, [&](auto &p){
+		return parent_pids.find(p) == parent_pids.end();
+	}); p != e)
+	{
+		auto q=b;
+
+		while (p != e)
+		{
+			*q++=*p++;
+
+			p=std::find_if(p, e, [&](auto &p){
+				return parent_pids.find(p) == parent_pids.end();
+			});
+		}
+
+		pids.erase(q, e);
+	}
 	return pids;
 }
 
