@@ -7,18 +7,57 @@
 
 #include "external_filedesc.H"
 #include "proc_loaderfwd.H"
+#include <algorithm>
 #include <sys/stat.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
-#include <optional>
-#include <variant>
 #include <time.h>
-#include <signal.h>
 
 std::string environconfig();
+
+/*! Bare-bones information about a process in the container
+
+Represents information about a single process
+within a container.
+
+*/
+
+struct pid_info {
+
+	// Its parent process id
+	pid_t ppid{1};
+
+	// exe's device/inode
+
+	dev_t exedev{};
+	ino_t exeino{};
+
+	// Its command line
+	std::vector<std::string> cmdline;
+	bool operator==(const pid_info &) const=default;
+	std::strong_ordering operator<=>(const pid_info &) const=default;
+};
+
+struct hier_pid_info {
+
+	// This is actually this process's pid. This is the parent
+	// of all the child_pids
+	pid_info parent_pid;
+
+	// Processes arranged in a parent-child hierarchy
+	using hier_pids=std::map<pid_t, hier_pid_info>;
+
+	// parent_pid's child processes.
+	hier_pids child_pids;
+
+	bool operator==(const hier_pid_info &) const;
+	std::strong_ordering operator<=>(
+		const hier_pid_info &
+	) const;
+};
 
 // Send requests and process responses over a privileged (root) sockets.
 
@@ -157,51 +196,45 @@ struct container_state_info {
 
 	bool enabled=false;
 
-	// Bare-bones information about a process in the container.
-	struct pid_info {
-
-		// Its parent process id
-		pid_t ppid{1};
-
-		// exe's device/inode
-
-		dev_t exedev{};
-		ino_t exeino{};
-
-		// Its command line
-		std::vector<std::string> cmdline;
-		bool operator==(const pid_info &) const=default;
-		bool operator<=>(const pid_info &) const=default;
-	};
-
-	struct hier_pid_info;
-
-	// Processes arranged in a parent-child hierarchy
-	typedef std::map<pid_t, hier_pid_info> hier_pids;
-
-	struct hier_pid_info {
-
-		// This is actually this process's pid. Thsi is the parent
-		// of all the child_pids
-		pid_info parent_pid;
-
-		// parent_pid's child processes.
-		hier_pids child_pids;
-
-		bool operator==(const hier_pid_info &) const=default;
-		bool operator<=>(const hier_pid_info &) const=default;
-	};
-
 	// Processes in this container.
-	hier_pids processes;
+	hier_pid_info::hier_pids processes;
 
 	// The dependencies
 	std::unordered_set<std::string> dep_requires, dep_requires_first,
 		dep_required_by, dep_starting_first, dep_stopping_first;
 
 
-	bool operator==(const container_state_info &) const=default;
+	bool operator==(const container_state_info &) const;
 };
+
+// Implement default comparison operators for hier_pid_info
+
+// We must manually compare the class members due to the
+// nested templated types.
+
+inline bool hier_pid_info::operator==(
+	const hier_pid_info &other
+) const=default;
+
+inline std::strong_ordering hier_pid_info::operator<=>(
+	const hier_pid_info &other
+) const
+{
+	std::strong_ordering ret=parent_pid<=>other.parent_pid;
+	if (ret!=std::strong_ordering::equivalent)
+		return ret;
+
+	return std::lexicographical_compare_three_way(
+		child_pids.begin(), child_pids.end(),
+		other.child_pids.begin(), other.child_pids.end()
+	);
+}
+
+// Implement default comparison operator for container_state_info
+
+inline bool container_state_info::operator==(
+	const container_state_info &other
+) const=default;
 
 /*! Receive and parse the container state.
 
@@ -227,7 +260,7 @@ std::unordered_map<std::string, container_state_info> get_status(
 
 extern const char slashprocslash[];
 
-/*! Populate container_state_info::pid_info
+/*! Populate pid_info
 
 This reads the pids in the container, then reads /proc and populates
 a pid_info map.
@@ -235,8 +268,7 @@ a pid_info map.
  */
 
 void get_pid_status(const std::string &container_name,
-		    std::unordered_map<pid_t,
-		    container_state_info::pid_info> &processes);
+		    std::unordered_map<pid_t, pid_info> &processes);
 
 /*! Sort container pids into a hierarchical tree
 
@@ -244,9 +276,8 @@ This removes each pid from the map populated by get_pid_status and puts them
 into a hierarchical parent/children tree.
 
  */
-void sort_pids(std::unordered_map<pid_t,
-	       container_state_info::pid_info> &processes,
-	       container_state_info::hier_pids &pids);
+void sort_pids(std::unordered_map<pid_t, pid_info> &processes,
+	       hier_pid_info::hier_pids &pids);
 
 // Update the container_state_info map to reflect the current overrides
 

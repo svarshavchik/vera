@@ -6,6 +6,9 @@
 #define proc_containerfwd_h
 
 #include <memory>
+#include <concepts>
+#include <string>
+#include <string_view>
 
 class proc_containerObj;
 
@@ -25,14 +28,23 @@ Allows proc_container_set to be looked up by a string
 
 */
 
-template<typename T, typename=void>
+template<typename T>
 struct get_name_for_comparator {
 
 	template<typename V>
-	static auto & name(V &&v)
+	static auto &name(V &&v)
 	{
 		return v;
 	}
+};
+
+/*! Concept used by get_name_for_comparator specialization
+
+*/
+
+template<typename T>
+concept has_name_field = requires(T ptr) {
+	{ ptr->name } -> std::convertible_to<std::string_view>;
 };
 
 /*! Helper class used by proc_container_set
@@ -43,15 +55,23 @@ Allows proc_container_set to be looked up by a proc_container.
 
 */
 
-template<typename T>
-struct get_name_for_comparator<T, std::void_t<decltype(std::declval<std::remove_cvref_t<T> &&>()->name)>> {
+template<has_name_field T>
+struct get_name_for_comparator<T> {
 
 	template<typename V>
-	static auto &name(V &&v)
+	static auto &name(V &&v) noexcept
 	{
 		return v->name;
 	}
 
+};
+
+/*! Concept used by get_name_for_comparator specialization
+
+*/
+
+template <typename T> concept has_new_container_field = requires(T ptr) {
+	{ ptr->new_container->name } -> std::convertible_to<std::string_view>;
 };
 
 /*! Helper class used by proc_new_container_set
@@ -62,11 +82,11 @@ Allows proc_new_container_set to be looked up by a proc_new_container.
 
 */
 
-template<typename T>
-struct get_name_for_comparator<T, std::void_t<decltype(std::declval<std::remove_cvref_t<T> &&>()->new_container->name)>> {
+template<has_new_container_field T>
+struct get_name_for_comparator<T> {
 
 	template<typename V>
-	static auto &name(V &&v)
+	static auto &name(V &&v) noexcept
 	{
 		return v->new_container->name;
 	}
@@ -114,7 +134,7 @@ struct proc_container_hash {
 	typedef void is_transparent;
 
 	template<typename T, typename defer=void>
-	auto operator()(T &&t) const noexcept
+	size_t operator()(T &&t) const noexcept
 	{
 		return std::hash<std::string>{}(
 			get_name_for_comparator<T>::name(

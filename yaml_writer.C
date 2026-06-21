@@ -3,8 +3,8 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-
 #include "yaml_writer.H"
+#include <fstream>
 
 // Interface libyaml to write the YAML contents to a std::ofstream
 

@@ -1670,7 +1670,7 @@ namespace {
 }
 #endif
 
-void dump_processes(const container_state_info::hier_pids &processes,
+void dump_processes(const hier_pid_info::hier_pids &processes,
 		    size_t level)
 {
 	for (auto &[pid, procinfo] : processes)
@@ -1856,7 +1856,7 @@ void dump_readable(const std::string &name,
 	dump_processes(info.processes, 0);
 }
 
-const char *dump_pids(const container_state_info::hier_pids &processes,
+const char *dump_pids(const hier_pid_info::hier_pids &processes,
 		      const char *prefix)
 {
 	const char *ret="";

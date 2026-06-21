@@ -7,16 +7,10 @@
 
 #include "proc_loaderfwd.H"
 #include "proc_container.H"
-#include "parsed_yaml.H"
-#include "messages.H"
 #include <filesystem>
 #include <functional>
 #include <string>
-#include <string_view>
-#include <vector>
 #include <iostream>
-#include <exception>
-#include <map>
 #include <optional>
 
 /*! Find pathnames to load
@@ -37,18 +31,52 @@ invalid() gets called with the following parameters
 - the full pathname to a path in one of the directories
 
 - an error message, an explanation why found() wasn't called for it.
+
+started() and finished() are called for each directory that's visited.
+
+- started() gets called with the directory pathname, relative to the
+  directory currently being processed. It gets called before calling
+  found() and invalid() for everything in that directory.
+
+- finished() gets called with the directory pathname, relative to the
+  directory currently being processed. It gets called after calling
+  found() and invalid() for everything in that directory.
+
+The passed in relative pathname is "." for the top-level directory.
+
 */
 
-void proc_find(const std::string &config_global,
-	       const std::string &config_local,
-	       const std::string &config_override,
-	       const std::function<void (
-		       const std::filesystem::path &,
-		       const std::optional<std::filesystem::path> &,
-		       const std::optional<std::filesystem::path> &,
-		       const std::filesystem::path &)> &found,
-	       const std::function<void (const std::filesystem::path &,
-					 const std::string &)> &invalid);
+struct proc_find {
+	const std::filesystem::path config_global;
+	const std::filesystem::path config_local;
+	const std::filesystem::path config_override;
+
+	proc_find(
+		std::filesystem::path config_global,
+		std::filesystem::path config_local,
+		std::filesystem::path config_override
+	);
+
+	virtual void found(
+		const std::filesystem::path &,
+		const std::optional<std::filesystem::path> &,
+		const std::optional<std::filesystem::path> &,
+		const std::filesystem::path &)=0;
+
+	virtual void invalid(
+		const std::filesystem::path &,
+		const std::string &)=0;
+
+	virtual void started(const std::filesystem::path &);
+	virtual void finished(const std::filesystem::path &);
+
+	void find()
+	{
+		scan(".");
+	}
+
+	void scan(const std::filesystem::path &);
+};
 
 /*! Garbage collection
 
@@ -70,22 +98,27 @@ void proc_gc(const std::string &config_global,
 
 extern std::string overrideconfigdir();
 
-//! Attempt to load a container configuration
+/*! Attempt to load a container configuration
 
-//! Parameters:
-//!
-//! - the opened file from where the container configuration gets loaded.
-//!
-//! - the filename, for logging purposes
-//!
-//! - the relative path, in the global or the local configuration directory
-//!
-//! - whether these containers are flagged as enabled
-//!
-//! - a callback that gets invoked to report loading errors.
-//!
-//! Returns the set of containers loaded from a file. A loading error is
-//! determined by whether the error callback gets invoked.
+Parameters:
+
+- the opened file from where the container configuration gets loaded.
+
+- the filename, for logging purposes
+
+- the relative path, in the global or the local configuration directory
+
+- whether these containers are flagged as enabled
+
+- a callback that gets invoked to report loading errors.
+
+Returns:
+
+- the set of containers loaded from the given file.
+
+Note: a loading error is determined by whether the error callback gets invoked.
+
+*/
 
 proc_new_container_set proc_load(
 	std::istream &input_file,

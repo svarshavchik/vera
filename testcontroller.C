@@ -5,7 +5,6 @@
 
 #include "config.h"
 #include "proc_container.H"
-#include "proc_container_timer.H"
 #include "external_filedesc_privcmdsocket.H"
 
 #include "unit_test.H"
@@ -1332,6 +1331,7 @@ void test_runlevels()
 		  logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"runlevel12prog: " + STATE_START_PENDING::label.label_str(),
 			"runlevel12prog: " + STATE_STARTED::label.label_str(),
@@ -1388,6 +1388,7 @@ void test_runlevels()
 	if (!proc_container_runlevel("multi-user").empty())
 		throw "Unexpected error starting runlevel2";
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Stopping " RUNLEVEL_PREFIX "graphical",
 			"runlevel1prog: " + STATE_STOP_PENDING::label.label_str(),
 			"Starting " RUNLEVEL_PREFIX "multi-user",
@@ -1427,6 +1428,7 @@ void test_before_after1()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"testbefore_after_1: " + STATE_START_PENDING::label.label_str(),
 			"testbefore_after_2: " + STATE_START_PENDING::label.label_str(),
@@ -1449,6 +1451,7 @@ void test_before_after1()
 			  &logged_state_changes[4]);
 	}
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Stopping " RUNLEVEL_PREFIX "graphical",
 			"testbefore_after_1: " + STATE_STOP_PENDING::label.label_str(),
 			"testbefore_after_2: " + STATE_STOP_PENDING::label.label_str(),
@@ -1494,6 +1497,7 @@ void test_before_after2()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"testbefore_after_1: " + STATE_START_PENDING::label.label_str(),
 			"testbefore_after_2: " + STATE_START_PENDING::label.label_str(),
@@ -1515,6 +1519,7 @@ void test_before_after2()
 			  &logged_state_changes[4]);
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Stopping " RUNLEVEL_PREFIX "graphical",
 			"testbefore_after_1: " + STATE_STOP_PENDING::label.label_str(),
 			"testbefore_after_2: " + STATE_STOP_PENDING::label.label_str(),
@@ -1564,6 +1569,7 @@ void test_failed_fork_with_dependencies()
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"dep_fail_forkb: " + STATE_START_PENDING::label.label_str(),
 			"dep_fail_forkc: " + STATE_START_PENDING::label.label_str(),
@@ -1617,6 +1623,7 @@ void test_failed_fork_with_dependencies()
 
 			// Start of b  fails, so that gets cleaned up.
 
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"dep_fail_forkb: aborting,"
 			" dependency not started: dep_fail_forkc",
 			"dep_fail_forkb: " + STATE_REMOVING::label.label_str(),
@@ -2106,6 +2113,7 @@ void testgroup()
 	}
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"beforegroup: " + STATE_START_PENDING::label.label_str(),
 			"final: " + STATE_START_PENDING::label.label_str(),
@@ -2214,6 +2222,7 @@ void testfailcgroupcreate()
 		std::sort(&logged_state_changes[1], &logged_state_changes[3]);
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"a: " + STATE_START_PENDING::label.label_str(),
 			"b: " + STATE_START_PENDING::label.label_str(),
@@ -2869,9 +2878,12 @@ void testmultirunlevels()
 			"multi2: " + STATE_START_PENDING::label.label_str(),
 			"multi1: " + STATE_STOPPING::label.label_str(),
 		})
+		throw "unexpected state changes (3)";
 
 	while (!poller_is_transferrable())
+	{
 		do_poll(0);
+	}
 	proc_check_reexec();
 	logged_state_changes.clear();
 	runner_finished(2, 0);
@@ -3127,6 +3139,7 @@ void testunpopulated1st()
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"unpopulated1stb: " + STATE_START_PENDING::label.label_str(),
 			"unpopulated1stc: " + STATE_START_PENDING::label.label_str(),
@@ -3493,8 +3506,7 @@ void testparentsterm()
 			throw "Could not start exe1 and exe2.";
 		}
 
-		std::map<pid_t, container_state_info::hier_pid_info>
-			expected_processes{
+		std::map<pid_t, hier_pid_info> expected_processes{
 			{10, { {1, exe1.st_dev, exe1.st_ino,
 				{"exe1", "a", "b"}},
 			       {{11, { {10, exe1.st_dev,

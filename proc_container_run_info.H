@@ -157,7 +157,7 @@ struct proc_container_run_info {
 	//! We are reexeced. Restore ourselves.
 
 	//! Receives the input stream for the output stream that was passed
-	//! to is_transferable.
+	//! to is_transferrable.
 
 	void restored(std::istream &i,
 		      const group_create_info &create_info,

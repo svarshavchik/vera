@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <dirent.h>
 #include "log.H"
 #include "messages.H"
 #include <unordered_map>

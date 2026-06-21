@@ -39,6 +39,12 @@ error:testconfglobal/.file1.invalid:ignoring non-compliant filename
 error:testconfglobal/file1,invalid:ignoring non-compliant filename
 error:testconfglobal/file1..invalid:ignoring non-compliant filename
 error:testconfglobal/file1.invalid.:ignoring non-compliant filename
+finished:"."
+finished:"sub1"
+finished:"sub2"
+started:"."
+started:"sub1"
+started:"sub2"
 EOF
 
 $VALGRIND ./testprocloader dump testconfglobal testconflocal testconfoverride \

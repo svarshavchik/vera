@@ -10,9 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <sstream>
 #include <fstream>
-#include <errno.h>
 #include <ios>
 #include <string.h>
 
@@ -23,15 +21,15 @@ void loadtest(const std::string &name, bool enabled)
 	if (enabled)
 		o.set_state(proc_override::state_t::enabled);
 
-	proc_load_dump(
+	auto results=
 		proc_load(std::cin, "(built-in)", name, o,
 			  []
 			  (const std::string &error)
 			  {
 				  std::cout << "error: " << error << "\n";
 			  }
-		)
-	);
+		);
+	proc_load_dump(std::move(results));
 }
 
 std::vector<std::string> search_default_runlevel(const runlevels &rl)
@@ -177,6 +175,55 @@ void testresources(const std::string &config_global,
 		throw std::runtime_error{"testresources test 9 failed"};
 }
 
+struct dumper : proc_find {
+
+	using proc_find::proc_find;
+
+	void found(
+		const std::filesystem::path &globalfilename,
+		const std::optional<std::filesystem::path> &localfilename,
+		const std::optional<std::filesystem::path> &overridefilename,
+		const std::filesystem::path &name) override
+	{
+		std::cout << "config:"
+			    << (overridefilename ?
+				static_cast<std::string>(
+					*overridefilename
+				):"*")
+			    << ":"
+			    << (localfilename ?
+					static_cast<std::string>(
+						*localfilename
+					):"*")
+			    << ":"
+			    << static_cast<std::string>(
+				    globalfilename
+				) << ":"
+			    << static_cast<std::string>(
+				    name
+				) << "\n";
+	}
+
+	void invalid(
+		const std::filesystem::path &filename,
+		const std::string &error) override
+	{
+		std::cout << "error:"
+			    << static_cast<std::string>(
+				    filename
+			    ) << ":" << error << "\n";
+	}
+
+	void started(const std::filesystem::path &filename) override
+	{
+		std::cout << "started:" << filename << "\n";
+	}
+	
+	void finished(const std::filesystem::path &filename) override
+	{
+		std::cout << "finished:" << filename << "\n";
+	}
+};
 
 int main(int argc, char **argv)
 {
@@ -184,42 +231,9 @@ int main(int argc, char **argv)
 
 	if (args.size() == 5 && args[1] == "dump")
 	{
-		proc_find(args[2],
-			  args[3],
-			  args[4],
-			  []
-			  (const auto &globalfilename,
-			   const auto &localfilename,
-			   const auto &overridefilename,
-			   const auto &name)
-			  {
-				  std::cout << "config:"
-					    << (overridefilename ?
-						static_cast<std::string>(
-							*overridefilename
-						):"*")
-					    << ":"
-					    << (localfilename ?
-						static_cast<std::string>(
-							*localfilename
-						):"*")
-					    << ":"
-					    << static_cast<std::string>(
-						    globalfilename
-					    ) << ":"
-					    << static_cast<std::string>(
-						    name
-					    ) << "\n";
-			  },
-			  []
-			  (const std::filesystem::path &filename,
-			   const std::string &error)
-			  {
-				  std::cout << "error:"
-					    << static_cast<std::string>(
-						    filename
-					    ) << ":" << error << "\n";
-			  });
+		dumper d{args[2], args[3], args[4]};
+
+		d.find();
 		return 0;
 	}
 

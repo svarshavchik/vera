@@ -294,8 +294,7 @@ std::unordered_map<std::string, container_state_info> get_status(
 		container_state_info info;
 
 		// Linear list of processes in the container
-		std::unordered_map<pid_t,
-				   container_state_info::pid_info> processes;
+		std::unordered_map<pid_t, pid_info> processes;
 
 		std::string line;
 
@@ -402,8 +401,7 @@ std::unordered_map<std::string, container_state_info> get_status(
 }
 
 void get_pid_status(const std::string &container_name,
-		    std::unordered_map<pid_t,
-		    container_state_info::pid_info> &processes)
+		    std::unordered_map<pid_t, pid_info> &processes)
 {
 	for (auto p:proc_container_group::cgroups_getpids(
 		     container_name, false
@@ -463,13 +461,10 @@ void get_pid_status(const std::string &container_name,
 	}
 }
 
-void sort_pids(std::unordered_map<pid_t,
-	       container_state_info::pid_info> &processes,
-	       container_state_info::hier_pids &pids)
+void sort_pids(std::unordered_map<pid_t, pid_info> &processes,
+	       hier_pid_info::hier_pids &pids)
 {
-	std::unordered_map<pid_t,
-			   container_state_info::hier_pid_info *
-			   > parent_pid_lookup;
+	std::unordered_map<pid_t, hier_pid_info *> parent_pid_lookup;
 
 	// Take each pid in the original map
 
@@ -504,9 +499,9 @@ void sort_pids(std::unordered_map<pid_t,
 
 			parent_pid_lookup[b->first]=&(
 				parent->second->child_pids[b->first]=
-				container_state_info::hier_pid_info{
-					std::move(b->second)
-				}
+					hier_pid_info{
+						std::move(b->second)
+					}
 			);
 		}
 		else
@@ -514,8 +509,7 @@ void sort_pids(std::unordered_map<pid_t,
 			// Move the pid to the hier pid and update the
 			// lookup map.
 			parent_pid_lookup[b->first]=&(
-				pids[b->first]=
-				container_state_info::hier_pid_info{
+				pids[b->first]=hier_pid_info{
 					std::move(b->second),
 					{}
 				}

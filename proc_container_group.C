@@ -426,12 +426,11 @@ void proc_container_group::cgroups_sendsig_all(int sig)
 
 void proc_container_group::cgroups_sendsig_parents(int sig)
 {
-	std::unordered_map<pid_t,
-			   container_state_info::pid_info> processes;
+	std::unordered_map<pid_t, pid_info> processes;
 
 	get_pid_status(container->name, processes);
 
-	container_state_info::hier_pids pids;
+	hier_pid_info::hier_pids pids;
 
 	sort_pids(processes, pids);
 
@@ -439,8 +438,8 @@ void proc_container_group::cgroups_sendsig_parents(int sig)
 }
 
 void proc_container_group::cgroups_sendsig_parents(
-	const container_state_info::hier_pids &pids,
-	const container_state_info::pid_info *parent,
+	const hier_pid_info::hier_pids &pids,
+	const pid_info *parent,
 	int sig)
 {
 	for (auto &[pid, info]: pids)

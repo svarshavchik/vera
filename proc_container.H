@@ -6,18 +6,13 @@
 #define proc_container_h
 
 #include <string>
-#include <set>
 #include <unordered_set>
 #include <time.h>
 #include <functional>
-#include <variant>
-#include <type_traits>
 #include <libintl.h>
 
+#include "external_filedesc.H"
 #include "proc_containerfwd.H"
-#include "proc_container_runnerfwd.H"
-#include "proc_container_timerfwd.H"
-#include "proc_container_state.H"
 #include "log.H"
 
 //! Container type
@@ -25,7 +20,7 @@
 enum class proc_container_type {
 	loaded,		//!< Loaded process container
 	runlevel,	//!< Entry for a run
-	synthesized	//!< Synthesized, for dependencies.
+	synthesized	//!< Like directory, but synthesized for dependencies.
 };
 
 //! Who to send a SIGTERM to
@@ -141,7 +136,7 @@ class proc_containerObj {
 public:
 	//! The container's name
 
-	//! type=runlevel container names are RUNLEVEL_PREFIX + name
+	//! For type=runlevel, the full name is RUNLEVEL_PREFIX + name
 	const std::string name;
 
 	//! Container's description
@@ -243,10 +238,10 @@ public:
 	const std::shared_ptr<proc_containerObj> new_container;
 
 	//! Constructor
-	proc_new_containerObj(const std::string &name)
-		: new_container{std::make_shared<proc_containerObj>(
-				name
-		)}
+	proc_new_containerObj(
+		const std::string &name
+	)
+		: new_container{std::make_shared<proc_containerObj>(name)}
 	{
 	}
 

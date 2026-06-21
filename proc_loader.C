@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include <set>
 #include <errno.h>
+#include <dirent.h>
 #include <ranges>
 #include <sys/stat.h>
 
@@ -30,18 +31,25 @@ static proc_override read_override(
 	const std::function<void (const std::string &)> &error
 );
 
-static void proc_find(const std::filesystem::path &config_global,
-		      const std::filesystem::path &config_local,
-		      const std::filesystem::path &config_override,
-		      const std::filesystem::path &subdir,
-		      const std::function<void (
-			      const std::filesystem::path &,
-			      const std::optional<std::filesystem::path> &,
-			      const std::optional<std::filesystem::path> &,
-			      const std::filesystem::path &)> &found,
-		      const std::function<void (const std::filesystem::path &,
-						const std::string &)> &invalid,
-		      const std::function<void (const std::filesystem::path &)> &visited)
+proc_find::proc_find(
+	std::filesystem::path config_global,
+	std::filesystem::path config_local,
+	std::filesystem::path config_override
+) : config_global{std::move(config_global)},
+	  config_local{std::move(config_local)},
+	  config_override{std::move(config_override)}
+{
+}
+
+void proc_find::started(const std::filesystem::path &subdir)
+{
+}
+
+void proc_find::finished(const std::filesystem::path &subdir)
+{
+}
+
+void proc_find::scan(const std::filesystem::path &subdir)
 {
 	auto fullglobal=config_global / subdir;
 
@@ -58,6 +66,7 @@ static void proc_find(const std::filesystem::path &config_global,
 		invalid(fullglobal, ec.message());
 	}
 
+	started(subdir);
 	while (b != e)
 	{
 		auto entry = *b++;
@@ -79,12 +88,10 @@ static void proc_find(const std::filesystem::path &config_global,
 
 		if (entry.is_directory())
 		{
-			auto subdir_name = subdir / filename;
+			auto subdir_name = (subdir == ".") ?
+				filename : subdir / filename;
 
-			proc_find(config_global, config_local, config_override,
-				  subdir_name,
-				  found, invalid, visited);
-			visited(config_global / subdir_name);
+			scan(subdir_name);
 			continue;
 		}
 
@@ -100,10 +107,11 @@ static void proc_find(const std::filesystem::path &config_global,
 		std::optional<std::filesystem::path> localfilename;
 		std::optional<std::filesystem::path> overridefilename;
 
-		for (const auto &[found, file] : std::array<
-			     std::tuple<std::optional<std::filesystem::path> *,
-			     std::filesystem::path>,
-			     2>{{
+		for (const auto &[found, file] :
+			std::array<
+				std::tuple<std::optional<std::filesystem::path> *,
+						    std::filesystem::path>,
+				2>{{
 				     {
 					     &localfilename,
 					     (config_local /
@@ -141,26 +149,170 @@ static void proc_find(const std::filesystem::path &config_global,
 		      overridefilename,
 		      relative_filename.lexically_normal());
 	}
+
+	finished(subdir);
 }
 
-void proc_find(const std::string &config_global,
-	       const std::string &config_local,
-	       const std::string &config_override,
-	       const std::function<void (
-		       const std::filesystem::path &,
-		       const std::optional<std::filesystem::path> &,
-		       const std::optional<std::filesystem::path> &,
-		       const std::filesystem::path &)> &found,
-	       const std::function<void (const std::filesystem::path &,
-					 const std::string &)> &invalid)
+namespace {
+#if 0
+}
+#endif
+
+struct proc_gc_find : public proc_find
 {
-	proc_find(config_global, config_local, config_override, ".",
-		  found,
-		  invalid,
-		  []
-		  (const std::filesystem::path &)
+	std::function<void (const std::string &message)> message;
+
+	proc_gc_find(
+		const std::string &config_global,
+		const std::string &config_local,
+		const std::string &config_override,
+		std::function<void (const std::string &message)> message)
+		: proc_find{config_global, config_local, config_override},
+		  message{std::move(message)}
+	{
+	}
+
+	void found(
+		const std::filesystem::path &,
+		const std::optional<std::filesystem::path> &,
+		const std::optional<std::filesystem::path> &,
+		const std::filesystem::path &) override;
+
+	void invalid(
+		const std::filesystem::path &,
+		const std::string &) override;
+
+	void finished(const std::filesystem::path &) override;
+};
+
+struct proc_stale_find : public proc_find
+{
+	std::function<void (const std::string &message)> message;
+
+	proc_stale_find(
+		const std::string &config_global,
+		const std::string &config_local,
+		const std::string &config_override,
+		std::function<void (const std::string &message)> message)
+		: proc_find{config_global, config_local, config_override},
+		  message{std::move(message)}
+	{
+	}
+
+	void found(
+		const std::filesystem::path &,
+		const std::optional<std::filesystem::path> &,
+		const std::optional<std::filesystem::path> &,
+		const std::filesystem::path &) override;
+
+	void invalid(
+		const std::filesystem::path &,
+		const std::string &) override;
+
+	void finished(const std::filesystem::path &) override;
+};
+#if 0
+{
+#endif
+}
+
+void proc_gc_find::found(
+	const std::filesystem::path &l,
+	const std::optional<std::filesystem::path> &ignore,
+	const std::optional<std::filesystem::path> &override_path,
+	const std::filesystem::path &relpath)
+{
+	if (!override_path)
+		return;
+
+	std::ifstream i{*override_path};
+
+	if (!i.is_open())
+		return;
+
+	bool legacy;
+
+	auto o=read_override(*override_path, i,
+				       legacy,
+				       message);
+
+	if (!legacy)
+		return;
+
+	proc_set_override(
+		config_override,
+		relpath,
+		o,
+		[]
+		  (const auto &error)
 		  {
-		  });
+			  std::cerr << error << std::endl;
+		  }
+	);
+}
+
+void proc_gc_find::invalid(
+	const std::filesystem::path &path,
+	const std::string &error_message)
+{
+	message((unlink(path.c_str()) == 0 ?
+			 _("removed: ") :
+			 _("could not remove: "))
+			+ static_cast<std::string>(path)
+			+ ": " + error_message);
+}
+
+void proc_gc_find::finished(
+	const std::filesystem::path &path)
+{
+	if (path == ".")
+		return;
+
+	auto p=config_global / path;
+	if (rmdir(p.c_str()) == 0)
+		message(_("removed empty directory: ") +
+			static_cast<std::string>(p));	
+}
+
+void proc_stale_find::found(
+	const std::filesystem::path &globalpath,
+	const std::optional<std::filesystem::path> &localpath,
+	const std::optional<std::filesystem::path> &overridepath,
+	const std::filesystem::path &relpath)
+{
+	if (localpath)
+		return; // Global/main exists.
+
+	message((unlink(globalpath.c_str()) == 0 ?
+			 _("stale (removed): ") :
+			 _("could not remove stale entry: "))
+			+ static_cast<std::string>(globalpath)
+			+ ": "
+			+ static_cast<std::string>(relpath)
+		);
+}
+
+void proc_stale_find::invalid(
+	const std::filesystem::path &path,
+	const std::string &error_message)
+{
+	message((unlink(path.c_str()) == 0 ?
+			 _("removed: ") :
+			 _("could not remove: "))
+			+ static_cast<std::string>(path)
+			+ ": " + error_message);
+}
+
+void proc_stale_find::finished(
+	const std::filesystem::path &path)
+{
+	if (path == ".")
+		return;
+
+	auto p=config_global / path;
+	if (rmdir(p.c_str()) == 0)
+		message(_("removed empty directory: ") +
+			static_cast<std::string>(path));
 }
 
 void proc_gc(const std::string &config_global,
@@ -168,60 +320,14 @@ void proc_gc(const std::string &config_global,
 	     const std::string &config_override,
 	     const std::function<void (const std::string &message)> &message)
 {
-	proc_find(config_global, config_local, config_override, ".",
-		  [&]
-		  (const auto &l,
-		   const auto &,
-		   const auto &override_path,
-		   const auto &relpath)
-		  {
-			  if (!override_path)
-				  return;
-
-			  std::ifstream i{*override_path};
-
-			  if (!i.is_open())
-				  return;
-
-			  bool legacy;
-
-			  auto o=read_override(*override_path, i,
-					       legacy,
-					       message);
-
-			  if (!legacy)
-				  return;
-
-			  proc_set_override(
-				  config_override,
-				  relpath,
-				  o,
-				  []
-				  (const auto &error)
-				  {
-					  std::cerr << error << std::endl;
-				  }
-			  );
-		  },
-		  [&]
-		  (const std::filesystem::path &path,
-		   const std::string &error_message)
-		  {
-			  message((unlink(path.c_str()) == 0 ?
-				   _("removed: ") :
-				   _("could not remove: "))
-				  + static_cast<std::string>(path)
-				  + ": " + error_message);
-		  },
-		  [&]
-		  (const std::filesystem::path &path)
-		  {
-			  if (rmdir(path.c_str()) == 0)
-			  {
-				  message(_("removed empty directory: ") +
-					  static_cast<std::string>(path));
-			  }
-		  });
+	proc_gc_find gc_find{
+		config_global,
+		config_local,
+		config_override,
+		message
+	};
+	
+	gc_find.find();
 
 	// What we do now is pretend that the local or the override directory
 	// is the global directory, and the real global directory is the
@@ -234,46 +340,13 @@ void proc_gc(const std::string &config_global,
 			{&config_local, &config_override}
 		} )
 	{
-		proc_find(*string_ptr, config_global, config_global, ".",
-			  [&]
-			  (const auto &globalpath,
-			   const auto &localpath,
-			   const auto &overridepath,
-			   const std::filesystem::path &relpath)
-			  {
-				  if (localpath)
-					  return; // Global/main exists.
-
-				  message((unlink(globalpath.c_str()) == 0 ?
-					   _("stale (removed): ") :
-					   _("could not remove stale entry: "))
-					  + static_cast<std::string>(globalpath)
-					  + ": "
-					  + static_cast<std::string>(relpath)
-				  );
-			  },
-			  [&]
-			  (const std::filesystem::path &path,
-			   const std::string &error_message)
-			  {
-				  message((unlink(path.c_str()) == 0 ?
-					   _("removed: ") :
-					   _("could not remove: "))
-					  + static_cast<std::string>(path)
-					  + ": "
-					  + error_message);
-			  },
-			  [&]
-			  (const std::filesystem::path &path)
-			  {
-				  if (rmdir(path.c_str()) == 0)
-				  {
-					  message(_("removed empty directory: ")
-						  + static_cast<std::string>(
-							  path
-						  ));
-				  }
-			  });
+		proc_stale_find stale_find{
+			*string_ptr,
+			config_global,
+			config_override,
+			message
+		};
+		stale_find.find();
 	}
 }
 
@@ -455,10 +528,8 @@ proc_new_container_set proc_load(
 		}
 	}
 
-	if (results.empty())
-	{
-		return results; // Empty file
-	}
+	if (results.empty()) // Empty file
+		return results;
 
 	if (!found_version_tag)
 	{
@@ -1001,6 +1072,97 @@ proc_override proc_get_validated_override(const std::string &config_override,
 			     });
 }
 
+namespace {
+#if 0
+}
+#endif
+
+struct proc_loader : proc_find {
+
+	proc_new_container_set containers;
+
+	const std::function<void (const std::string &)> &warning;
+
+	const std::function<void (const std::string &)> &error;
+
+	proc_loader(const std::string &config_global,
+				const std::string &config_local,
+				const std::string &config_override,
+				const std::function<void (const std::string &)> &warning,
+				const std::function<void (const std::string &)> &error)
+		: proc_find{config_global, config_local, config_override},
+		  warning{warning},
+		  error{error}
+	{		
+	}
+
+	void found(const std::filesystem::path &globalpath,
+			const std::optional<std::filesystem::path> &localpath,
+			const std::optional<std::filesystem::path> &overridepath,
+			const std::filesystem::path &relpath) override;
+
+	void invalid(
+		const std::filesystem::path &path,
+		const std::string &message) override;
+};
+
+#if 0
+{
+#endif
+}
+
+void proc_loader::found(
+	const std::filesystem::path &global_path,
+	const std::optional<std::filesystem::path> &local_path,
+	const std::optional<std::filesystem::path> &override_path,
+	const std::filesystem::path &relative_path)
+{
+	proc_override o;
+
+	if (override_path)
+	{
+		std::ifstream i{*override_path};
+
+		if (!i.is_open())
+		{
+			error(static_cast<std::string>(*override_path) + ": " + 
+						strerror(errno));
+			return;
+		}
+
+		bool ignore;
+
+		o=read_override(*override_path, i, ignore, error);
+
+		if (o.get_state() == proc_override::state_t::masked)
+			return;
+	}
+
+	std::string name{
+		local_path ? *local_path:global_path
+	};
+
+	std::ifstream i{name};
+
+	if (!i.is_open())
+	{
+		error(name + ": " + strerror(errno));
+		return;
+	}
+
+	auto results=proc_load(i, name, relative_path, o, error);
+
+	containers.merge(std::move(results));
+}
+
+void proc_loader::invalid(
+	const std::filesystem::path &path,
+	const std::string &message
+)
+{
+	warning(static_cast<std::string>(path) + ": " + message);
+}
+
 proc_new_container_set proc_load_all(
 	const std::string &config_global,
 	const std::string &config_local,
@@ -1010,65 +1172,17 @@ proc_new_container_set proc_load_all(
 	const std::function<void (const std::string &)> &error
 )
 {
-	proc_new_container_set containers;
+	proc_loader loader{
+		config_global,
+		config_local,
+		config_override,
+		warning,
+		error
+	};
 
-	proc_find(config_global,
-		  config_local,
-		  config_override,
-		  [&]
-		  (const auto &global_path,
-		   const auto &local_path,
-		   const auto &override_path,
-		   const auto &relative_path)
-		  {
-			  proc_override o;
+	loader.find();
 
-			  if (override_path)
-			  {
-				  std::ifstream i{*override_path};
-
-				  if (!i.is_open())
-				  {
-					  error(static_cast<std::string>(
-							  *override_path
-						  ) + ": " + strerror(errno));
-					  return;
-				  }
-
-				  bool ignore;
-				  o=read_override(*override_path, i, ignore,
-						  error);
-
-				  if (o.get_state() ==
-				      proc_override::state_t::masked)
-					  return;
-			  }
-
-			  std::string name{
-				  local_path ? *local_path:global_path
-			  };
-
-			  std::ifstream i{name};
-
-			  if (!i.is_open())
-			  {
-				  error(name + ": " + strerror(errno));
-				  return;
-			  }
-			  containers.merge(
-				  proc_load(i, name, relative_path,
-					    o, error)
-			  );
-		  },
-		  [&]
-		  (const auto &path,
-		   const auto &message)
-		  {
-			  warning(static_cast<std::string>(path)
-				  + ": " + message);
-		  });
-
-	return containers;
+	return std::move(loader.containers);
 }
 
 void proc_load_dump(const proc_new_container_set &set)
@@ -1191,46 +1305,74 @@ void proc_load_dump(const proc_new_container_set &set)
 	}
 }
 
+namespace {
+#if 0
+}
+#endif
+
+struct override_loader : proc_find {
+	std::unordered_map<std::string, proc_override> overrides;
+
+	override_loader(const std::string &config_global,
+				const std::string &config_local,
+				const std::string &config_override)
+		: proc_find{config_global, config_local, config_override}
+	{
+	}
+
+	void found(const std::filesystem::path &global_path,
+			const std::optional<std::filesystem::path> &local_path,
+			const std::optional<std::filesystem::path> &override_path,
+			const std::filesystem::path &relative_path) override
+	{
+		if (!override_path)
+			return;
+
+		std::ifstream i{*override_path};
+
+		if (!i.is_open())
+			return;
+
+		bool ignore;
+		overrides.emplace(
+			relative_path,
+			read_override(
+				*override_path,
+				i,
+				ignore,
+				[] (const auto &msg)
+				{
+					std::cerr << msg << "\n";
+				}
+			)
+		);
+	}
+
+	void invalid(
+		const std::filesystem::path &path,
+		const std::string &message
+	) override
+	{
+		std::cerr << path << ": " << message << "\n";
+	}
+};
+
+#if 0
+{
+#endif
+}
+
 std::unordered_map<std::string, proc_override> proc_get_overrides(
 	const std::string &config_global,
 	const std::string &config_local,
 	const std::string &config_override
 )
 {
-	std::unordered_map<std::string, proc_override> ret;
+	override_loader loader{config_global, config_local, config_override};
 
-	proc_find(config_global,
-		  config_local,
-		  config_override,
-		  [&]
-		  (const auto &global_path,
-		   const auto &local_path,
-		   const auto &override_path,
-		   const auto &relative_path)
-		  {
-			  if (!override_path)
-				  return;
+	loader.find();
 
-			  std::ifstream i{*override_path};
-
-			  if (!i.is_open())
-				  return;
-
-			  bool ignore;
-			  ret.emplace(relative_path,
-				      read_override(*override_path, i,
-						    ignore,
-						    []
-						    (const auto &)
-						    {
-						    }
-				      ));
-		  },
-		  [&]
-		  (const auto &, const auto &)
-		  {
-		  });
-	return ret;
+	return std::move(loader.overrides);
 }
 
 bool proc_set_runlevel_config(const std::string &configfile,
@@ -1344,13 +1486,15 @@ static bool proc_validate_and_dump(
 
 		o.set_state(proc_override::state_t::enabled);
 
-		set=proc_load(i, unitfile, relative_path, o,
+		auto results=proc_load(i, unitfile, relative_path, o,
 			      [&]
 			      (const auto &msg)
 			      {
 				      std::cerr << msg << std::endl;
 				      error=true;
 			      });
+
+		set=std::move(results);
 
 		std::cout << _("Loading installed units") << std::endl;
 

@@ -1195,8 +1195,8 @@ void propagate_dependencies_t::doit2(
 				proc_new_containerObj>(dep);
 
 			newc->new_container->type=
-				proc_container_type::synthesized
-				;
+				proc_container_type::synthesized;
+
 			newc->new_container->description=
 				_("(synthesized container for dependency"
 				  " tracking purposes)");
@@ -1632,8 +1632,17 @@ void current_containers_infoObj::install(
 			// Edge case: we removed a container but it's now
 			// a synthesized dependency. Kill it.
 
-			if (iter->first->type !=
-			    proc_container_type::loaded)
+			bool remove_this_container=false;
+
+			switch (iter->first->type) {
+			case proc_container_type::loaded:
+			case proc_container_type::runlevel:
+				break;
+			case proc_container_type::synthesized:
+				remove_this_container=true;
+			}
+
+			if (remove_this_container)
 				to_remove.push_back(iter->first);
 			else if (mode == container_install::update)
 			{

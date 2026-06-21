@@ -9,11 +9,9 @@
 #include "proc_containerfwd.H"
 #include "proc_loaderfwd.H"
 #include "privrequest.H"
-#include <tuple>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <signal.h>
 
 struct group_create_info;
 
@@ -161,8 +159,8 @@ private:
 
 	//! Recursive implementation function.
 	void cgroups_sendsig_parents(
-		const container_state_info::hier_pids &pids,
-		const container_state_info::pid_info *parent,
+		const hier_pid_info::hier_pids &pids,
+		const pid_info *parent,
 		int sig);
 
 public:

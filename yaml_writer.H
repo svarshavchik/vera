@@ -5,9 +5,8 @@
 #ifndef yaml_writer_H
 #define yaml_writer_H
 
-#include <config.h>
+#include "config.h"
 #include <yaml.h>
-#include <fstream>
 #include <string>
 #include <vector>
 #include <memory>
