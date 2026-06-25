@@ -1,16 +1,14 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 
 #include "config.h"
 #include "proc_container.H"
-#include "proc_container_timer.H"
 
 #include "unit_test.H"
 #include "privrequest.H"
 
-#include "proc_loader.H"
 #include "sys/wait.h"
 #include <unistd.h>
 #include <sys/stat.h>
@@ -48,9 +46,7 @@ void respawn1_setup(const std::vector<std::string> &args)
 	a->new_container->respawn_attempts=2;
 	a->new_container->respawn_limit=60;
 
-	proc_containers_install({
-			a
-		}, container_install::update);
+	call_install(container_install::update, a);
 
 	proc_container_start("respawn");
 
@@ -87,9 +83,7 @@ void respawn1_reexec()
 	a->new_container->respawn_attempts=2;
 	a->new_container->respawn_limit=60;
 
-	proc_containers_install({
-			a
-		}, container_install::initial);
+	call_install(container_install::initial, a);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"re-exec: respawn",
@@ -133,9 +127,7 @@ void respawn3_setup(const std::vector<std::string> &args)
 	a->new_container->respawn_attempts=2;
 	a->new_container->respawn_limit=60;
 
-	proc_containers_install({
-			a
-		}, container_install::update);
+	call_install(container_install::update, a);
 
 	proc_container_start("respawn3");
 	runner_finished(2, 0);
@@ -188,9 +180,7 @@ void respawn3_reexec()
 	a->new_container->respawn_attempts=2;
 	a->new_container->respawn_limit=60;
 
-	proc_containers_install({
-			a
-		}, container_install::initial);
+	call_install(container_install::initial, a);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"re-exec: respawn3",
@@ -246,9 +236,7 @@ void noreexec1()
 
 	a->new_container->starting_command="start";
 
-	proc_containers_install({
-			a
-		}, container_install::initial);
+	call_install(container_install::initial, a);
 
 	proc_container_start("noreexec1");
 
@@ -275,9 +263,7 @@ void noreexec2()
 
 	a->new_container->stopping_command="start";
 
-	proc_containers_install({
-			a
-		}, container_install::initial);
+	call_install(container_install::initial, a);
 
 	proc_container_start("noreexec2");
 	proc_container_stop("noreexec2");
@@ -307,9 +293,7 @@ void noreexec3()
 
 	a->new_container->restarting_command="restart";
 
-	proc_containers_install({
-			a
-		}, container_install::initial);
+	call_install(container_install::initial, a);
 
 	proc_container_start("noreexec3");
 	proc_container_restart("noreexec3",

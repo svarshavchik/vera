@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #ifndef proc_container_h
@@ -13,6 +13,7 @@
 
 #include "external_filedesc.H"
 #include "proc_containerfwd.H"
+#include "proc_loaderfwd.H"
 #include "log.H"
 
 //! Container type
@@ -265,6 +266,19 @@ public:
 
 	//! These process containers stop after this one.
 	std::unordered_set<std::string> stopping_after;
+
+	//! All dependency sets, for convenience
+	static inline constexpr std::array<
+		std::unordered_set<std::string> proc_new_containerObj::*, 7
+	> all_dependencies={
+		&proc_new_containerObj::dep_requires,
+		&proc_new_containerObj::dep_requires_first,
+		&proc_new_containerObj::dep_required_by,
+		&proc_new_containerObj::starting_before,
+		&proc_new_containerObj::starting_after,
+		&proc_new_containerObj::stopping_before,
+		&proc_new_containerObj::stopping_after
+	};
 };
 
 typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
@@ -323,9 +337,9 @@ enum class container_install {
 
 //! Install process containers
 
-void proc_containers_install(const proc_new_container_set &new_containers,
+void proc_containers_install(const loaded_containers &lc,
 			     container_install mode);
-void proc_containers_install(proc_new_container_set &&new_containers,
+void proc_containers_install(loaded_containers &&lc,
 			     container_install mode);
 
 //! Trigger a restart

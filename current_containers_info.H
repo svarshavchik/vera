@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #ifndef current_containers_info_h
@@ -10,7 +10,6 @@
 #include "proc_container.H"
 #include "external_filedesc.H"
 #include <sys/wait.h>
-#include <type_traits>
 #include <functional>
 #include <unordered_map>
 #include <memory>
@@ -437,7 +436,7 @@ private:
 public:
 	std::vector<std::tuple<proc_container, proc_container_state>> get();
 
-	void install(proc_new_container_set &new_containers,
+	void install(loaded_containers &lc,
 		     container_install mode);
 
 	std::string runlevel(std::string new_runlevel,

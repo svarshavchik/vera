@@ -278,7 +278,7 @@
       <refmeta>
 	<refentrytitle>vera</refentrytitle>
 	<manvolnum>8</manvolnum>
-	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+	<refmiscinfo>S. Varshavchik</refmiscinfo>
       </refmeta>
 
       <refnamediv>
@@ -961,7 +961,7 @@
       <refmeta>
 	<refentrytitle>vera runlevels</refentrytitle>
 	<manvolnum>8</manvolnum>
-	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+	<refmiscinfo>S. Varshavchik</refmiscinfo>
       </refmeta>
 
       <refnamediv>
@@ -1225,7 +1225,7 @@ multi-user                # Reverts to the previous default runlevel
       <refmeta>
 	<refentrytitle>vera units</refentrytitle>
 	<manvolnum>8</manvolnum>
-	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+	<refmiscinfo>S. Varshavchik</refmiscinfo>
       </refmeta>
 
       <refnamediv>
@@ -3236,7 +3236,7 @@ version: 1
       <refmeta>
 	<refentrytitle>vera logs</refentrytitle>
 	<manvolnum>8</manvolnum>
-	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+	<refmiscinfo>S. Varshavchik</refmiscinfo>
       </refmeta>
 
       <refnamediv>
@@ -3393,7 +3393,7 @@ version: 1
       <refmeta>
 	<refentrytitle>vera extras</refentrytitle>
 	<manvolnum>8</manvolnum>
-	<refmiscinfo>Double Precision, Inc.</refmiscinfo>
+	<refmiscinfo>S. Varshavchik</refmiscinfo>
       </refmeta>
 
       <refnamediv>

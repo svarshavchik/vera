@@ -1,11 +1,10 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 
 #include "config.h"
 #include "proc_container.H"
-#include "proc_container_timer.H"
 #include "proc_loader.H"
 
 #define UNIT_TEST_RUNNER (next_pid=fork())
@@ -14,7 +13,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -31,14 +29,14 @@ void test_failedexec()
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->new_container->starting_command="/no/such/path/failedexec";
 
-	proc_containers_install({
-			b,
-		}, container_install::update);
+	call_install(container_install::update, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
 
 	if (logged_state_changes != std::vector<std::string>{
+
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"failedexec: " + STATE_START_PENDING::label.label_str(),
 			"failedexec: cgroup created",
@@ -59,9 +57,7 @@ void test_capture()
 	b->new_container->start_type=start_type_t::oneshot;
 	b->new_container->stop_type=stop_type_t::automatic;
 
-	proc_containers_install({
-			b,
-		}, container_install::update);
+	call_install(container_install::update, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -78,6 +74,7 @@ void test_capture()
 	do_poll(0);
 
 	if (logged_state_changes != std::vector<std::string>{
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"capture: " + STATE_START_PENDING::label.label_str(),
 			"capture: cgroup created",
@@ -192,9 +189,7 @@ void test_restart()
 	b->new_container->restarting_command="echo restarting-cmd; exit 10";
 	b->new_container->reloading_command="echo reloading-cmd; exit 9";
 
-	proc_containers_install({
-			b,
-		}, container_install::update);
+	call_install(container_install::update, b);
 
 	auto ret=do_test_or_restart(
 		[]
@@ -400,9 +395,7 @@ void test_envvars()
 		"echo \"second|stop|$PREVRUNLEVEL|$RUNLEVEL\" >>log; "
 		+ populated_sh(second->new_container);
 
-	proc_containers_install({
-			first, second,
-		}, container_install::update);
+	call_install(container_install::update, first, second);
 
 	unlink("log");
 
@@ -479,10 +472,9 @@ void test_reexec_nofork()
 
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 
-	proc_containers_install({
-			a,
-			std::make_shared<proc_new_containerObj>("reexec_b"),
-		}, container_install::update);
+	call_install(container_install::update,
+		a,
+		std::make_shared<proc_new_containerObj>("reexec_b"));
 
 	while (!poller_is_transferrable())
 		do_poll(0);
@@ -533,10 +525,9 @@ static int common_reexec_setup()
 		a->new_container->starting_command=cmd.str();
 	}
 
-	proc_containers_install({
-			a,
-			std::make_shared<proc_new_containerObj>("reexec_b"),
-		}, container_install::update);
+	call_install(container_install::update,
+		a,
+		std::make_shared<proc_new_containerObj>("reexec_b"));
 
 	while (!poller_is_transferrable())
 		do_poll(0);
@@ -703,10 +694,9 @@ void testreexec_after(const std::string &socket_str)
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 	a->new_container->starting_command="exit 0";
 
-	proc_containers_install({
-			a,
-			std::make_shared<proc_new_containerObj>("reexec_b"),
-		}, container_install::initial);
+	call_install(container_install::initial,
+		a,
+		std::make_shared<proc_new_containerObj>("reexec_b"));
 
 	std::istringstream i{socket_str};
 	int socketfd;
@@ -731,6 +721,7 @@ void testreexec_after(const std::string &socket_str)
 	if (logged_state_changes != std::vector<std::string>{
 			"re-exec: reexec_a",
 			"re-exec: reexec_b",
+// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"reexec: " RUNLEVEL_PREFIX "networking",
 			"reexec_a: container was started as a dependency",
 			"reexec_a: reactivated after re-exec",

@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #include "config.h"
@@ -947,19 +947,17 @@ void proc_containers_reset()
 	get_containers_info(&replacement);
 }
 
-void proc_containers_install(const proc_new_container_set &new_containers,
+void proc_containers_install(const loaded_containers &lc,
 			     container_install mode)
 {
-	proc_new_container_set copy{new_containers};
-
-	proc_containers_install(std::move(copy), mode);
+	proc_containers_install(loaded_containers{lc}, mode);
 }
 
-void proc_containers_install(proc_new_container_set &&new_containers,
+void proc_containers_install(loaded_containers &&lc,
 			     container_install mode)
 {
 	install_sighandlers();
-	get_containers_info(nullptr)->install(new_containers, mode);
+	get_containers_info(nullptr)->install(lc, mode);
 }
 
 namespace {
@@ -1264,10 +1262,12 @@ void propagate_dependencies_t::doit2(
 }
 
 void current_containers_infoObj::install(
-	proc_new_container_set &new_containers,
+	loaded_containers &lc,
 	container_install mode
 )
 {
+	proc_new_container_set &new_containers=lc.containers;
+
 	current_containers new_current_containers;
 	new_all_dependency_info_t new_all_dependency_info;
 

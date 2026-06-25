@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 
@@ -29,7 +29,9 @@ void loadtest(const std::string &name, bool enabled)
 				  std::cout << "error: " << error << "\n";
 			  }
 		);
-	proc_load_dump(std::move(results));
+
+	loaded_containers lc{std::move(results)};
+	proc_load_dump(lc);
 }
 
 std::vector<std::string> search_default_runlevel(const runlevels &rl)

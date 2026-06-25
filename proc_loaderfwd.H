@@ -1,5 +1,5 @@
 /*
-** Copyright 2022-2024 Double Precision, Inc.
+** Copyright 2022-2024 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #ifndef proc_loaderfwd_h
@@ -9,9 +9,10 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-#include <memory>
-#include <exception>
+#include <stdexcept>
 #include "messages.H"
+
+struct loaded_containers;
 
 //! Container overrides
 

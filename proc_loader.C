@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 Double Precision, Inc.
+** Copyright 2022 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #include "config.h"
@@ -350,6 +350,29 @@ void proc_gc(const std::string &config_global,
 	}
 }
 
+bool is_in_session(
+	std::string_view path,
+	std::string_view name
+)
+{
+	if (path.size() < name.size())
+		return false;
+	if (path.substr(0, name.size()) != name)
+		return false;
+
+	path.remove_prefix(name.size());
+	return path.empty() || path.front() == '/';
+}
+
+std::string_view is_in_session_prefix(std::string_view path)
+{
+	if (is_in_session(path, INSTALLED_SESSIONS_PREFIX))
+		return INSTALLED_SESSIONS_PREFIX;
+	if (is_in_session(path, ACTIVE_SESSIONS_PREFIX))
+		return ACTIVE_SESSIONS_PREFIX;
+
+	return {};
+}
 
 static bool proc_load_container(
 	parsed_yaml &parsed,
@@ -516,6 +539,79 @@ proc_new_container_set proc_load(
 					    error);
 			    },
 			    error))
+		{
+			results.clear();
+			return results;
+		}
+
+		std::string_view session_type =
+			is_in_session_prefix(unit_path.native());
+
+		if (session_type == ACTIVE_SESSIONS_PREFIX)
+		{
+			error(name + _(": active session containers "
+				"cannot be loaded."));
+			results.clear();
+			return results;
+		}
+
+		if (!session_type.empty() &&
+		    session_type != INSTALLED_SESSIONS_PREFIX)
+		{
+			error(name + _(": unknown container type, please "
+				"implement me!"));
+			results.clear();
+			return results;
+		}
+
+		// At this point, session_type is either empty or a
+		// INSTALLED_SESSIONS_PREFIX.
+
+		const char *dependency_restriction_msg =
+			(!session_type.empty()) ?
+				_("Session containers cannot have a dependency "
+				  "relationship with a non-session container") :
+				_("Non-session containers cannot have a "
+				  "dependency relationship with a "
+				  "session container");
+
+		const char *alternative_group_restriction_msg =
+			(!session_type.empty()) ?
+				_("Session containers cannot be in a "
+				   "non-session alternative group") :
+				_("Non-session containers cannot be in a "
+				   "session alternative group");
+
+		bool invalid_dependency_detected=false;
+
+		for (const auto &dep: proc_new_containerObj::all_dependencies)
+		{
+			for (const auto &name: (*nc).*dep)
+			{
+				if (session_type !=
+				    is_in_session_prefix(name))
+				{
+					error(unit_path.native() + ": " +
+					      dependency_restriction_msg +
+					      ": " + name);
+					invalid_dependency_detected=true;
+				}
+			}
+		}
+
+		if (!nc->new_container->alternative_group.empty() &&
+		    session_type != is_in_session_prefix(
+				nc->new_container->alternative_group
+			)
+		)
+		{
+			error(unit_path.native() + ": " +
+			      alternative_group_restriction_msg +
+			      ": " + nc->new_container->alternative_group);
+			invalid_dependency_detected=true;
+		}
+
+		if (invalid_dependency_detected)
 		{
 			results.clear();
 			return results;
@@ -1079,7 +1175,7 @@ namespace {
 
 struct proc_loader : proc_find {
 
-	proc_new_container_set containers;
+	loaded_containers newly_loaded_containers;
 
 	const std::function<void (const std::string &)> &warning;
 
@@ -1093,7 +1189,11 @@ struct proc_loader : proc_find {
 		: proc_find{config_global, config_local, config_override},
 		  warning{warning},
 		  error{error}
-	{		
+	{
+		newly_loaded_containers.all_sessions.emplace(
+			INSTALLED_SESSIONS_PREFIX,
+			proc_container_set{}
+		);
 	}
 
 	void found(const std::filesystem::path &globalpath,
@@ -1152,7 +1252,16 @@ void proc_loader::found(
 
 	auto results=proc_load(i, name, relative_path, o, error);
 
-	containers.merge(std::move(results));
+
+	if (!results.empty() && is_in_session(
+			(*results.begin())->new_container->name,
+			INSTALLED_SESSIONS_PREFIX
+			))
+		for (auto &pc:results)
+			newly_loaded_containers.all_sessions[
+				INSTALLED_SESSIONS_PREFIX
+			].insert(pc->new_container);
+	newly_loaded_containers.containers.merge(std::move(results));
 }
 
 void proc_loader::invalid(
@@ -1163,7 +1272,7 @@ void proc_loader::invalid(
 	warning(static_cast<std::string>(path) + ": " + message);
 }
 
-proc_new_container_set proc_load_all(
+loaded_containers proc_load_all(
 	const std::string &config_global,
 	const std::string &config_local,
 	const std::string &config_override,
@@ -1182,11 +1291,15 @@ proc_new_container_set proc_load_all(
 
 	loader.find();
 
-	return std::move(loader.containers);
+	return std::move(loader.newly_loaded_containers);
 }
 
-void proc_load_dump(const proc_new_container_set &set)
+void proc_load_dump(const loaded_containers &loaded)
 {
+	auto &set=loaded.containers;
+	auto installed_sessions_it=
+		loaded.all_sessions.find(INSTALLED_SESSIONS_PREFIX);
+
 	std::vector<proc_new_container> list;
 
 	list.reserve(set.size());
@@ -1207,6 +1320,10 @@ void proc_load_dump(const proc_new_container_set &set)
 		std::cout << pfix;
 		pfix = "\n";
 		auto &name=n->new_container->name;
+
+		if (installed_sessions_it != loaded.all_sessions.end() &&
+		    installed_sessions_it->second.count(n->new_container))
+			std::cout << name << ":installed-session\n";
 
 		std::cout << name
 			  << ":start=" << n->new_container->get_start_type()
@@ -1448,7 +1565,7 @@ static bool proc_validate_and_dump(
 	const std::string &config_local,
 	const std::string &config_override,
 	const std::function<void (const std::string &)> &log_message,
-	const std::function<void (const proc_new_container_set &)> &dump
+	const std::function<void (const loaded_containers &)> &dump
 )
 {
 	std::ifstream i{unitfile};
@@ -1520,8 +1637,8 @@ static bool proc_validate_and_dump(
 		// ignored.
 
 		new_configs=set;
-		new_configs.insert(current_configs.begin(),
-				   current_configs.end());
+		new_configs.insert(current_configs.containers.begin(),
+				   current_configs.containers.end());
 	} catch (...) {
 		std::cerr << unitfile << _(": parsing error")
 			  << std::endl;
@@ -1531,7 +1648,8 @@ static bool proc_validate_and_dump(
 	if (error)
 		return false;
 
-	dump(set);
+	loaded_containers lc{set};
+	dump(lc);
 
 	for (auto &s:set)
 	{

@@ -527,10 +527,24 @@ $VALGRIND ./testprocloader setoverride overridedir unit2-runlevel1 enabled >load
 $VALGRIND ./testprocloader setoverride overridedir unit3-runlevel2 enabled >loadtest.out
 $VALGRIND ./testprocloader setoverride overridedir unit5-masked masked >loadtest.out
 
+mkdir -p globaldir/system/sessions/installed
+
+cat >globaldir/system/sessions/installed/unit1-installed-session <<EOF
+name: unit1-installed-session
+version: 1
+EOF
+
+$VALGRIND ./testprocloader setoverride overridedir unit2-runlevel1 enabled >loadtest.out
+$VALGRIND ./testprocloader setoverride overridedir unit3-runlevel2 enabled >loadtest.out
+$VALGRIND ./testprocloader setoverride overridedir unit5-masked masked >loadtest.out
+
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir >loadtest.out
 
-cat loadtest.out
 cat >loadtest.txt <<EOF
+system/sessions/installed/unit1-installed-session:installed-session
+system/sessions/installed/unit1-installed-session:start=forking:stop=manual
+system/sessions/installed/unit1-installed-session:sigterm:notify=parents
+
 unit2-runlevel1:start=forking:stop=manual
 unit2-runlevel1:sigterm:notify=parents
 unit2-runlevel1:required-by runlevel1
@@ -565,6 +579,97 @@ built-in:sigterm:notify=parents
 EOF
 
 diff -U 3 loadtest.expected loadtest.out
+
+cat >loadtest.txt <<EOF
+name: namedtest
+requires:
+   - prerequisite1
+   - subtest/prerequisite2
+   - ../something
+alternative-group: ../default-group
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest system/sessions/installed/namedtest \
+	<loadtest.txt >loadtest.out
+
+cat >loadtest.expected <<EOF
+error: system/sessions/installed/namedtest: Session containers cannot have a dependency relationship with a non-session container: system/sessions/something
+error: system/sessions/installed/namedtest: Session containers cannot be in a non-session alternative group: system/sessions/default-group
+EOF
+
+diff -U 3 loadtest.expected loadtest.out
+
+cat >loadtest.txt <<EOF
+name: namedtest
+requires:
+   - prerequisite1
+   - subtest/prerequisite2
+   - sessions/installed/something
+alternative-group: sessions/installed/alternative-group
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest system/namedtest \
+	<loadtest.txt >loadtest.out
+
+cat >loadtest.expected <<EOF
+error: system/namedtest: Non-session containers cannot have a dependency relationship with a session container: system/sessions/installed/something
+error: system/namedtest: Non-session containers cannot be in a session alternative group: system/sessions/installed/alternative-group
+EOF
+
+diff -U 3 loadtest.expected loadtest.out
+
+cat >loadtest.txt <<EOF
+name: namedtest
+requires:
+   - prerequisite1
+   - subtest/prerequisite2
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest system/sessions/installed/namedtest \
+	<loadtest.txt >loadtest.out
+
+cat >loadtest.expected <<EOF
+system/sessions/installed/namedtest:start=forking:stop=manual
+system/sessions/installed/namedtest:sigterm:notify=parents
+system/sessions/installed/namedtest:requires system/sessions/installed/prerequisite1
+system/sessions/installed/namedtest:requires system/sessions/installed/subtest/prerequisite2
+EOF
+
+diff -U 3 loadtest.expected loadtest.out
+
+cat >loadtest.txt <<EOF
+name: namedtest
+
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest system/sessions/active/namedtest \
+	<loadtest.txt >loadtest.out
+
+cat >loadtest.expected <<EOF
+error: system/sessions/active/namedtest: active session containers cannot be loaded.
+EOF
+
+diff -U 3 loadtest.expected loadtest.out
+
+cat >loadtest.txt <<EOF
+name: namedtest
+requires:
+   - prerequisite1
+   - subtest/prerequisite2
+   - sessions/active/something
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadtest system/namedtest \
+	<loadtest.txt >loadtest.out
+
+cat >loadtest.expected <<EOF
+error: system/namedtest: Non-session containers cannot have a dependency relationship with a session container: system/sessions/installed/something
+EOF
 
 rm -rf globaldir
 mkdir -p globaldir

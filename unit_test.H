@@ -161,4 +161,22 @@ void create_fake_proc(
 	const std::string &exe,
 	const std::vector<std::string> &args);
 
+template<typename ...Args>
+concept proc_new_container_list =
+	(... && std::convertible_to<Args, proc_new_container>);
+
+template<proc_new_container_list ...Args>
+void call_install(container_install mode, Args && ...args)
+{
+	if constexpr (sizeof...(args) > 0)
+		proc_containers_install(
+			loaded_containers{proc_new_container_set{{
+				std::forward<Args>(args)...
+			}}},
+			mode
+		);
+	else
+		proc_containers_install(loaded_containers{}, mode);
+}
+
 #endif

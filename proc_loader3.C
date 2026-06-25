@@ -1,5 +1,5 @@
 /*
-** Copyright 2024 Double Precision, Inc.
+** Copyright 2024 S. Varshavchik
 a** See COPYING for distribution information.
 */
 #include "config.h"

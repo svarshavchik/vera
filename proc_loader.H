@@ -1,5 +1,5 @@
 /*
-** Copyright 2022-2024 Double Precision, Inc.
+** Copyright 2022-2024 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #ifndef proc_loader_h
@@ -11,6 +11,7 @@
 #include <functional>
 #include <string>
 #include <iostream>
+#include <string_view>
 #include <optional>
 
 /*! Find pathnames to load
@@ -98,6 +99,17 @@ void proc_gc(const std::string &config_global,
 
 extern std::string overrideconfigdir();
 
+/*! Container scope, returned from proc_load()
+
+Indicates if the loaded containers are regular containers or installed
+session containers.
+
+*/
+enum class container_scope {
+	regular,
+	installed_session
+};
+
 /*! Attempt to load a container configuration
 
 Parameters:
@@ -145,6 +157,38 @@ void proc_set_override(
 	const proc_override &o,
 	const std::function<void (const std::string &)> &error);
 
+/*! This is returned by proc_load_all()
+
+*/
+struct loaded_containers {
+
+	/*! All containers in the global config directory...
+
+	... as overridden/masked by the local config directory and the
+	override config directory.
+	*/
+	proc_new_container_set containers;
+
+	/*! All installed and active sessions
+
+	The map key is the session's prefix. INSTALLED_SESSION_PREFIX is used
+	for the installed, containers that define all containers in a session.
+
+	proc_load_all() returns all_sessions that have an
+	INSTALLED_SESSION_PREFIX.
+
+	The name of every container in the map key effectively begins with
+	the prefix. A new session is created by taking all the
+	INSTALLED_SESSION_PREFIX containers, cloning them under their active
+	session prefix, and storing them under the active prefix. Each
+	session container's name has its prefix replaced by the active prefix
+	string. The newly active sessions are also added to the containers set,
+	and their dependencies also have their prefixes replaced.
+
+	*/
+	std::unordered_map<std::string, proc_container_set> all_sessions;
+};
+
 /*! Load all container specifications
 
 Calls proc_find(), followed by proc_load() for each found container.
@@ -156,7 +200,7 @@ are reported as error messages.
 
  */
 
-proc_new_container_set proc_load_all(
+loaded_containers proc_load_all(
 	const std::string &config_global,
 	const std::string &config_local,
 	const std::string &config_override,
@@ -184,7 +228,7 @@ proc_override proc_get_validated_override(const std::string &config_override,
 
 //! Dump the loaded process containers to std::cout
 
-void proc_load_dump(const proc_new_container_set &res);
+void proc_load_dump(const loaded_containers &res);
 
 //! Return the default runlevel configuration
 
@@ -263,6 +307,28 @@ bool proc_validate(const std::string &unitfile,
 
 #define RUNLEVEL_PREFIX_BASE "runlevel "
 #define RUNLEVEL_PREFIX SYSTEM_PREFIX RUNLEVEL_PREFIX_BASE
+
+#define INSTALLED_SESSIONS_PREFIX	SYSTEM_PREFIX "sessions/installed"
+#define ACTIVE_SESSIONS_PREFIX		SYSTEM_PREFIX "sessions/active"
+
+/*! Determine whether a container "path" is in the session "name".
+
+Sessions are just pre-defined hierarchies of containers. This is just a fancy
+way of checking if "path" is either "name" or a subdirectory of "name".
+
+*/
+bool is_in_session(
+	std::string_view path,
+	std::string_view name
+);
+
+/*! Determine if "path" is in the INSTALLED_SESSIONS_PREFIX or
+ACTIVE_SESSIONS_PREFIX.
+
+Returns the corresponding prefix if "path" is in either, or an empty
+string if neither.
+*/
+std::string_view is_in_session_prefix(std::string_view path);
 
 #define SIGINT_UNIT     "sigint"
 #define SIGHUP_UNIT     "sighup"
