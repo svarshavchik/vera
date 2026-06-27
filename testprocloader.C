@@ -313,11 +313,11 @@ int main(int argc, char **argv)
 
 		return 0;
 	}
-	if (args.size() == 5 && args[1] == "loadalltest")
+	if (args.size() >= 5 && args[1] == "loadalltest")
 	{
 		std::vector<std::string> messages;
 
-		proc_load_dump(
+		auto loaded=
 			proc_load_all(
 				args[2], args[3], args[4],
 				[&]
@@ -329,9 +329,35 @@ int main(int argc, char **argv)
 				(const auto &message)
 				{
 					messages.push_back("E: " + message);
-				})
-		);
+				});
 
+		for (size_t i=5; i<args.size(); ++i)
+		{
+			std::string session_path=
+				ACTIVE_SESSIONS_PREFIX "/";
+			session_path += args[i];
+
+			std::cout << (
+				loaded.create_new_session(
+					session_path,
+					[&]
+					(const auto &container_name,
+					 const auto &error_message)
+					{
+						std::string e{"E: "};
+
+						e += container_name;
+						e += ": ";
+						e += error_message;
+						messages.push_back(e);
+					}
+				) ?
+					"Successfully created session " :
+					"Failed to create session ")
+					<< session_path << std::endl;
+		}
+
+		proc_load_dump(loaded);
 		std::sort(messages.begin(), messages.end());
 
 		for (auto &m:messages)

@@ -172,7 +172,7 @@ struct loaded_containers {
 	/*! All installed and active sessions
 
 	The map key is the session's prefix. INSTALLED_SESSION_PREFIX is used
-	for the installed, containers that define all containers in a session.
+	for the installed containers that define all containers in a session.
 
 	proc_load_all() returns all_sessions that have an
 	INSTALLED_SESSION_PREFIX.
@@ -187,6 +187,30 @@ struct loaded_containers {
 
 	*/
 	std::unordered_map<std::string, proc_container_set> all_sessions;
+
+	/*! Create a new session
+
+	Take all the INSTALLED_SESSION_PREFIX containers, clone them using
+	the active session prefix, which should be "<username>/<number>",
+	and store them under the active prefix.
+
+	Each session container's name has its prefix replaced by the active
+	prefix string.
+
+	The newly active sessions are also added to the containers set,
+	and their dependencies also have their prefixes replaced.
+
+	The error callback gets invoked with the full name of a new session
+	that failed to be created. Otherwise you can find the new session
+	under the active session prefix in the all_sessions map.
+	*/
+
+	bool create_new_session(
+		const std::string &active_session_path,
+		const std::function<void (
+			const std::string_view &container_name,
+			const std::string_view &error_message
+		)> &error);
 };
 
 /*! Load all container specifications

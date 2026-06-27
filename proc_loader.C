@@ -369,8 +369,31 @@ std::string_view is_in_session_prefix(std::string_view path)
 	if (is_in_session(path, INSTALLED_SESSIONS_PREFIX))
 		return INSTALLED_SESSIONS_PREFIX;
 	if (is_in_session(path, ACTIVE_SESSIONS_PREFIX))
-		return ACTIVE_SESSIONS_PREFIX;
+	{
+		size_t i=sizeof(ACTIVE_SESSIONS_PREFIX)-1;
 
+		size_t j=0;
+
+		// We have:
+		// ACTIVE_SESSIONS_PREFIX/<username>/<session-number>/<unitname>
+		//
+		// Search for the third slash, which delimits the session name
+		// prefix.
+
+		for (; i < path.size(); ++i)
+		{
+			if (path[i] == '/')
+			{
+				++j;
+
+				if (j == 3)
+				{
+					break;
+				}
+			}
+		}
+		return path.substr(0, i);
+	}
 	return {};
 }
 
@@ -547,7 +570,7 @@ proc_new_container_set proc_load(
 		std::string_view session_type =
 			is_in_session_prefix(unit_path.native());
 
-		if (session_type == ACTIVE_SESSIONS_PREFIX)
+		if (is_in_session(unit_path.native(), ACTIVE_SESSIONS_PREFIX))
 		{
 			error(name + _(": active session containers "
 				"cannot be loaded."));
@@ -1250,6 +1273,8 @@ void proc_loader::found(
 
 	auto results=proc_load(i, name, relative_path, o, error);
 
+	// The constructor created the INSTALLED_SESSIONS_PREFIX with an
+	// empty set. Populate it with all session containers.
 
 	if (!results.empty() && is_in_session(
 			(*results.begin())->new_container->name,
@@ -1260,6 +1285,113 @@ void proc_loader::found(
 				INSTALLED_SESSIONS_PREFIX
 			].insert(pc->new_container);
 	newly_loaded_containers.containers.merge(std::move(results));
+}
+
+bool loaded_containers::create_new_session(
+	const std::string &active_session_path,
+	const std::function<void (
+		const std::string_view &container_name,
+		const std::string_view &error_message
+	)> &error)
+{
+	// Sanity check: can't create a session that already exists.
+
+	if (all_sessions.find(active_session_path) !=
+		all_sessions.end())
+	{
+		error(
+			active_session_path,
+			"session already exists"
+		);
+		return false;
+	}
+
+	proc_new_container_set new_session;
+
+	for (auto &pc: all_sessions[INSTALLED_SESSIONS_PREFIX])
+	{
+		auto nc=containers.find(pc);
+
+		if (nc == containers.end())
+		{
+			error(
+				pc->name,
+				"container not found in the containers set"
+			);
+			return false;
+		}
+		auto new_container=std::make_shared<proc_new_containerObj>(
+			INSTALLED_SESSIONS_PREFIX,
+			active_session_path,
+			*nc
+		);
+		if (!proc_validpath(new_container->new_container->name))
+		{
+			error(
+				new_container->new_container->name,
+				"invalid path"
+			);
+			return false;
+		}
+		if (!new_container->new_container->alternative_group.empty() &&
+		    !proc_validpath(
+			    new_container->new_container->alternative_group
+		    ))
+		{
+			error(
+				new_container->new_container->alternative_group,
+				"invalid alternative group"
+			);
+			return false;
+		}
+
+		for (const auto &dependency_list :
+			proc_new_containerObj::all_dependencies)
+		{
+			for (auto &existing_dependency :
+				(*new_container).*dependency_list)
+			{
+				if (!proc_validpath(existing_dependency))
+				{
+					error(
+						existing_dependency,
+						"invalid dependency"
+					);
+
+					return false;
+				}
+			}
+		}
+		new_session.insert(new_container);
+
+		// Sanity check: this container doesn't alredy exist!
+
+		if (containers.find(new_container) != containers.end())
+		{
+			error(
+				new_container->new_container->name,
+				"container already exists"
+			);
+			return false;
+		}
+	}
+
+	// All the error checking is done. Time to get down to business.
+	// We have two things to do:
+	//
+	// * Add the active session path to the all_sessions map and populate
+	//   the set of containers that are part of this session.
+	//
+	// * Add the containers to the containers set.
+
+	auto &new_session_containers = all_sessions[active_session_path];
+
+	for (auto &nc : new_session)
+		new_session_containers.insert(nc->new_container);
+
+	containers.merge(std::move(new_session));
+
+	return true;
 }
 
 void proc_loader::invalid(

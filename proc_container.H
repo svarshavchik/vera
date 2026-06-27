@@ -227,6 +227,26 @@ public:
 	//! Constructor
 	proc_containerObj(const std::string &name);
 
+	/*! Clone an existing container for a new session.
+
+	This is used when a session is started. The installed_container is
+	expected to have an is_in_session_prefix of INSTALLED_SESSIONS_PREFIX.
+
+	The passed in active_session_path is expected to have an
+	is_in_session_prefix of
+	ACTIVE_SESSIONS_PREFIX/<username>/<session number>.
+
+	We calculate the new container's name and alternative_group based on
+	active_session_path and installed_container->name.
+
+	IMPORTANT: the caller is responsible for checking that both the name
+	and the alternative_group is proc_validpath().
+
+	*/
+	proc_containerObj(const std::string_view &installed_session_prefix,
+			  const std::string_view &active_session_path,
+			  const proc_container &installed_container);
+
 	//! Destructor
 	~proc_containerObj();
 
@@ -259,6 +279,14 @@ private:
 	}
 };
 
+//! Forward declaration.
+
+class proc_new_containerObj;
+
+//! A shared pointer to a proc_new_containerObj.
+
+typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
+
 //! Dependencies for a new container.
 
 //! Used when installing a new set of containers. Includes additional data
@@ -278,6 +306,13 @@ public:
 		: new_container{std::make_shared<proc_containerObj>(name)}
 	{
 	}
+
+	//! Constructor used when creating a new session
+	proc_new_containerObj(
+		const std::string_view &installed_session_prefix,
+		const std::string_view &active_session_path,
+		const proc_new_container &installed_container
+	);
 
 	//! What other process containers this one requires
 	std::unordered_set<std::string> dep_requires;
@@ -313,8 +348,6 @@ public:
 		&proc_new_containerObj::stopping_after
 	};
 };
-
-typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
 
 //! A set of proc_new_containers.
 

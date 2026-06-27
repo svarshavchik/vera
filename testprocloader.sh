@@ -820,5 +820,141 @@ version: 1
 EOF
 diff -U 3 overridedir/subdir/name1 loadtest.txt
 
+rm -rf globaldir localdir overridedir
+
+mkdir -p globaldir/system/sessions/installed localdir overridedir
+
+cat >globaldir/system/sessions/installed/sess1 <<EOF
+name: sess1
+requires:
+  - sess2
+alternative-group: altgroup
+version: 1
+EOF
+
+cat >globaldir/system/sessions/installed/sess2 <<EOF
+name: sess2
+alternative-group: altgroup
+version: 1
+EOF
+
+cat >globaldir/system/sessions/installed/something <<EOF
+name: something
+required-by:
+  - sess2
+version: 1
+EOF
+
+cat >globaldir/system/startup <<EOF
+name: startup
+description: system startup
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
+   user1/1 user2/2 user1/1 >loadtest.out
+cat >loadtest.txt <<EOF
+Successfully created session system/sessions/active/user1/1
+Successfully created session system/sessions/active/user2/2
+Failed to create session system/sessions/active/user1/1
+system/sessions/active/user1/1/sess1:start=forking:stop=manual
+system/sessions/active/user1/1/sess1:alternative-group=system/sessions/active/user1/1/altgroup
+system/sessions/active/user1/1/sess1:sigterm:notify=parents
+system/sessions/active/user1/1/sess1:requires system/sessions/active/user1/1/sess2
+
+system/sessions/active/user1/1/sess2:start=forking:stop=manual
+system/sessions/active/user1/1/sess2:alternative-group=system/sessions/active/user1/1/altgroup
+system/sessions/active/user1/1/sess2:sigterm:notify=parents
+
+system/sessions/active/user1/1/something:start=forking:stop=manual
+system/sessions/active/user1/1/something:sigterm:notify=parents
+system/sessions/active/user1/1/something:required-by system/sessions/active/user1/1/sess2
+
+system/sessions/active/user2/2/sess1:start=forking:stop=manual
+system/sessions/active/user2/2/sess1:alternative-group=system/sessions/active/user2/2/altgroup
+system/sessions/active/user2/2/sess1:sigterm:notify=parents
+system/sessions/active/user2/2/sess1:requires system/sessions/active/user2/2/sess2
+
+system/sessions/active/user2/2/sess2:start=forking:stop=manual
+system/sessions/active/user2/2/sess2:alternative-group=system/sessions/active/user2/2/altgroup
+system/sessions/active/user2/2/sess2:sigterm:notify=parents
+
+system/sessions/active/user2/2/something:start=forking:stop=manual
+system/sessions/active/user2/2/something:sigterm:notify=parents
+system/sessions/active/user2/2/something:required-by system/sessions/active/user2/2/sess2
+
+system/sessions/installed/sess1:installed-session
+system/sessions/installed/sess1:start=forking:stop=manual
+system/sessions/installed/sess1:alternative-group=system/sessions/installed/altgroup
+system/sessions/installed/sess1:sigterm:notify=parents
+system/sessions/installed/sess1:requires system/sessions/installed/sess2
+
+system/sessions/installed/sess2:installed-session
+system/sessions/installed/sess2:start=forking:stop=manual
+system/sessions/installed/sess2:alternative-group=system/sessions/installed/altgroup
+system/sessions/installed/sess2:sigterm:notify=parents
+
+system/sessions/installed/something:installed-session
+system/sessions/installed/something:start=forking:stop=manual
+system/sessions/installed/something:sigterm:notify=parents
+system/sessions/installed/something:required-by system/sessions/installed/sess2
+
+system/startup:start=forking:stop=manual
+system/startup:description=system startup
+system/startup:sigterm:notify=parents
+E: system/sessions/active/user1/1: session already exists
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+rm -rf globaldir localdir overridedir
+
+mkdir -p globaldir/system/sessions/installed localdir overridedir
+
+BIGNAME=`dd if=/dev/zero bs=128 count=1 2>/dev/null | tr '\0' 'A'`
+
+cat >globaldir/system/sessions/installed/$BIGNAME <<EOF
+name: $BIGNAME
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
+    $BIGNAME/1 | grep '^E:' >loadtest.out
+
+cat >loadtest.txt <<EOF
+E: system/sessions/active/${BIGNAME}/1/${BIGNAME}: invalid path
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+rm -rf globaldir/system/sessions/installed/$BIGNAME
+
+cat >globaldir/system/sessions/installed/sess3 <<EOF
+name: sess3
+requires: $BIGNAME
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
+    $BIGNAME/1 | grep '^E:' >loadtest.out
+
+cat >loadtest.txt <<EOF
+E: system/sessions/active/${BIGNAME}/1/${BIGNAME}: invalid dependency
+EOF
+diff -U 3 loadtest.txt loadtest.out
+
+cat >globaldir/system/sessions/installed/sess3 <<EOF
+name: sess3
+alternative-group: $BIGNAME
+version: 1
+EOF
+
+$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
+    $BIGNAME/1 | grep '^E:' >loadtest.out
+
+cat >loadtest.txt <<EOF
+E: system/sessions/active/${BIGNAME}/1/${BIGNAME}: invalid alternative group
+EOF
+
+diff -U 3 loadtest.txt loadtest.out
+
 rm -rf globaldir localdir overridedir \
     loadtest.txt loadtest.out loadtest.expected
