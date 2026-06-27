@@ -5,13 +5,10 @@
 #include "config.h"
 #include "log.H"
 #include "messages.H"
-#include "proc_container.H"
+#include "proc_container.H" // IWYU pragma: keep
 #include "proc_container_timer.H"
-#include "switchlog.H"
-#include <string.h>
 #include <functional>
 #include <iostream>
-#include <iomanip>
 #include <sstream>
 #include <algorithm>
 #include <syslog.h>
@@ -35,7 +32,7 @@ void log_state_change(const proc_container &pc,
 					      new_container_state.end()});
 #else
 	auto &descr_for_logging =
-		pc->description.empty() ? pc->name:pc->description;
+		pc->meta->description.empty() ? pc->name:pc->meta->description;
 
 	std::string logged_message;
 

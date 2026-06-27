@@ -27,7 +27,7 @@ void test_failedexec()
 	auto b=std::make_shared<proc_new_containerObj>("failedexec");
 
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	b->new_container->starting_command="/no/such/path/failedexec";
+	b->new_container->meta->starting_command="/no/such/path/failedexec";
 
 	call_install(container_install::update, b);
 
@@ -53,9 +53,9 @@ void test_capture()
 	auto b=std::make_shared<proc_new_containerObj>("capture");
 
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	b->new_container->starting_command="./testcontroller2fdleak";
-	b->new_container->start_type=start_type_t::oneshot;
-	b->new_container->stop_type=stop_type_t::automatic;
+	b->new_container->meta->starting_command="./testcontroller2fdleak";
+	b->new_container->meta->start_type=start_type_t::oneshot;
+	b->new_container->meta->stop_type=stop_type_t::automatic;
 
 	call_install(container_install::update, b);
 
@@ -184,10 +184,10 @@ void test_restart()
 
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	b->new_container->starting_command="echo starting-cmd; exit 0";
-	b->new_container->stopping_command="echo stopping-cmd; exit 0";
-	b->new_container->restarting_command="echo restarting-cmd; exit 10";
-	b->new_container->reloading_command="echo reloading-cmd; exit 9";
+	b->new_container->meta->starting_command="echo starting-cmd; exit 0";
+	b->new_container->meta->stopping_command="echo stopping-cmd; exit 0";
+	b->new_container->meta->restarting_command="echo restarting-cmd; exit 10";
+	b->new_container->meta->reloading_command="echo reloading-cmd; exit 9";
 
 	call_install(container_install::update, b);
 
@@ -372,26 +372,26 @@ void test_envvars()
 {
 	auto first=std::make_shared<proc_new_containerObj>("first");
 
-	first->new_container->stop_type=stop_type_t::target;
+	first->new_container->meta->stop_type=stop_type_t::target;
 
 	first->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
 	first->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 
-	first->new_container->starting_command=
+	first->new_container->meta->starting_command=
 		"echo \"first|start|$PREVRUNLEVEL|$RUNLEVEL\" >>log";
-	first->new_container->stopping_command=
+	first->new_container->meta->stopping_command=
 		"echo \"first|stop|$PREVRUNLEVEL|$RUNLEVEL\" >>log; "
 		+ populated_sh(first->new_container);
 
 	auto second=std::make_shared<proc_new_containerObj>("second");
 
-	second->new_container->stop_type=stop_type_t::target;
+	second->new_container->meta->stop_type=stop_type_t::target;
 	second->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 	second->starting_after.insert("first");
 	second->stopping_before.insert("first");
-	second->new_container->starting_command=
+	second->new_container->meta->starting_command=
 		"echo \"second|start|$PREVRUNLEVEL|$RUNLEVEL\" >>log";
-	second->new_container->stopping_command=
+	second->new_container->meta->stopping_command=
 		"echo \"second|stop|$PREVRUNLEVEL|$RUNLEVEL\" >>log; "
 		+ populated_sh(second->new_container);
 
@@ -522,7 +522,7 @@ static int common_reexec_setup()
 
 		cmd << "./testcontroller2 server " << sockets[1];
 
-		a->new_container->starting_command=cmd.str();
+		a->new_container->meta->starting_command=cmd.str();
 	}
 
 	call_install(container_install::update,
@@ -692,7 +692,7 @@ void testreexec_after(const std::string &socket_str)
 	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
 
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
-	a->new_container->starting_command="exit 0";
+	a->new_container->meta->starting_command="exit 0";
 
 	call_install(container_install::initial,
 		a,

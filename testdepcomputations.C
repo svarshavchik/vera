@@ -142,7 +142,7 @@ void test_deps2()
 	auto b=std::make_shared<proc_containerObj>("b");
 	auto c=std::make_shared<proc_containerObj>("c");
 
-	runlevel->type=proc_container_type::runlevel;
+	runlevel->meta->type=proc_container_type::runlevel;
 
 	std::vector dependencies{
 		std::tuple{c, runlevel},

@@ -128,25 +128,20 @@ enum class stop_type_t {
 	target
 };
 
-//! Implementation object.
+/*! Common metadata
 
-//! \see proc_container
+Copies of containers in different sessions share the same
+proc_container_metaObj instance, because this information is the same
+regardless of session.
 
-class proc_containerObj {
+*/
 
+class proc_container_metaObj {
 public:
-	//! The container's name
-
-	//! For type=runlevel, the full name is RUNLEVEL_PREFIX + name
-	const std::string name;
-
 	//! Container's description
 
 	//! type=runlevel container names are their bare name
 	std::string description;
-
-	//! Container's alternative group
-	std::string alternative_group;
 
 	//! Its type
 	proc_container_type type=proc_container_type::loaded;
@@ -167,18 +162,6 @@ public:
 
 	//! The container's stopping type
 	stop_type_t stop_type{stop_type_t::manual};
-
-	//! When parsing, set the start_type value.
-	bool set_start_type(const std::string &);
-
-	//! When parsing, set the start_type value.
-	bool set_stop_type(const std::string &);
-
-	//! Return the start type, as a string literal
-	const char *get_start_type() const;
-
-	//! Return the stop type, as a string literal
-	const char *get_stop_type() const;
 
 	//! The container's starting command
 	std::string starting_command;
@@ -201,6 +184,46 @@ public:
 	//! The reload command
 	std::string reloading_command;
 
+};
+
+typedef std::shared_ptr<proc_container_metaObj> proc_container_meta;
+
+//! Implementation object.
+
+//! \see proc_container
+
+class proc_containerObj {
+
+public:
+	//! The container's name
+
+	//! For type=runlevel, the full name is RUNLEVEL_PREFIX + name
+	const std::string name;
+
+	//! Container's meta object.
+
+	//! This is a shared object, so multiple containers can share the same
+	//! meta data.
+
+	proc_container_meta meta;
+
+	//! Container's alternative group
+
+	//! This is a pathname, so it's different from session to session.
+	std::string alternative_group;
+
+	//! When parsing, set the start_type value.
+	bool set_start_type(const std::string &);
+
+	//! When parsing, set the start_type value.
+	bool set_stop_type(const std::string &);
+
+	//! Return the start type, as a string literal
+	const char *get_start_type() const;
+
+	//! Return the stop type, as a string literal
+	const char *get_stop_type() const;
+
 	//! Constructor
 	proc_containerObj(const std::string &name);
 
@@ -221,6 +244,16 @@ private:
 		     const char *message) const
 	{
 		if ( (this->*field) == ((*new_container).*field))
+			return;
+		log_message(name + message);
+	}
+
+	template<typename T>
+	void compare(T proc_container_metaObj::*field,
+		     const proc_container &new_container,
+		     const char *message) const
+	{
+		if ( (*meta).*field == ((*new_container->meta).*field))
 			return;
 		log_message(name + message);
 	}

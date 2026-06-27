@@ -347,7 +347,8 @@ private:
 			// Ignore synthesized, and other kinds of containers
 			// except the real, loaded, ones.
 			if (iter == containers.end() ||
-			    iter->first->type != proc_container_type::loaded)
+			    iter->first->meta->type !=
+				proc_container_type::loaded)
 				continue;
 
 			f(iter);
@@ -461,7 +462,7 @@ private:
 	void reload_or_restart(
 		const external_filedesc &requester,
 		external_filedesc requester_stdout,
-		std::string proc_containerObj::*command,
+		std::string proc_container_metaObj::*command,
 		const char *no_command_error);
 
 	struct start_eligibility;

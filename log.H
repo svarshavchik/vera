@@ -6,7 +6,6 @@
 #define log_h
 
 #include <string>
-#include <functional>
 #include <time.h>
 
 #include "proc_container_statefwd.H"

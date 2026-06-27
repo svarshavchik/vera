@@ -381,8 +381,8 @@ void current_containers_infoObj::define_dependency(
 	auto &a_dep=all_dependency_info[a];
 	auto &b_dep=all_dependency_info[b];
 
-	if (b->type == proc_container_type::runlevel &&
-	    a->type != proc_container_type::runlevel)
+	if (b->meta->type == proc_container_type::runlevel &&
+	    a->meta->type != proc_container_type::runlevel)
 	{
 		log_message(_("Non runlevel unit cannot require a "
 			      "runlevel unit: ")
@@ -723,7 +723,7 @@ void current_containers_infoObj::check_reexec()
 
 		for (auto &[pc, run_info] : containers)
 		{
-			if (pc->type != proc_container_type::loaded)
+			if (pc->meta->type != proc_container_type::loaded)
 				continue;
 
 			// REEXEC FILE: container name
@@ -796,7 +796,7 @@ void current_containers_infoObj::check_reexec()
 	// Tell all container to prepare_to_transfer, then reexec.
 	for (auto &[pc, run_info] : containers)
 	{
-		if (pc->type != proc_container_type::loaded)
+		if (pc->meta->type != proc_container_type::loaded)
 			continue;
 
 		run_info.prepare_to_transfer(pc);
@@ -1174,7 +1174,7 @@ void propagate_dependencies_t::doit2(
 	// entries.
 
 	if (skip_for_runlevel &&
-	    c->new_container->type ==
+	    c->new_container->meta->type ==
 	    proc_container_type::runlevel)
 		return;
 
@@ -1192,10 +1192,10 @@ void propagate_dependencies_t::doit2(
 			auto newc=std::make_shared<
 				proc_new_containerObj>(dep);
 
-			newc->new_container->type=
+			newc->new_container->meta->type=
 				proc_container_type::synthesized;
 
-			newc->new_container->description=
+			newc->new_container->meta->description=
 				_("(synthesized container for dependency"
 				  " tracking purposes)");
 			auto iter=new_containers.insert(newc)
@@ -1223,7 +1223,7 @@ void propagate_dependencies_t::doit2(
 			// "required_by" is allowed to do this.
 
 			if (disallow_for_runlevel &&
-			    (*iter)->new_container->type ==
+			    (*iter)->new_container->meta->type ==
 			    proc_container_type::runlevel)
 			{
 				log_message(
@@ -1237,7 +1237,7 @@ void propagate_dependencies_t::doit2(
 				continue;
 			}
 			if (skip_for_runlevel &&
-			    (*iter)->new_container->type ==
+			    (*iter)->new_container->meta->type ==
 			    proc_container_type::runlevel)
 				continue;
 
@@ -1321,19 +1321,19 @@ void current_containers_infoObj::install(
 
 		// What goes into the RUNLEVEL environment variable gets
 		// kept in the description.
-		runlevel_container->new_container->description=name;
+		runlevel_container->new_container->meta->description=name;
 
 		for (auto &alias:runlevel.aliases)
 		{
 			if (alias.size() == 1 &&
 			    alias[0] >= '0' && alias[0] <= '9')
 			{
-				runlevel_container->new_container->description=
-					alias;
+				runlevel_container->new_container->meta
+					->description=alias;
 			}
 		}
 
-		runlevel_container->new_container->type=
+		runlevel_container->new_container->meta->type=
 			proc_container_type::runlevel;
 
 		for (auto &alias:runlevel.aliases)
@@ -1634,7 +1634,7 @@ void current_containers_infoObj::install(
 
 			bool remove_this_container=false;
 
-			switch (iter->first->type) {
+			switch (iter->first->meta->type) {
 			case proc_container_type::loaded:
 			case proc_container_type::runlevel:
 				break;
@@ -1768,7 +1768,7 @@ void current_containers_infoObj::install(
 		auto iter=containers.find(c);
 
 		if (iter == containers.end() ||
-		    iter->first->type != proc_container_type::loaded)
+		    iter->first->meta->type != proc_container_type::loaded)
 			continue;
 
 		group_create_info gci{me, iter};
@@ -1797,7 +1797,8 @@ std::tuple<std::string, std::string>
 current_containers_infoObj::prev_current_runlevel() const
 {
 	return std::tuple{previous_runlevel_description,
-		active_runlevel ? active_runlevel->description:std::string{}};
+		active_runlevel ? active_runlevel->meta->description
+		: std::string{}};
 }
 
 void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
@@ -1826,7 +1827,7 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 
 	for (auto &[pc, run_info] : containers)
 	{
-		switch (pc->type) {
+		switch (pc->meta->type) {
 		case proc_container_type::loaded:
 		case proc_container_type::synthesized:
 			break;
@@ -1938,7 +1939,7 @@ std::string current_containers_infoObj::runlevel(
 		auto iter=containers.find(RUNLEVEL_PREFIX + new_runlevel);
 
 		if (iter != containers.end() &&
-		    iter->first->type == proc_container_type::runlevel)
+		    iter->first->meta->type == proc_container_type::runlevel)
 		{
 			new_runlevel=iter->first->name;
 		}
@@ -2208,7 +2209,7 @@ struct current_containers_infoObj::start_eligibility {
 			// If we are asked to start a stop_type=target
 			// container, we can start it again.
 
-			if (next_visited_container->first->stop_type ==
+			if (next_visited_container->first->meta->stop_type ==
 			    stop_type_t::target)
 			{
 				containers.emplace(
@@ -2377,7 +2378,7 @@ void current_containers_infoObj::start(
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
-	    iter->first->type != proc_container_type::loaded)
+	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		requester->write_all(name + _(": unknown unit\n"));
 		return;
@@ -2548,7 +2549,7 @@ void current_containers_infoObj::stop(
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
-	    iter->first->type != proc_container_type::loaded)
+	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		if (requester)
 			requester->write_all(name + _(": unknown unit\n"));
@@ -2644,7 +2645,7 @@ void current_containers_infoObj::stop_with_all_requirements(
 		{
 			// Ignore targets
 
-			switch (c->first->stop_type) {
+			switch (c->first->meta->stop_type) {
 			case stop_type_t::manual:
 			case stop_type_t::automatic:
 				break;
@@ -2761,7 +2762,7 @@ void current_containers_infoObj::stop_with_all_requirements(
 
 			// Ignore targets
 
-			switch (iter->first->stop_type) {
+			switch (iter->first->meta->stop_type) {
 			case stop_type_t::manual:
 			case stop_type_t::automatic:
 				break;
@@ -2953,7 +2954,8 @@ void current_containers_infoObj::find_start_or_stop_to_do()
 			{
 				if (active_runlevel)
 					previous_runlevel_description=
-						active_runlevel->description;
+						active_runlevel->meta
+							->description;
 				else
 					previous_runlevel_description="";
 
@@ -3358,7 +3360,7 @@ void current_containers_infoObj::do_start_runner(
 
 	// A stopping_type=target dependency does not check if all of its
 	// dependencies were started.
-	switch (pc->stop_type) {
+	switch (pc->meta->stop_type) {
 	case stop_type_t::target:
 		break;
 	case stop_type_t::automatic:
@@ -3406,11 +3408,11 @@ void current_containers_infoObj::do_start_runner(
 	}
 	// If there's a non-empty starting command: run it.
 
-	if (!pc->starting_command.empty())
+	if (!pc->meta->starting_command.empty())
 	{
 		auto runner=create_runner(
 			shared_from_this(),
-			cc, pc->starting_command,
+			cc, pc->meta->starting_command,
 			[]
 			(const auto &info, int status)
 			{
@@ -3423,7 +3425,7 @@ void current_containers_infoObj::do_start_runner(
 
 		if (!runner)
 		{
-			if (pc->start_type == start_type_t::respawn)
+			if (pc->meta->start_type == start_type_t::respawn)
 			{
 				respawn(cc,
 					run_info.state.emplace<state_started>(
@@ -3440,13 +3442,13 @@ void current_containers_infoObj::do_start_runner(
 		starting.starting_runner=runner;
 		starting.delayed_depopulation=false;
 
-		if (is_oneshot_like(pc->start_type))
+		if (is_oneshot_like(pc->meta->start_type))
 		{
 			auto &state=started(cc, starting.dependency);
 
 			// If this is a respawn, we need to track it.
 
-			if (pc->start_type == start_type_t::respawn)
+			if (pc->meta->start_type == start_type_t::respawn)
 				state.respawn_runner=runner;
 
 			return;
@@ -3457,7 +3459,7 @@ void current_containers_infoObj::do_start_runner(
 		starting.starting_runner_timeout=create_timer(
 			shared_from_this(),
 			pc,
-			pc->starting_timeout,
+			pc->meta->starting_timeout,
 			[]
 			(const auto &info)
 			{
@@ -3524,7 +3526,7 @@ void current_containers_infoObj::starting_command_finished(
 				// respawnable container, this is the
 				// then this is what needs to be respawned.
 
-				if (cc->first->start_type ==
+				if (cc->first->meta->start_type ==
 				    start_type_t::respawn)
 				{
 					log_container_message(
@@ -3550,7 +3552,7 @@ void current_containers_infoObj::starting_command_finished(
 					{
 						current_state.respawn_counter=
 							cc->first
-							->respawn_attempts;
+							->meta->respawn_attempts;
 					}
 
 					prepare_respawn(
@@ -3562,7 +3564,7 @@ void current_containers_infoObj::starting_command_finished(
 
 		}, cc->second.state);
 
-	if (is_oneshot_like(cc->first->start_type))
+	if (is_oneshot_like(cc->first->meta->start_type))
 	{
 		return;
 	}
@@ -3663,7 +3665,8 @@ void current_containers_infoObj::respawn(
 	// is stopping too fast.
 
 	if (now < state.respawn_starting_time ||
-	    (now - state.respawn_starting_time) >= cc->first->respawn_limit)
+	    (now - state.respawn_starting_time) >=
+		cc->first->meta->respawn_limit)
 	{
 		// It's been a while since the container respawn for the
 		// first time, we can start with a clean slate.
@@ -3679,7 +3682,7 @@ void current_containers_infoObj::respawn(
 	}
 	else
 	{
-		if (++state.respawn_counter >= cc->first->respawn_attempts
+		if (++state.respawn_counter >= cc->first->meta->respawn_attempts
 
 		    // Don't hold up a re-exec on account of us.
 
@@ -3698,7 +3701,7 @@ void current_containers_infoObj::respawn(
 				shared_from_this(),
 				cc->first,
 				state.respawn_starting_time +
-				cc->first->respawn_limit - now,
+				cc->first->meta->respawn_limit - now,
 				[]
 				(auto &info)
 				{
@@ -3734,7 +3737,7 @@ void current_containers_infoObj::respawn(
 
 	state.respawn_runner=create_runner(
 		shared_from_this(),
-		cc, cc->first->starting_command,
+		cc, cc->first->meta->starting_command,
 		[]
 		(const auto &info, int status)
 		{
@@ -3941,7 +3944,7 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 	// If the no stopping command, immediately begin the process of
 	// removing this container.
 
-	if (pc->stopping_command.empty())
+	if (pc->meta->stopping_command.empty())
 	{
 		do_remove(cc, false);
 		return;
@@ -3951,7 +3954,7 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 
 	auto runner=create_runner(
 		shared_from_this(),
-		cc, pc->stopping_command,
+		cc, pc->meta->stopping_command,
 		[]
 		(const auto &info, int status)
 		{
@@ -3986,7 +3989,7 @@ void current_containers_infoObj::do_stop_runner(const current_container &cc)
 			timer=create_timer(
 				shared_from_this(),
 				pc,
-				pc->stopping_timeout,
+				pc->meta->stopping_timeout,
 				[]
 				(const auto &info)
 				{
@@ -4102,7 +4105,7 @@ void current_containers_infoObj::do_remove(const current_container &cc,
 	}
 	else
 	{
-		switch (cc->first->sigterm_notify) {
+		switch (cc->first->meta->sigterm_notify) {
 		case sigterm::all:
 			run_info.group->cgroups_sendsig_all(SIGTERM);
 			break;
@@ -4159,7 +4162,7 @@ void current_containers_infoObj::populated(const std::string &s,
 	auto cc=containers.find(s);
 
 	if (cc == containers.end() ||
-	    cc->first->type != proc_container_type::loaded)
+	    cc->first->meta->type != proc_container_type::loaded)
 		return;
 
 	// We expect the container to exist here.
@@ -4252,7 +4255,7 @@ void current_containers_infoObj::stopped(const std::string &s)
 	auto cc=containers.find(s);
 
 	if (cc == containers.end() ||
-	    cc->first->type != proc_container_type::loaded)
+	    cc->first->meta->type != proc_container_type::loaded)
 		return;
 
 	auto &[pc, run_info] = *cc;
@@ -4295,7 +4298,7 @@ void current_containers_infoObj::stopped(const std::string &s)
 	}, cc->second.state))
 		return;
 
-	switch (cc->first->stop_type) {
+	switch (cc->first->meta->stop_type) {
 	case stop_type_t::manual:
 	case stop_type_t::target:
 		// The container does not stop automatically. If it is
@@ -4358,7 +4361,7 @@ void current_containers_infoObj::restart(
 {
 	return reload_or_restart(requester,
 				 std::move(requester_stdout),
-				 &proc_containerObj::restarting_command,
+				 &proc_container_metaObj::restarting_command,
 				 _(": is not restartable\n"));
 }
 
@@ -4369,21 +4372,21 @@ void current_containers_infoObj::reload(
 {
 	return reload_or_restart(requester,
 				 std::move(requester_stdout),
-				 &proc_containerObj::reloading_command,
+				 &proc_container_metaObj::reloading_command,
 				 _(": is not reloadable\n"));
 }
 
 void current_containers_infoObj::reload_or_restart(
 	const external_filedesc &requester,
 	external_filedesc requester_stdout,
-	std::string proc_containerObj::*command,
+	std::string proc_container_metaObj::*command,
 	const char *no_command_error)
 {
 	auto name=requester->readln();
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
-	    iter->first->type != proc_container_type::loaded)
+	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		requester->write_all(name + _(": unknown unit\n"));
 		return;
@@ -4406,7 +4409,7 @@ void current_containers_infoObj::reload_or_restart(
 		return;
 	}
 
-	if (((*pc).*command).empty())
+	if (((*pc->meta).*command).empty())
 	{
 		requester->write_all(name + no_command_error);
 		return;
@@ -4417,7 +4420,7 @@ void current_containers_infoObj::reload_or_restart(
 	started.reload_or_restart_runner=create_runner(
 		shared_from_this(),
 		iter,
-		(*pc).*command,
+		(*pc->meta).*command,
 		[requester]
 		(auto &callback_info,
 		 int exit_status)
@@ -4447,33 +4450,33 @@ void current_containers_infoObj::reload_or_restart(
 void proc_containerObj::compare_and_log(const proc_container &new_container)
 	const
 {
-	compare(&proc_containerObj::description, new_container,
+	compare(&proc_container_metaObj::description, new_container,
 		": description updated");
-	compare(&proc_containerObj::type, new_container,
+	compare(&proc_container_metaObj::type, new_container,
 		": type updated");
-	compare(&proc_containerObj::start_type, new_container,
+	compare(&proc_container_metaObj::start_type, new_container,
 		": start type updated");
-	compare(&proc_containerObj::respawn_attempts, new_container,
+	compare(&proc_container_metaObj::respawn_attempts, new_container,
 		": respawn attempts updated");
-	compare(&proc_containerObj::respawn_limit, new_container,
+	compare(&proc_container_metaObj::respawn_limit, new_container,
 		": respawn limit updated");
-	compare(&proc_containerObj::stop_type, new_container,
+	compare(&proc_container_metaObj::stop_type, new_container,
 		": stop type updated");
 	compare(&proc_containerObj::alternative_group, new_container,
 		": alternative group updated");
-	compare(&proc_containerObj::starting_command, new_container,
+	compare(&proc_container_metaObj::starting_command, new_container,
 		": starting command updated");
-	compare(&proc_containerObj::starting_timeout, new_container,
+	compare(&proc_container_metaObj::starting_timeout, new_container,
 		": starting timeout updated");
-	compare(&proc_containerObj::stopping_command, new_container,
+	compare(&proc_container_metaObj::stopping_command, new_container,
 		": stopping command updated");
-	compare(&proc_containerObj::stopping_timeout, new_container,
+	compare(&proc_container_metaObj::stopping_timeout, new_container,
 		": stopping timeout updated");
-	compare(&proc_containerObj::sigterm_notify, new_container,
+	compare(&proc_container_metaObj::sigterm_notify, new_container,
 		": sigterm notify updated");
-	compare(&proc_containerObj::restarting_command, new_container,
+	compare(&proc_container_metaObj::restarting_command, new_container,
 		": restarting command updated");
-	compare(&proc_containerObj::reloading_command, new_container,
+	compare(&proc_container_metaObj::reloading_command, new_container,
 		": reloading command updated");
 }
 
@@ -4650,7 +4653,7 @@ void current_containers_infoObj::freeze(
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
-	    iter->first->type != proc_container_type::loaded)
+	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		if (requester)
 			requester->write_all(name + _(": unknown unit\n"));
@@ -4671,7 +4674,7 @@ void current_containers_infoObj::thaw(
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
-	    iter->first->type != proc_container_type::loaded)
+	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		if (requester)
 			requester->write_all(name + _(": unknown unit\n"));

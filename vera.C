@@ -568,7 +568,7 @@ struct showing_verbose_progress_t {
 
 			// Space, then bold.
 			" \e[1m" <<
-			container_info.container->description <<
+			container_info.container->meta->description <<
 			// Reset colors to normal
 			"\e[0m"
 			// Erase to EOL

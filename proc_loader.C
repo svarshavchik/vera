@@ -618,9 +618,9 @@ proc_new_container_set proc_load(
 		}
 
 		if (!parsed_sigterm_notify &&
-		    nc->new_container->stopping_command.empty())
+		    nc->new_container->meta->stopping_command.empty())
 		{
-			nc->new_container->sigterm_notify=sigterm::parents;
+			nc->new_container->meta->sigterm_notify=sigterm::parents;
 		}
 	}
 
@@ -658,7 +658,7 @@ static bool proc_load_container(
 			    n,
 			    name,
 			    error,
-			    nc->new_container->description))
+			    nc->new_container->meta->description))
 			return false;
 	}
 
@@ -726,8 +726,8 @@ static bool proc_load_container(
 			name,
 			error,
 			unit_path,
-			nc->new_container->starting_command,
-			nc->new_container->starting_timeout,
+			nc->new_container->meta->starting_command,
+			nc->new_container->meta->starting_timeout,
 			nc->starting_before,
 			nc->starting_after,
 			*nc->new_container,
@@ -742,8 +742,8 @@ static bool proc_load_container(
 			name + "/stopping",
 			error,
 			unit_path,
-			nc->new_container->stopping_command,
-			nc->new_container->stopping_timeout,
+			nc->new_container->meta->stopping_command,
+			nc->new_container->meta->stopping_timeout,
 			nc->stopping_before,
 			nc->stopping_after,
 			*nc->new_container,
@@ -758,8 +758,7 @@ static bool proc_load_container(
 			n,
 			name,
 			error,
-			nc->new_container
-			->restarting_command);
+			nc->new_container->meta->restarting_command);
 	}
 
 	if (key == "reload")
@@ -768,8 +767,7 @@ static bool proc_load_container(
 			n,
 			name,
 			error,
-			nc->new_container
-			->reloading_command);
+			nc->new_container->meta->reloading_command);
 	}
 
 	if (key == "respawn")
@@ -785,7 +783,7 @@ static bool proc_load_container(
 						n,
 						name + ": attempts",
 						nc->new_container
-						->respawn_attempts,
+						->meta->respawn_attempts,
 						error);
 				}
 
@@ -795,7 +793,7 @@ static bool proc_load_container(
 						n,
 						name + ": limit",
 						nc->new_container
-						->respawn_limit,
+						->meta->respawn_limit,
 						error);
 				}
 
@@ -824,13 +822,13 @@ static bool proc_load_container(
 
 					if (sigterm == "all")
 					{
-						nc->new_container
+						nc->new_container->meta
 							->sigterm_notify=
 							sigterm::all;
 					}
 					else if (sigterm == "parents")
 					{
-						nc->new_container
+						nc->new_container->meta
 							->sigterm_notify=
 							sigterm::parents;
 					}
@@ -1335,32 +1333,32 @@ void proc_load_dump(const loaded_containers &loaded)
 				  << n->new_container->alternative_group
 				  << "\n";
 
-		if (!n->new_container->description.empty())
+		if (!n->new_container->meta->description.empty())
 			std::cout << name << ":description="
-				  << n->new_container->description << "\n";
+				  << n->new_container->meta->description << "\n";
 
-		if (!n->new_container->starting_command.empty())
+		if (!n->new_container->meta->starting_command.empty())
 			std::cout << name << ":starting:"
-				  << n->new_container->starting_command
+				  << n->new_container->meta->starting_command
 				  << "\n";
-		if (!n->new_container->stopping_command.empty())
+		if (!n->new_container->meta->stopping_command.empty())
 			std::cout << name << ":stopping:"
-				  << n->new_container->stopping_command
+				  << n->new_container->meta->stopping_command
 				  << "\n";
-		if (n->new_container->starting_timeout !=
+		if (n->new_container->meta->starting_timeout !=
 		    DEFAULT_STARTING_TIMEOUT)
 			std::cout << name << ":starting_timeout "
-				  << n->new_container->starting_timeout
+				  << n->new_container->meta->starting_timeout
 				  << "\n";
-		if (n->new_container->stopping_timeout !=
+		if (n->new_container->meta->stopping_timeout !=
 		    DEFAULT_STOPPING_TIMEOUT)
 			std::cout << name << ":stopping_timeout "
-				  << n->new_container->stopping_timeout
+				  << n->new_container->meta->stopping_timeout
 				  << "\n";
 
 		std::cout << name << ":sigterm:notify=";
 
-		switch (n->new_container->sigterm_notify) {
+		switch (n->new_container->meta->sigterm_notify) {
 		case sigterm::all:
 			std::cout << "all\n";
 			break;
@@ -1369,31 +1367,30 @@ void proc_load_dump(const loaded_containers &loaded)
 			break;
 		}
 
-		if (!n->new_container->restarting_command.empty())
+		if (!n->new_container->meta->restarting_command.empty())
 			std::cout << name << ":restart:"
-				  << n->new_container->restarting_command
+				  << n->new_container->meta->restarting_command
 				  << "\n";
-		if (!n->new_container->reloading_command.empty())
+		if (!n->new_container->meta->reloading_command.empty())
 			std::cout << name << ":reload:"
-				  << n->new_container->reloading_command
+				  << n->new_container->meta->reloading_command
 				  << "\n";
 
-		if (n->new_container->respawn_attempts !=
+		if (n->new_container->meta->respawn_attempts !=
 		    RESPAWN_ATTEMPTS_DEFAULT)
 			std::cout << name << ":respawn_attempts:"
-				  << n->new_container->respawn_attempts
+				  << n->new_container->meta->respawn_attempts
 				  << "\n";
-		if (n->new_container->respawn_limit !=
+		if (n->new_container->meta->respawn_limit !=
 		    RESPAWN_LIMIT_DEFAULT)
 			std::cout << name << ":respawn_limit:"
-				  << n->new_container->respawn_attempts
+				  << n->new_container->meta->respawn_limit
 				  << "\n";
 
 		for (const auto &[unordered_set, label] :
 			     std::array<
 			     std::tuple<std::unordered_set<std::string>
-			     proc_new_containerObj::*,
-			     const char *>, 7>{{
+			     proc_new_containerObj::*,const char*>, 7>{{
 				     {&proc_new_containerObj::dep_requires,
 					   "requires"},
 				     {&proc_new_containerObj::dep_requires_first,

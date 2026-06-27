@@ -47,7 +47,7 @@ void test_start_and_stop()
 
 	auto a=std::make_shared<proc_new_containerObj>("a");
 
-	a->new_container->stopping_command="/bin/true";
+	a->new_container->meta->stopping_command="/bin/true";
 	pcs.insert(a);
 	proc_containers_install(
 		loaded_containers{pcs},
@@ -147,9 +147,9 @@ void test_happy_start_stop_common(const std::string &name)
 
 	auto a=std::make_shared<proc_new_containerObj>(name);
 
-	a->new_container->starting_command="start";
-	a->new_container->starting_timeout=0;
-	a->new_container->stopping_command="stop";
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->starting_timeout=0;
+	a->new_container->meta->stopping_command="stop";
 
 	pcs.insert(a);
 	proc_containers_install(
@@ -299,7 +299,7 @@ void test_start_failed_fork()
 
 	auto a=std::make_shared<proc_new_containerObj>("failed_fork");
 
-	a->new_container->starting_command="start";
+	a->new_container->meta->starting_command="start";
 
 	pcs.insert(a);
 	proc_containers_install(
@@ -342,7 +342,7 @@ void test_start_failed()
 
 	auto a=std::make_shared<proc_new_containerObj>("start_failed");
 
-	a->new_container->starting_command="start";
+	a->new_container->meta->starting_command="start";
 
 	pcs.insert(a);
 	proc_containers_install(
@@ -389,7 +389,7 @@ void test_start_timeout()
 
 	auto a=std::make_shared<proc_new_containerObj>("start_timeout");
 
-	a->new_container->starting_command="start";
+	a->new_container->meta->starting_command="start";
 
 	pcs.insert(a);
 	proc_containers_install(
@@ -411,7 +411,7 @@ void test_start_timeout()
 		throw "unexpected state change after start";
 	}
 
-	test_advance(a->new_container->starting_timeout);
+	test_advance(a->new_container->meta->starting_timeout);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"start_timeout: " + STATE_START_PENDING_MANUAL::label.label_str(),
@@ -558,17 +558,17 @@ proc_new_container_set test_requires_common(std::string prefix)
 	auto c=std::make_shared<proc_new_containerObj>(prefix + "c");
 
 	a->dep_requires.insert(prefix + "b");
-	a->new_container->starting_command="start_a";
-	a->new_container->stopping_command="stop_a";
+	a->new_container->meta->starting_command="start_a";
+	a->new_container->meta->stopping_command="stop_a";
 	pcs.insert(a);
 
 	b->dep_requires.insert(prefix + "c");
-	b->new_container->starting_command="start_b";
-	a->new_container->stopping_command="stop_b";
+	b->new_container->meta->starting_command="start_b";
+	a->new_container->meta->stopping_command="stop_b";
 	pcs.insert(b);
 
-	c->new_container->starting_command="start_c";
-	a->new_container->stopping_command="stop_c";
+	c->new_container->meta->starting_command="start_c";
+	a->new_container->meta->stopping_command="stop_c";
 	pcs.insert(c);
 
 	return pcs;
@@ -729,7 +729,7 @@ void verify_container_state(
 
 	for (const auto &[pc, s] : get_proc_containers())
 	{
-		if (pc->type == proc_container_type::runlevel)
+		if (pc->meta->type == proc_container_type::runlevel)
 			continue;
 
 		states.push_back(
@@ -755,8 +755,8 @@ void test_requires2()
 
 	d->dep_requires.insert("requires2a");
 	d->dep_requires.insert("requires2e");
-	d->new_container->starting_command="start_d";
-	d->new_container->stopping_command="stop_d";
+	d->new_container->meta->starting_command="start_d";
+	d->new_container->meta->stopping_command="stop_d";
 	pcs.insert(d);
 
 	proc_containers_install(
@@ -767,8 +767,8 @@ void test_requires2()
 	std::unordered_map<std::string, proc_container_type> containers;
 
 	for (const auto &[pc, ignore] : get_proc_containers())
-		if (pc->type != proc_container_type::runlevel)
-			containers.emplace(pc->name, pc->type);
+		if (pc->meta->type != proc_container_type::runlevel)
+			containers.emplace(pc->name, pc->meta->type);
 
 	if (containers != std::unordered_map<std::string, proc_container_type>{
 			{"requires2a", proc_container_type::loaded},
@@ -1255,7 +1255,7 @@ void test_circular()
 
 	for (const auto &[pc, s] : get_proc_containers())
 	{
-		if (pc->type == proc_container_type::runlevel)
+		if (pc->meta->type == proc_container_type::runlevel)
 			continue;
 
 		states.emplace(pc->name, std::holds_alternative<state_started>(
@@ -1303,7 +1303,7 @@ void test_circular()
 	states.clear();
 	for (const auto &[pc, s] : get_proc_containers())
 	{
-		if (pc->type == proc_container_type::runlevel)
+		if (pc->meta->type == proc_container_type::runlevel)
 			continue;
 		states.emplace(pc->name, std::holds_alternative<state_stopped>(
 				  s));
@@ -1555,10 +1555,10 @@ void test_failure_with_dependencies_common(const std::string &name)
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->dep_requires.insert(name + "c");
 	c->dep_requires.insert(name + "d");
-	c->new_container->starting_command="start_c";
-	d->new_container->starting_command="start_d";
-	c->new_container->stopping_command="stop_c";
-	d->new_container->stopping_command="stop_d";
+	c->new_container->meta->starting_command="start_c";
+	d->new_container->meta->starting_command="start_d";
+	c->new_container->meta->stopping_command="stop_c";
+	d->new_container->meta->stopping_command="stop_d";
 
 	e->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
@@ -1865,9 +1865,9 @@ void happy_oneshot()
 {
 	auto b=std::make_shared<proc_new_containerObj>("happyoneshotb");
 
-	b->new_container->start_type=start_type_t::oneshot;
+	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	b->new_container->starting_command="/happyoneshot echo *";
+	b->new_container->meta->starting_command="/happyoneshot echo *";
 	call_install(container_install::update, b);
 
 	if (!proc_container_runlevel("graphical").empty())
@@ -1903,9 +1903,9 @@ void sad_oneshot()
 {
 	auto b=std::make_shared<proc_new_containerObj>("sadoneshotb");
 
-	b->new_container->start_type=start_type_t::oneshot;
+	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	b->new_container->starting_command="sadoneshot verysad";
+	b->new_container->meta->starting_command="sadoneshot verysad";
 	call_install(container_install::update, b);
 
 	if (!proc_container_runlevel("graphical").empty())
@@ -1947,7 +1947,7 @@ void manualstopearly()
 {
 	auto b=std::make_shared<proc_new_containerObj>("manualstopearly");
 
-	b->new_container->start_type=start_type_t::oneshot;
+	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	call_install(container_install::update, b);
 
@@ -1996,8 +1996,8 @@ void automaticstopearly1()
 {
 	auto b=std::make_shared<proc_new_containerObj>("automaticstopearly1");
 
-	b->new_container->start_type=start_type_t::oneshot;
-	b->new_container->stop_type=stop_type_t::automatic;
+	b->new_container->meta->start_type=start_type_t::oneshot;
+	b->new_container->meta->stop_type=stop_type_t::automatic;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	call_install(container_install::update, b);
 
@@ -2030,9 +2030,9 @@ void automaticstopearly2()
 {
 	auto b=std::make_shared<proc_new_containerObj>("automaticstopearly2");
 
-	b->new_container->start_type=start_type_t::oneshot;
-	b->new_container->stop_type=stop_type_t::automatic;
-	b->new_container->stopping_command="stop";
+	b->new_container->meta->start_type=start_type_t::oneshot;
+	b->new_container->meta->stop_type=stop_type_t::automatic;
+	b->new_container->meta->stopping_command="stop";
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	call_install(container_install::update, b);
 
@@ -2086,8 +2086,8 @@ void testgroup()
 	auto c=std::make_shared<proc_new_containerObj>("group/1");
 	auto d=std::make_shared<proc_new_containerObj>("group/2");
 
-	c->new_container->starting_command="startc";
-	d->new_container->starting_command="startd";
+	c->new_container->meta->starting_command="startc";
+	d->new_container->meta->starting_command="startd";
 
 	auto e=std::make_shared<proc_new_containerObj>("final");
 	e->starting_before.insert("group");
@@ -2195,7 +2195,7 @@ void testfailcgroupcreate()
 
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	a->dep_requires.insert("b");
-	a->new_container->starting_command="startfailure";
+	a->new_container->meta->starting_command="startfailure";
 
 	auto b=std::make_shared<proc_new_containerObj>("b");
 
@@ -2248,7 +2248,7 @@ void testfailcgroupdelete()
 	auto a=std::make_shared<proc_new_containerObj>("a");
 
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	a->new_container->starting_command="startok";
+	a->new_container->meta->starting_command="startok";
 
 	call_install(container_install::update, a);
 
@@ -2322,11 +2322,11 @@ void testnotimeout()
 {
 	auto a=std::make_shared<proc_new_containerObj>("notimeout");
 
-	a->new_container->starting_timeout=0;
-	a->new_container->stopping_timeout=0;
+	a->new_container->meta->starting_timeout=0;
+	a->new_container->meta->stopping_timeout=0;
 
-	a->new_container->starting_command="infinitestart";
-	a->new_container->stopping_command="infinitestop";
+	a->new_container->meta->starting_command="infinitestart";
+	a->new_container->meta->stopping_command="infinitestop";
 
 	call_install(container_install::update, a);
 
@@ -2366,7 +2366,7 @@ void testmultiplestart()
 {
 	auto a=std::make_shared<proc_new_containerObj>("multiplestart");
 
-	a->new_container->starting_command="start";
+	a->new_container->meta->starting_command="start";
 
 	call_install(container_install::update, a);
 
@@ -2404,10 +2404,10 @@ proc_new_container commonrespawn()
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn");
 
-	a->new_container->starting_command="start";
-	a->new_container->start_type=start_type_t::respawn;
-	a->new_container->respawn_attempts=2;
-	a->new_container->respawn_limit=60;
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->start_type=start_type_t::respawn;
+	a->new_container->meta->respawn_attempts=2;
+	a->new_container->meta->respawn_limit=60;
 
 	call_install(container_install::update, a);
 
@@ -2465,7 +2465,7 @@ void testrespawn()
 		})
 		throw "unexpected state changes before delay starts.";
 	logged_state_changes.clear();
-	test_advance(a->new_container->respawn_limit-1-SIGTERM_TIMEOUT);
+	test_advance(a->new_container->meta->respawn_limit-1-SIGTERM_TIMEOUT);
 	do_poll(0);
 	if (logged_state_changes != std::vector<std::string>{
 		})
@@ -2531,7 +2531,7 @@ void testrespawn()
 	}
 	logged_state_changes.clear();
 	do_poll(0);
-	test_advance(a->new_container->respawn_limit-1);
+	test_advance(a->new_container->meta->respawn_limit-1);
 	do_poll(0);
 	if (logged_state_changes != std::vector<std::string>{
 		})
@@ -2586,7 +2586,7 @@ void testrespawn2()
 	logged_state_changes.clear();
 	logged_runners.clear();
 	next_pid= -1;
-	test_advance(a->new_container->respawn_limit);
+	test_advance(a->new_container->meta->respawn_limit);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"respawn: restarting",
@@ -2610,10 +2610,10 @@ void testrespawn3()
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn");
 
-	a->new_container->starting_command="start";
-	a->new_container->start_type=start_type_t::respawn;
-	a->new_container->respawn_attempts=2;
-	a->new_container->respawn_limit=60;
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->start_type=start_type_t::respawn;
+	a->new_container->meta->respawn_attempts=2;
+	a->new_container->meta->respawn_limit=60;
 
 	call_install(container_install::update, a);
 
@@ -2631,7 +2631,7 @@ void testrespawn3()
 
 	all_forks_fail=false;
 	logged_state_changes.clear();
-	test_advance(a->new_container->respawn_limit);
+	test_advance(a->new_container->meta->respawn_limit);
 	if (logged_state_changes != std::vector<std::string>{
 			"respawn: restarting after a failure",
 			"respawn: restarting"
@@ -2650,9 +2650,9 @@ void testtarget1()
 	b->starting_before.insert("target1c");
 	b->stopping_after.insert("target1c");
 
-	a->new_container->stop_type=stop_type_t::target;
-	b->new_container->starting_command="start";
-	c->new_container->starting_command="start";
+	a->new_container->meta->stop_type=stop_type_t::target;
+	b->new_container->meta->starting_command="start";
+	c->new_container->meta->starting_command="start";
 
 	call_install(container_install::update, a, b, c);
 
@@ -2714,7 +2714,7 @@ void testtarget2()
 
 	b->dep_required_by.insert("target2a");
 
-	b->new_container->stop_type=stop_type_t::target;
+	b->new_container->meta->stop_type=stop_type_t::target;
 
 	call_install(container_install::update, a, b);
 
@@ -2737,9 +2737,9 @@ void testtarget3()
 
 	b->dep_required_by.insert("target3a");
 
-	a->new_container->stop_type=stop_type_t::target;
-	b->new_container->start_type=start_type_t::oneshot;
-	b->new_container->stop_type=stop_type_t::automatic;
+	a->new_container->meta->stop_type=stop_type_t::target;
+	b->new_container->meta->start_type=start_type_t::oneshot;
+	b->new_container->meta->stop_type=stop_type_t::automatic;
 
 	call_install(container_install::update, a, b);
 
@@ -2781,12 +2781,12 @@ void testmultirunlevels()
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
 	c->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	a->new_container->starting_command="start1";
-	a->new_container->stopping_command="stop1";
-	b->new_container->starting_command="start2";
-	b->new_container->stopping_command="stop2";
-	c->new_container->starting_command="start3";
-	c->new_container->stopping_command="stop3";
+	a->new_container->meta->starting_command="start1";
+	a->new_container->meta->stopping_command="stop1";
+	b->new_container->meta->starting_command="start2";
+	b->new_container->meta->stopping_command="stop2";
+	c->new_container->meta->starting_command="start3";
+	c->new_container->meta->stopping_command="stop3";
 	call_install(container_install::update, a, b, c);
 
 	if (!proc_container_runlevel("single-user").empty())
@@ -3193,14 +3193,14 @@ void testalternategroups()
 	a->new_container->alternative_group="alt";
 	b->new_container->alternative_group="alt";
 
-	a->new_container->starting_command="starta";
-	b->new_container->starting_command="startb";
-	c->new_container->starting_command="startc";
-	d->new_container->starting_command="startd";
-	a->new_container->stopping_command="stopa";
-	b->new_container->stopping_command="stopb";
-	c->new_container->stopping_command="stopc";
-	d->new_container->stopping_command="stopd";
+	a->new_container->meta->starting_command="starta";
+	b->new_container->meta->starting_command="startb";
+	c->new_container->meta->starting_command="startc";
+	d->new_container->meta->starting_command="startd";
+	a->new_container->meta->stopping_command="stopa";
+	b->new_container->meta->stopping_command="stopb";
+	c->new_container->meta->stopping_command="stopc";
+	d->new_container->meta->stopping_command="stopd";
 
 	call_install(container_install::update, a, b, c, d);
 
@@ -3379,13 +3379,13 @@ void teststatustimestamp()
 	a->dep_requires.insert("c");
 	a->dep_requires.insert("d");
 
-	b->new_container->starting_command="startb";
-	c->new_container->starting_command="startc";
-	d->new_container->starting_command="startd";
+	b->new_container->meta->starting_command="startb";
+	c->new_container->meta->starting_command="startc";
+	d->new_container->meta->starting_command="startd";
 
-	b->new_container->starting_timeout=0;
-	c->new_container->starting_timeout=60;
-	d->new_container->starting_timeout=90;
+	b->new_container->meta->starting_timeout=0;
+	c->new_container->meta->starting_timeout=60;
+	d->new_container->meta->starting_timeout=90;
 
 	call_install(container_install::update, a, b, c, d);
 
@@ -3435,8 +3435,8 @@ void testparentsterm()
 {
 	auto a=std::make_shared<proc_new_containerObj>("a");
 
-	a->new_container->sigterm_notify=sigterm::parents;
-	a->new_container->starting_command="/bin/true";
+	a->new_container->meta->sigterm_notify=sigterm::parents;
+	a->new_container->meta->starting_command="/bin/true";
 
 	call_install(container_install::update, a);
 
@@ -3627,7 +3627,7 @@ void testreexec_stopped()
 	reexec_handler=[]{ throw 0; };
 
 	auto a=std::make_shared<proc_new_containerObj>("a");
-	a->new_container->starting_command="start";
+	a->new_container->meta->starting_command="start";
 
 	call_install(container_install::update, a);
 
@@ -3685,8 +3685,8 @@ void testfreezethaw()
 
 	auto a=std::make_shared<proc_new_containerObj>("a");
 
-	a->new_container->start_type=start_type_t::oneshot;
-	a->new_container->starting_command="/bin/true";
+	a->new_container->meta->start_type=start_type_t::oneshot;
+	a->new_container->meta->starting_command="/bin/true";
 	pcs.insert(a);
 	proc_containers_install(
 		loaded_containers{pcs},
@@ -3751,8 +3751,8 @@ void testbootorder()
 	auto boot=std::make_shared<proc_new_containerObj>("boot");
 	auto multiuser=std::make_shared<proc_new_containerObj>("multi-user");
 
-	boot->new_container->stop_type=stop_type_t::target;
-	multiuser->new_container->stop_type=stop_type_t::target;
+	boot->new_container->meta->stop_type=stop_type_t::target;
+	multiuser->new_container->meta->stop_type=stop_type_t::target;
 	multiuser->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
 	multiuser->dep_requires_first.insert("boot");
 
@@ -3760,13 +3760,13 @@ void testbootorder()
 	auto multiuserprog=
 		std::make_shared<proc_new_containerObj>("multiuserprog");
 
-	bootprog->new_container->starting_command="/bin/true";
+	bootprog->new_container->meta->starting_command="/bin/true";
 
 	multiuser->dep_requires.insert("boot");
 	bootprog->dep_required_by.insert("boot");
 	multiuserprog->dep_required_by.insert("multi-user");
 
-	multiuserprog->new_container->starting_command="/bin/true";
+	multiuserprog->new_container->meta->starting_command="/bin/true";
 
 	call_install(container_install::update,
 		boot, multiuser, bootprog, multiuserprog);

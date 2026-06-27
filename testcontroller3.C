@@ -41,10 +41,10 @@ void respawn1_setup(const std::vector<std::string> &args)
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn");
 
-	a->new_container->starting_command="start";
-	a->new_container->start_type=start_type_t::respawn;
-	a->new_container->respawn_attempts=2;
-	a->new_container->respawn_limit=60;
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->start_type=start_type_t::respawn;
+	a->new_container->meta->respawn_attempts=2;
+	a->new_container->meta->respawn_limit=60;
 
 	call_install(container_install::update, a);
 
@@ -78,10 +78,10 @@ void respawn1_reexec()
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn");
 
-	a->new_container->starting_command="start";
-	a->new_container->start_type=start_type_t::respawn;
-	a->new_container->respawn_attempts=2;
-	a->new_container->respawn_limit=60;
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->start_type=start_type_t::respawn;
+	a->new_container->meta->respawn_attempts=2;
+	a->new_container->meta->respawn_limit=60;
 
 	call_install(container_install::initial, a);
 
@@ -122,10 +122,10 @@ void respawn3_setup(const std::vector<std::string> &args)
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn3");
 
-	a->new_container->starting_command="start";
-	a->new_container->start_type=start_type_t::respawn;
-	a->new_container->respawn_attempts=2;
-	a->new_container->respawn_limit=60;
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->start_type=start_type_t::respawn;
+	a->new_container->meta->respawn_attempts=2;
+	a->new_container->meta->respawn_limit=60;
 
 	call_install(container_install::update, a);
 
@@ -175,10 +175,10 @@ void respawn3_reexec()
 {
 	auto a=std::make_shared<proc_new_containerObj>("respawn3");
 
-	a->new_container->starting_command="start";
-	a->new_container->start_type=start_type_t::respawn;
-	a->new_container->respawn_attempts=2;
-	a->new_container->respawn_limit=60;
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->start_type=start_type_t::respawn;
+	a->new_container->meta->respawn_attempts=2;
+	a->new_container->meta->respawn_limit=60;
 
 	call_install(container_install::initial, a);
 
@@ -234,7 +234,7 @@ void noreexec1()
 {
 	auto a=std::make_shared<proc_new_containerObj>("noreexec1");
 
-	a->new_container->starting_command="start";
+	a->new_container->meta->starting_command="start";
 
 	call_install(container_install::initial, a);
 
@@ -261,7 +261,7 @@ void noreexec2()
 {
 	auto a=std::make_shared<proc_new_containerObj>("noreexec2");
 
-	a->new_container->stopping_command="start";
+	a->new_container->meta->stopping_command="start";
 
 	call_install(container_install::initial, a);
 
@@ -291,7 +291,7 @@ void noreexec3()
 {
 	auto a=std::make_shared<proc_new_containerObj>("noreexec3");
 
-	a->new_container->restarting_command="restart";
+	a->new_container->meta->restarting_command="restart";
 
 	call_install(container_install::initial, a);
 

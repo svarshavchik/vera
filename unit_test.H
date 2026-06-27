@@ -1,6 +1,8 @@
 #ifndef UNIT_TEST_H
 #define UNIT_TEST_H
 
+// IWYU pragma: always_keep
+
 #include <vector>
 #include <string>
 #include <unistd.h>
@@ -8,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include "privrequest.H"
+#include "switchlog.H"
 #include "proc_loader.H"
 
 extern std::vector<std::string> logged_state_changes;
