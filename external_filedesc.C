@@ -10,6 +10,9 @@
 #include <string>
 #include <fcntl.h>
 #include <poll.h>
+#include <errno.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 external_filedescObj::~external_filedescObj()
 {
@@ -21,9 +24,29 @@ void external_filedescObj::write_all(std::string_view msg)
 	auto p=msg.data();
 	auto s=msg.size();
 
+	bool sock=true;
+
 	while (s)
 	{
-		ssize_t n=send(fd, p, s, MSG_NOSIGNAL);
+		ssize_t n;
+
+		// memfd_create is used on public sockets, which are E_NOTSOCK,
+		// this minimal usage is fine to try and fallback each time.
+
+		if (sock)
+		{
+			n=send(fd, p, s, MSG_NOSIGNAL);
+
+			if (n < 0 && errno == ENOTSOCK)
+			{
+				sock=false;
+				continue;
+			}
+		}
+		else
+		{
+			n=write(fd, p, s);
+		}
 
 		if (n <= 0)
 			break;
@@ -32,7 +55,7 @@ void external_filedescObj::write_all(std::string_view msg)
 	}
 }
 
-std::string external_filedescObj::readln()
+std::string external_filedescObj::readln(size_t maxsize)
 {
 	std::string::iterator b, e, p;
 
@@ -49,6 +72,18 @@ std::string external_filedescObj::readln()
 			auto ln=buffer;
 			buffer.clear();
 			return ln;
+		}
+
+		if (maxsize && buffer.size()+n > maxsize)
+		{
+			n=maxsize-buffer.size();
+
+			if (n == 0)
+			{
+				std::string ln=std::move(buffer);
+				buffer.clear();
+				return ln;
+			}
 		}
 		buffer.insert(e, charbuffer, charbuffer+n);
 	}
@@ -73,6 +108,22 @@ bool external_filedescObj::ready()
 
 	return buffer.find('\n') != buffer.npos;
 }
+
+bool external_filedescObj::regular() const
+{
+	struct stat st;
+
+	return fstat(fd, &st) == 0 &&
+		S_ISREG(st.st_mode);
+}
+
+external_filedesc tmpfile_filedesc()
+{
+	int fd=memfd_create("vera socket", MFD_CLOEXEC);
+
+	return std::make_shared<external_filedescObj>(fd);
+}
+
 
 namespace {
 #if 0

@@ -167,60 +167,88 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
 	return ret;
 }
 
-external_filedesc receive_fd(const external_filedesc &efd)
+receive_fds_ret_t receive_fds(const external_filedesc &efd)
 {
-	int fd;
+	receive_fds_ret_t ret;
+
 	struct msghdr msg{};
-	char buf[CMSG_SPACE(sizeof(fd))];
-	char dummy;
 	struct iovec iov;
+	char dummy_byte;
 
-	msg.msg_control=buf;
-	msg.msg_controllen=sizeof(buf);
+	iov.iov_base = &dummy_byte;
+	iov.iov_len = 1;
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
 
-	msg.msg_iov=&iov;
-	msg.msg_iovlen=1;
+	// Allow sufficiently large buffer to accept both credentials and
+	// up to four file descriptors
 
-	iov.iov_base=&dummy;
-	iov.iov_len=1;
+	char control_buf[CMSG_SPACE(sizeof(int) * 4) +
+			 CMSG_SPACE(sizeof(ucred))];
+
+	memset(control_buf, 0, sizeof(control_buf));
+	msg.msg_control = control_buf;
+	msg.msg_controllen = sizeof(control_buf);
 
 	if (recvmsg(efd->fd, &msg, 0) < 0)
-		return nullptr;
+		return ret;
 
-	if (msg.msg_controllen < sizeof(buf))
-		return nullptr;
+	auto &[retfdvec, retcred] = ret;
 
-	auto cmsg=CMSG_FIRSTHDR(&msg);
-
-	if (cmsg->cmsg_level != SOL_SOCKET ||
-	    cmsg->cmsg_type != SCM_RIGHTS ||
-	    cmsg->cmsg_len != CMSG_LEN(sizeof(fd)))
+	for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
+	     cmsg = CMSG_NXTHDR(&msg, cmsg))
 	{
-		return nullptr;
+		if (cmsg->cmsg_level != SOL_SOCKET)
+			continue;
+
+		if (cmsg->cmsg_type == SCM_CREDENTIALS) {
+			auto *cred = reinterpret_cast<ucred*>(CMSG_DATA(cmsg));
+
+			retcred=*cred;
+			continue;
+		}
+
+		if (cmsg->cmsg_type == SCM_RIGHTS)
+		{
+			int payload_bytes = cmsg->cmsg_len - CMSG_LEN(0);
+			size_t total_fds_in_msg = payload_bytes / sizeof(int);
+
+			retfdvec.clear();
+			retfdvec.reserve(total_fds_in_msg);
+
+			int *raw_fd_ptr =
+				reinterpret_cast<int*>(CMSG_DATA(cmsg));
+			for (size_t i=0; i<total_fds_in_msg; ++i)
+			{
+				fcntl(raw_fd_ptr[i], F_SETFD, FD_CLOEXEC);
+
+				retfdvec.push_back(
+					std::make_shared<external_filedescObj>(
+						raw_fd_ptr[i]
+					)
+				);
+			}
+		}
 	}
-	memcpy(&fd, CMSG_DATA(cmsg), sizeof(fd));
 
-	auto ret=std::make_shared<external_filedescObj>(fd);
-
-	// Make sure it has FD_CLOEXEC set
-	fcntl(ret->fd, F_SETFD, FD_CLOEXEC);
+	if (msg.msg_flags & MSG_CTRUNC)
+		ret={};
 	return ret;
 }
 
 external_filedesc request_regfd(const external_filedesc &efd)
 {
-	auto ret=receive_fd(efd);
+	const auto &[rets, ignore] = receive_fds(efd);
+
+	if (rets.empty())
+		return nullptr;
+
+	auto ret=rets.front();
 
 	// This must be a regular file.
 
-	struct stat stat_buf;
-
-	if (fstat(ret->fd, &stat_buf) < 0 ||
-	    !S_ISREG(stat_buf.st_mode))
+	if (!ret->regular())
 		return nullptr;
-
-	// Make sure it has FD_CLOEXEC set
-	fcntl(ret->fd, F_SETFD, FD_CLOEXEC);
 
 	return ret;
 }
@@ -235,27 +263,31 @@ void request_fd_wait(const external_filedesc &efd)
 	efd->readln();
 }
 
-void request_send_fd(const external_filedesc &efd, int statusfd)
+void request_send_fd(const external_filedesc &efd, const int *fds, size_t nfds)
 {
 	struct iovec iov{};
 	char dummy{0};
 
 	struct msghdr msg{};
-	char buf[CMSG_SPACE(sizeof(statusfd))]={0};
 
+	char buf[CMSG_SPACE(sizeof(int) * nfds)];
+
+	memset(buf, 0, sizeof(buf));
 	msg.msg_control=buf;
-	msg.msg_controllen=sizeof(buf);
+	msg.msg_controllen=CMSG_SPACE(sizeof(int) * nfds);
 
 	auto cmsg = CMSG_FIRSTHDR(&msg);
+
 	cmsg->cmsg_level=SOL_SOCKET;
 	cmsg->cmsg_type=SCM_RIGHTS;
-	cmsg->cmsg_len=CMSG_LEN(sizeof(statusfd));
-	memcpy(CMSG_DATA(cmsg), &statusfd, sizeof(statusfd));
+	cmsg->cmsg_len=CMSG_LEN(sizeof(int) * nfds);
+	memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * nfds);
 
-	msg.msg_iov=&iov;
-	msg.msg_iovlen=1;
 	iov.iov_base=&dummy;
 	iov.iov_len=1;
+	msg.msg_iov=&iov;
+	msg.msg_iovlen=1;
+
 	sendmsg(efd->fd, &msg, MSG_NOSIGNAL);
 }
 
@@ -598,7 +630,7 @@ external_filedesc create_stdoutcc(const external_filedesc &efd)
 
 	efd->write_all("cc\n");
 	request_fd_wait(efd);
-	request_send_fd(efd, b->fd);
+	request_send_fd(efd, &b->fd, 1);
 
 	return a;
 }

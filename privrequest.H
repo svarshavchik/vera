@@ -9,8 +9,11 @@
 #include "proc_loaderfwd.H"
 #include <algorithm>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
@@ -156,13 +159,24 @@ std::tuple<external_filedesc, external_filedesc> create_fake_request();
 
 void request_status(const external_filedesc &efd);
 
-// Helper function used to receive the file descriptor for a plain file.
+/*! What receive_fd() returns
 
-// Parameter is the connection to the requester.
-//
-// Receives and returns the file descriptor.
+  It returns a list of file descriptors received over the socket, and,
+  for the public socket (which has credentials enabled) the sender's
+  credentials.
+*/
 
-external_filedesc receive_fd(const external_filedesc &efd);
+typedef std::tuple<std::vector<external_filedesc>,
+		   std::optional<ucred>> receive_fds_ret_t;
+
+/*! Helper function used to receive the file descriptors over a socket.
+
+  Parameter is the connection to the requester.
+
+  Receives and returns the received file descriptors.
+*/
+
+receive_fds_ret_t receive_fds(const external_filedesc &efd);
 
 // Helper function used to receive the file descriptor for a plain file.
 
@@ -180,9 +194,9 @@ void request_fd(const external_filedesc &efd);
 
 void request_fd_wait(const external_filedesc &efd);
 
-// Send a file descriptor to the requesting daemon
+// Send file descriptors to the requesting daemon
 
-void request_send_fd(const external_filedesc &efd, int statusfd);
+void request_send_fd(const external_filedesc &efd, const int *fds, size_t nfds);
 
 external_filedesc create_stdoutcc(const external_filedesc &efd);
 

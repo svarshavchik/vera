@@ -31,6 +31,7 @@
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/wait.h>
+#include <stdlib.h>
 #include <syslog.h>
 #include <iostream>
 #include <signal.h>
@@ -1149,13 +1150,18 @@ void pager()
 
 void do_pub_request(external_filedesc pubfd)
 {
-	auto cmd=pubfd->readln();
+	const auto &[pubfds, sender]=receive_fds(pubfd);
 
-	if (cmd == "status")
+	if (pubfds.empty() || lseek(pubfds[0]->fd, 0L, SEEK_SET) < 0)
+		return;
+
+	if (!pubfds[0]->regular())
+		return;
+
+	auto cmd=pubfds[0]->readln(256);
+
+	if (cmd == "status" && pubfds.size() > 1)
 	{
-		request_fd(pubfd);
-		auto tmp=request_regfd(pubfd);
-
 		auto fd=try_connect_vera_priv();
 
 		if (!fd)
@@ -1163,10 +1169,24 @@ void do_pub_request(external_filedesc pubfd)
 
 		request_status(fd);
 		request_fd_wait(fd);
-		request_send_fd(fd, tmp->fd);
+		request_send_fd(fd, &pubfds[1]->fd, 1);
 		request_fd_wait(fd);
 		return;
 	}
+}
+
+void request_status_pub(external_filedesc pubsocket,
+			external_filedesc statussocket)
+{
+	auto cmdfd=tmpfile_filedesc();
+
+	if (cmdfd < 0)
+		return;
+	cmdfd->write_all("status\n");
+
+	int fd[2]={cmdfd->fd, statussocket->fd};
+
+	request_send_fd(pubsocket, fd, 2);
 }
 
 // Create a pipe, both ends of the pipe have CLOEXEC set.
@@ -1238,6 +1258,7 @@ void vera_pub(char *parentfd)
 	umask(000);
 	int fd=create_vera_socket(PUBCMDSOCKET ".tmp",
 				  PUBCMDSOCKET);
+
 	umask(077);
 
 	int parent_fd_pipe=-1;
@@ -1305,6 +1326,17 @@ void vera_pub(char *parentfd)
 
 			if (conn_fd < 0)
 				return;
+
+			int opt=1;
+
+			if (setsockopt(
+				    conn_fd, SOL_SOCKET, SO_PASSCRED, &opt,
+				    sizeof(opt)
+			    ) < 0)
+			{
+				close(conn_fd);
+				return;
+			}
 
 			do_pub_request(std::make_shared<external_filedescObj>(
 					       conn_fd
@@ -2274,18 +2306,19 @@ void vlad(std::vector<std::string> args)
 	{
 		pager();
 
-		FILE *fpfd=tmpfile();
+		auto fdfp=tmpfile_filedesc();
+
+		if (fdfp->fd < 0)
+			return;
 
 		auto fd=connect_vera_pub();
 
-		request_status(fd);
-		request_fd_wait(fd);
-		request_send_fd(fd, fileno(fpfd));
+		request_status_pub(fd, fdfp);
 
 		if (args.size() >= 2)
 			stopped_flag=1;
 
-		auto status=get_status(fd, fileno(fpfd));
+		auto status=get_status(fd, fdfp->fd);
 
 		update_status_overrides(
 			status,

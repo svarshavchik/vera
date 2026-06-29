@@ -32,12 +32,31 @@ private:
 	std::string buffer;
 
 public:
-	std::string readln();
 
+	/*! Read a line from the socket
+
+	  On the public socket we pass in a maximum size of the command
+	*/
+	std::string readln(size_t maxsize=0);
+
+	/*! Confirm that this file descriptor is a regular file
+
+	  When we use this, it's on a file descriptor that we expect to
+	  be a regular file. If it's not, we treat it as an internal error.
+
+	*/
+
+	bool regular() const;
+
+	/*! Check to see if the socket has at least one line of input ready
+
+	 */
 	bool ready();
 };
 
 typedef std::shared_ptr<external_filedescObj> external_filedesc;
+
+external_filedesc tmpfile_filedesc();
 
 /*! forward output from a container to the requester's stdout
 

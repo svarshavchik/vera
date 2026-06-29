@@ -1986,7 +1986,12 @@ void proc_do_request(external_filedesc efd)
 
 	request_fd(efd);
 
-	auto requester_stdout=receive_fd(efd);
+	const auto &[filedescs, ignore]=receive_fds(efd);
+
+	if (filedescs.empty())
+		return;
+
+	auto requester_stdout=filedescs.front();
 
 	if (!requester_stdout)
 		return;
@@ -1994,7 +1999,11 @@ void proc_do_request(external_filedesc efd)
 	// We get a request. We redirect everyone's stdout to the requester's
 	// stdout.
 	//
-	// A unit executes a command that
+	// A unit executes another command. Detect that by keeping a weak
+	// reference to the requester_stdout. If we get here, we will quietly
+	// ignore the 2nd requester's stdout, and not forward it to
+	// do_proc_request().
+
 	static std::weak_ptr<external_filedescObj> active_requester;
 
 	if (!active_requester.lock())

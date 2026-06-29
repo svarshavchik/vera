@@ -7,6 +7,7 @@
 #include "proc_container.H"
 #include "external_filedesc_privcmdsocket.H"
 
+#include "proc_container_statefwd.H"
 #include "unit_test.H"
 #include "privrequest.H"
 
@@ -1132,20 +1133,20 @@ void test_install()
 		if (privsocketb->readln() != "status")
 			throw "Did not receive status command";
 
-		FILE *fp=tmpfile();
+		auto fp=tmpfile_filedesc();
 
 		request_fd(privsocketb);
 
 		request_fd_wait(privsocketa);
 
-		request_send_fd(privsocketa, fileno(fp));
+		request_send_fd(privsocketa, &fp->fd, 1);
 
 		proc_do_status_request(privsocketb,
 				       request_regfd(privsocketb));
 
 		privsocketb=nullptr;
 
-		auto ret=get_status(privsocketa, fileno(fp));
+		auto ret=get_status(privsocketa, fp->fd);
 
 		for (auto &[name, state] : ret)
 			state.timestamp=0;
@@ -1159,7 +1160,6 @@ void test_install()
 		{
 			throw "did not receive expected status response";
 		}
-		fclose(fp);
 	}
 
 	{
@@ -1170,7 +1170,8 @@ void test_install()
 		if (!fp)
 			throw "cannot open /dev/null?";
 
-		request_send_fd(privsocketa, fileno(fp));
+		int fpfd=fileno(fp);
+		request_send_fd(privsocketa, &fpfd, 1);
 
 		if (request_regfd(privsocketb))
 			throw "received special file descriptor unexpectedly";
@@ -3456,20 +3457,20 @@ void testparentsterm()
 		if (privsocketb->readln() != "status")
 			throw "Did not receive status command";
 
-		FILE *fp=tmpfile();
+		auto fp=tmpfile_filedesc();
 
 		request_fd(privsocketb);
 
 		request_fd_wait(privsocketa);
 
-		request_send_fd(privsocketa, fileno(fp));
+		request_send_fd(privsocketa, &fp->fd, 1);
 
 		proc_do_status_request(privsocketb,
 				       request_regfd(privsocketb));
 
 		privsocketb=nullptr;
 
-		auto ret=get_status(privsocketa, fileno(fp));
+		auto ret=get_status(privsocketa, fp->fd);
 
 		struct stat exe1, exe2;
 
@@ -3503,7 +3504,6 @@ void testparentsterm()
 
 		if (ret.begin()->second.processes != expected_processes)
 			throw "Unexpected get_status() return (2).";
-		fclose(fp);
 	}
 
 	proc_container_stop("a");
@@ -3811,6 +3811,65 @@ void testbootorder()
 	}
 }
 
+void teststopwhilestartpending()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+	a->new_container->meta->starting_command="start";
+	a->new_container->meta->stopping_command="stop";
+
+	call_install(container_install::update, a);
+
+	proc_container_start("a");
+	populated(a->new_container, true);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+		"a: " + STATE_START_PENDING_MANUAL::label.label_str(),
+		"a: cgroup created",
+		"a: " + STATE_STARTING_MANUAL::label.label_str()
+	})
+	{
+		throw "Unexpected state changes after starting a";
+	}
+
+	if (logged_runners != std::vector<std::string>{
+			"a: /bin/sh|-c|start (pid 1)"
+		})
+	{
+		throw "did not schedule a start runner";
+	}
+
+	logged_runners.clear();
+	logged_state_changes.clear();
+	proc_container_stop("a");
+
+	if (logged_state_changes != std::vector<std::string>{
+		"a: " + STATE_REMOVING::label.label_str(),
+		"a: sending SIGTERM",
+	})
+	{
+		throw "Unexpected state changes after stopping a";
+	}
+
+	logged_state_changes.clear();
+	runner_finished(1, 0);
+
+	if (logged_state_changes != std::vector<std::string>{
+		})
+	{
+		throw "Unexpected state changes after start runner finished";
+	}
+	populated(a->new_container, false);
+	do_poll(0);
+	if (logged_state_changes != std::vector<std::string>{
+		"a: cgroup removed",
+		"a: " + STATE_STOPPED::label.label_str(),
+		})
+	{
+		throw "Unexpected state changes after container is empty";
+	}
+
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -4014,6 +4073,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="testbootorder";
 		testbootorder();
+
+		test_reset();
+		test="teststopwhilestartpending";
+		teststopwhilestartpending();
 
 		test_finished();
 	} catch (const char *e)
