@@ -1,3 +1,12 @@
+2026-07-04  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Refactor daemon connections and file descriptor passing logic. Use
+	a single public socket for both root and non-root connections. Use
+	SO_PEERCRED to verify the identity of the requester. Limit the number
+	of simultaneous connections from non-root pids. Use file descriptors
+	to pass requests and results, verify that they are S_ISREG, use memfd
+	file descriptors.
+
 2025-01-12  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Version 1.4

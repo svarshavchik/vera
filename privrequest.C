@@ -9,6 +9,7 @@
 #include "messages.H"
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <sstream>
 #include <fstream>
 #include <fcntl.h>
@@ -173,10 +174,11 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 
 	struct msghdr msg{};
 	struct iovec iov;
-	char dummy_byte;
 
-	iov.iov_base = &dummy_byte;
-	iov.iov_len = 1;
+	auto &[retfdvec, buf] = ret;
+
+	iov.iov_base = buf.data();
+	iov.iov_len = buf.size()-1;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 
@@ -190,23 +192,17 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 	msg.msg_control = control_buf;
 	msg.msg_controllen = sizeof(control_buf);
 
-	if (recvmsg(efd->fd, &msg, 0) < 0)
+	auto n=recvmsg(efd->fd, &msg, 0);
+	if (n < 0)
 		return ret;
 
-	auto &[retfdvec, retcred] = ret;
+	std::fill(buf.data()+n, buf.data()+buf.size(), 0);
 
 	for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
 	     cmsg = CMSG_NXTHDR(&msg, cmsg))
 	{
 		if (cmsg->cmsg_level != SOL_SOCKET)
 			continue;
-
-		if (cmsg->cmsg_type == SCM_CREDENTIALS) {
-			auto *cred = reinterpret_cast<ucred*>(CMSG_DATA(cmsg));
-
-			retcred=*cred;
-			continue;
-		}
 
 		if (cmsg->cmsg_type == SCM_RIGHTS)
 		{
@@ -236,52 +232,34 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 	return ret;
 }
 
-external_filedesc request_regfd(const external_filedesc &efd)
+void request_send_fd(
+	const external_filedesc &efd,
+	const std::vector<external_filedesc> &fds)
 {
-	const auto &[rets, ignore] = receive_fds(efd);
+	std::vector<int> ifds;
 
-	if (rets.empty())
-		return nullptr;
+	ifds.reserve(fds.size());
 
-	auto ret=rets.front();
+	for (auto &fd : fds)
+		ifds.push_back(fd->fd);
 
-	// This must be a regular file.
-
-	if (!ret->regular())
-		return nullptr;
-
-	return ret;
-}
-
-void request_fd(const external_filedesc &efd)
-{
-	efd->write_all("\n");
-}
-
-void request_fd_wait(const external_filedesc &efd)
-{
-	efd->readln();
-}
-
-void request_send_fd(const external_filedesc &efd, const int *fds, size_t nfds)
-{
 	struct iovec iov{};
 	char dummy{0};
 
 	struct msghdr msg{};
 
-	char buf[CMSG_SPACE(sizeof(int) * nfds)];
+	char buf[CMSG_SPACE(sizeof(int) * ifds.size())];
 
 	memset(buf, 0, sizeof(buf));
 	msg.msg_control=buf;
-	msg.msg_controllen=CMSG_SPACE(sizeof(int) * nfds);
+	msg.msg_controllen=CMSG_SPACE(sizeof(int) * ifds.size());
 
 	auto cmsg = CMSG_FIRSTHDR(&msg);
 
 	cmsg->cmsg_level=SOL_SOCKET;
 	cmsg->cmsg_type=SCM_RIGHTS;
-	cmsg->cmsg_len=CMSG_LEN(sizeof(int) * nfds);
-	memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * nfds);
+	cmsg->cmsg_len=CMSG_LEN(sizeof(int) * ifds.size());
+	memcpy(CMSG_DATA(cmsg), ifds.data(), sizeof(int) * ifds.size());
 
 	iov.iov_base=&dummy;
 	iov.iov_len=1;
@@ -291,22 +269,33 @@ void request_send_fd(const external_filedesc &efd, const int *fds, size_t nfds)
 	sendmsg(efd->fd, &msg, MSG_NOSIGNAL);
 }
 
-void request_status(const external_filedesc &efd)
+bool request_status(
+	const external_filedesc &efd,
+	std::vector<external_filedesc> &fds
+)
 {
-	efd->write_all("status\n");
+	fds.push_back(tmpfile_filedesc());
+
+	if (fds.back()->fd < 0)
+		return false;
+	fds[0]->write_all("status\n");
+
+	request_send_fd(efd, fds);
+	return true;
 }
 
 std::unordered_map<std::string, container_state_info> get_status(
 	const external_filedesc &efd,
-	int fd)
+	const std::vector<external_filedesc> &cmdfds)
 {
-	request_fd_wait(efd);
+	efd->readln();
 	std::unordered_map<std::string, container_state_info> m;
 
 	std::stringstream s;
 
 	s.imbue(std::locale{"C"});
 
+	auto fd=cmdfds.at(1)->fd;
 	if (lseek(fd, 0L, SEEK_SET) == 0)
 	{
 		char buffer[1024];
@@ -597,42 +586,54 @@ void update_status_overrides(
 	}
 }
 
-std::tuple<external_filedesc, external_filedesc> create_fake_request()
+static int create_socketpair(int sockets[])
 {
-	int sockets[2];
-
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
 		throw "socketpair() failed";
-
-	std::tuple<external_filedesc, external_filedesc> efd{
-		std::make_shared<external_filedescObj>(
-			sockets[0]
-		), std::make_shared<external_filedescObj>(
-			sockets[1]
-		)
-	};
 
 	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0 ||
 	    fcntl(sockets[1], F_SETFD, FD_CLOEXEC) < 0)
 	{
-		throw "fnctl failed";
+		close(sockets[0]);
+		close(sockets[1]);
+		return 1;
 	}
 
-	return efd;
+	return 0;
 }
 
-// Have output from started/stopped/restarting/reloading units go to my
-// standard output.
-
-external_filedesc create_stdoutcc(const external_filedesc &efd)
+std::tuple<external_filedesc, external_filedesc> create_vera_socketpair()
 {
-	auto [a, b]=create_fake_request();
+	int sockets[2];
 
-	efd->write_all("cc\n");
-	request_fd_wait(efd);
-	request_send_fd(efd, &b->fd, 1);
+	if (create_socketpair(sockets) < 0)
+		return {};
 
-	return a;
+	return {std::make_shared<external_filedescObj>(sockets[0]),
+		std::make_shared<external_filedescObj>(sockets[1])};
+}
+
+std::tuple<external_filedesc, external_filedesc,
+	std::vector<external_filedesc>> create_fake_request()
+{
+	int sockets[2];
+
+	if (create_socketpair(sockets) != 0)
+		throw "socketpair() failed";
+
+	std::tuple<external_filedesc, external_filedesc,
+	std::vector<external_filedesc>> efd{
+		std::make_shared<external_filedescObj>(
+			sockets[0]
+		), std::make_shared<external_filedescObj>(
+			sockets[1]
+		),
+		std::vector<external_filedesc>{}
+	};
+
+	std::get<2>(efd).push_back(tmpfile_filedesc());
+
+	return efd;
 }
 
 void send_setenv(const external_filedesc &fd,

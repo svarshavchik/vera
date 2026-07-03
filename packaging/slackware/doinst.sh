@@ -1,6 +1,6 @@
 #! /bin/sh
 
-set -e;
+set -e
 /sbin/vlad inittab
 /sbin/vlad rehook || :
 if test -f /sbin/init.init

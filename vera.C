@@ -31,6 +31,7 @@
 #include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
 #include <stdlib.h>
 #include <syslog.h>
 #include <iostream>
@@ -49,7 +50,9 @@
 #include <charconv>
 #include <iterator>
 
-#define PUB_PROCESS_SIGNATURE "[public process]"
+#ifndef MAX_NONROOT_CONNECTIONS
+#define MAX_NONROOT_CONNECTIONS 5
+#endif
 
 int all_flag;
 int stopped_flag;
@@ -776,32 +779,135 @@ int create_vera_socket(const char *tmpname, const char *finalname)
 	return fd;
 }
 
-// Poll on the private socket.
-//
-// Create a filesystem socket without group-world privileges and
-// listen on it.
-//
-// Call proc_do_request after accepting a connection on the socket.
+// Identify the int file descriptor associated with an object
 
-static int start_vera_pub();
+// For std::unordered_set, we need a hash and an equality test. The hash
+// and equality tests should only depend on the file descriptor. We can look
+// up the file descriptor in the std::unordered_set by either an int file
+// descriptor or, for convenience, by the external_filedesc too.
+//
+// The default template assumes that the object passed is the file descriptor
+// itself, and simply returns it.
+
+template<typename T>
+struct get_file_descriptor {
+
+	template<typename U>
+	static int getfd(U &&u) noexcept
+	{
+		return u;
+	}
+};
+
+// The std::unordered_set stores socket_connections which have a member
+// called fd, which is an external_filedesc. We use the concept to
+// retrieve the file descriptor, that identifies the socket connection.
+
+template<typename T>
+concept get_file_descriptor_from_fd = requires(T &ptr) {
+	{ ptr.fd->fd } -> std::convertible_to<int>;
+};
+
+template<get_file_descriptor_from_fd T>
+struct get_file_descriptor<T>
+{
+	template<typename U>
+	static int getfd(U &&u) noexcept
+	{
+		return u.fd->fd;
+	}
+};
+
+// For std::unordered_set, a transparent equality test.
+struct file_descriptor_equal {
+	typedef void is_transparent;
+
+	template<typename T, typename U>
+	bool operator()(T &&a,
+			U &&b) const noexcept
+	{
+		return get_file_descriptor<std::remove_cvref_t<T>>{}.getfd(
+			std::forward<T>(a)
+		) ==
+			get_file_descriptor<std::remove_cvref_t<U>>{}.getfd(
+				std::forward<U>(b)
+			);
+	}
+};
+
+// For std::unordered_set, a transparent hash function.
+
+struct file_descriptor_hash {
+	typedef void is_transparent;
+
+	template<typename T>
+	size_t operator()(T &&u) const
+	{
+		return get_file_descriptor<std::remove_cvref_t<T>>{}.getfd(
+			std::forward<T>(u)
+		);
+	}
+};
+
+// This keeps track of how many active connections per uid
+//
+// polled_socket_connection's constructor increments this value, and its
+// destructor decrements it. The uid is removed when there are no more
+// active connections for it.
+
+static std::unordered_map<uid_t, size_t> active_connections_by_uid;
+
+// A single active connection
+
+struct polled_socket_connection {
+
+	// The file descriptor associated with this connection
+
+	external_filedesc fd;
+
+	// The credentials of the user who opened this connection
+
+	ucred credentials;
+
+	// The poller for this connection
+
+	polledfd poller;
+
+	polled_socket_connection(external_filedesc fd, const ucred &cred);
+	~polled_socket_connection();
+
+	polled_socket_connection(const polled_socket_connection &other) = delete;
+
+	polled_socket_connection &operator=(const polled_socket_connection &other) = delete;
+};
+
+// The poller for the command socket
 
 struct priv_poller_t {
+
+	// The listening socket
 	external_filedesc cmd_socket;
+
+	// The poller for the listening socket
 	polledfd poll_cmd;
 
-	external_filedesc pub_socket_pipe;
+	// The set of active connections
+
+	std::unordered_set<
+		polled_socket_connection,
+		file_descriptor_hash,
+		file_descriptor_equal
+	> connections;
 };
 
 priv_poller_t priv_poller;
 
 void create_priv_poller()
 {
-	umask(077);
+	umask(0111);
 	int fd=create_vera_socket(PRIVCMDSOCKET ".tmp",
 				  PRIVCMDSOCKET);
 	umask(022);
-
-	int pub_socket_pipe=start_vera_pub();
 
 	auto cmd_socket=std::make_shared<external_filedescObj>(fd);
 
@@ -826,19 +932,150 @@ void create_priv_poller()
 			if (conn_fd < 0)
 				return;
 
-			auto privcmdsocket=std::make_shared<
-				external_filedesc_privcmdsocketObj>(conn_fd);
+			// Turn on the close-on-exec bit and set the socket to
+			// non-blocking, so that we don't have to worry about
+			// closing file descriptors after forking and executing
+			// a command, and so that we don't block when reading
+			// from the socket, or writing too, for that matter,
+			// in case of an obnoxious user that sends a command
+			// and that holds the socket open and doesn't read it,
+			// although at this time we're unlikely to be using a
+			// lot of socket writes.
 
-			proc_do_request(privcmdsocket);
+			if (fcntl(conn_fd, F_SETFL, O_CLOEXEC|O_NONBLOCK) < 0)
+			{
+				log_message(
+					"could not configure a "
+					"new connection");
+				close(conn_fd);
+				return;
+			}
+
+			struct ucred cred{};
+			socklen_t len = sizeof(cred);
+			if (getsockopt(conn_fd, SOL_SOCKET, SO_PEERCRED, &cred,
+					       &len) < 0)
+			{
+				log_message("could not retrieve credentials "
+						    "for a new connection");
+				close(conn_fd);
+				return;
+			}
+
+			if (cred.uid != 0)
+			{
+				auto iter=active_connections_by_uid.find(
+					cred.uid
+				);
+
+				if (iter != active_connections_by_uid.end() &&
+				    iter->second >= MAX_NONROOT_CONNECTIONS)
+				{
+					log_message("maximum number of non-root "
+							"connections reached "
+							"(uid "
+							+ std::to_string(
+								cred.uid
+							) + ")");
+					close(conn_fd);
+					return;
+				}
+			}
+
+			priv_poller.connections.emplace(
+				std::make_shared<
+					external_filedesc_privcmdsocketObj
+				>(conn_fd),
+				cred);
 		}};
 
 	priv_poller=priv_poller_t{
 		cmd_socket,
-		std::move(poll_cmd),
-		std::make_shared<external_filedescObj>(
-			pub_socket_pipe
-		)
+		std::move(poll_cmd)
 	};
+}
+
+polled_socket_connection::polled_socket_connection(
+	external_filedesc fd,
+	const ucred &cred
+)
+	: fd{std::move(fd)},
+	  credentials{cred},
+	  poller{this->fd->fd,
+		[]
+		(int fd)
+		{
+			// This is a new connection received on the poller
+			// socket. We need to figure out which connection this
+			// is, save the socket, remove the connection from the
+			// poller (so that after we're done the connection is
+			// closed), then process the connection.
+
+			auto iter=priv_poller.connections.find(fd);
+			if (iter == priv_poller.connections.end())
+				return;
+
+			// Zero errno before receiving. This is so that we can
+			// tell when the read on the non-blocking socket failed
+			// because there's nothing to read (spurious wake-up).
+			// All other error conditions, indicated by an empty
+			// fds array, is an error and we remove this file
+			// descriptor from the poller, which closes it.
+			//
+			// All commands must pass in at least one file
+			// descriptor with the command itself and its parameters
+			// so if some clown sends us an empty file descriptor
+			// array, we treat it as an error and remove this file
+			// descriptor from the poller, which closes it.
+
+			errno=0;
+			auto [cmdfds, legacy_cmd]=receive_fds(iter->fd);
+			if (cmdfds.empty())
+			{
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+					// Note the file desc is still polled,
+					// so we'll get another chance at
+					// reading.
+					return;
+
+				// If the user sends an empty cmdfds array, we
+				// assume that it's a legacy client and
+				// create a temporary file descriptor and write
+				// the legacy command into it.
+
+				cmdfds.push_back(tmpfile_filedesc());
+				cmdfds.back()->write_all(legacy_cmd.data());
+			}
+
+			// Save the sock and remove the connection from the
+			// poller (so that after we're done the connection is
+			// closed).
+
+			auto sock=iter->fd;
+			priv_poller.connections.erase(iter);
+
+			proc_check_and_do_request(
+				std::move(sock),
+				cmdfds,
+				iter->credentials
+			);
+		}
+	}
+{
+	++active_connections_by_uid[credentials.uid];
+}
+
+polled_socket_connection::~polled_socket_connection()
+{
+	auto iter=active_connections_by_uid.find(credentials.uid);
+
+	// The uid is guaranteed to be there since we increment it in
+	// the constructor, and the only way this object could have been
+	// created is if that happened.
+
+	--iter->second;
+	if (iter->second == 0)
+		active_connections_by_uid.erase(iter);
 }
 
 void sigusr2()
@@ -1018,11 +1255,11 @@ void vera_init()
 		// Create a fake request to switch to the default runlevel
 		//
 		// This makes the daemon come up with the default runlevel.
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfds] = create_fake_request();
 
-		request_runlevel(socketa, "default");
+		request_runlevel(cmdfds[0], "default");
 
-		proc_do_request(socketb);
+		proc_do_request(socketb, cmdfds, {});
 
 		if (get_containers_info(nullptr)->default_runlevel_override)
 		{
@@ -1064,38 +1301,6 @@ void vera_init()
 		}
 		proc_check_reexec();
 	}
-}
-
-// Connect to the private socket.
-
-external_filedesc try_connect_vera_priv()
-{
-	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
-	struct sockaddr_un sun{};
-
-	sun.sun_family=AF_UNIX;
-	strcpy(sun.sun_path, PRIVCMDSOCKET);
-
-	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
-	{
-		close(fd);
-		return nullptr;
-	}
-
-	return std::make_shared<external_filedescObj>(fd);
-}
-
-external_filedesc connect_vera_pub()
-{
-	auto fd=try_connect_vera_pub(PUBCMDSOCKET);
-
-	if (!fd)
-	{
-		perror(PUBCMDSOCKET);
-		exit(1);
-	}
-
-	return fd;
 }
 
 void pager()
@@ -1141,214 +1346,8 @@ void pager()
 	exit(1);
 }
 
-// Connection on the public socket.
-
-// A separate process listens on the public socket and it does not affect
-// the main vera init daemon. Therefore it's not as critical that it's going
-// to block on reading the command. At most, a rogue connection is going to
-// block all other non-privileged connections.
-
-void do_pub_request(external_filedesc pubfd)
-{
-	const auto &[pubfds, sender]=receive_fds(pubfd);
-
-	if (pubfds.empty() || lseek(pubfds[0]->fd, 0L, SEEK_SET) < 0)
-		return;
-
-	if (!pubfds[0]->regular())
-		return;
-
-	auto cmd=pubfds[0]->readln(256);
-
-	if (cmd == "status" && pubfds.size() > 1)
-	{
-		auto fd=try_connect_vera_priv();
-
-		if (!fd)
-			return;
-
-		request_status(fd);
-		request_fd_wait(fd);
-		request_send_fd(fd, &pubfds[1]->fd, 1);
-		request_fd_wait(fd);
-		return;
-	}
-}
-
-void request_status_pub(external_filedesc pubsocket,
-			external_filedesc statussocket)
-{
-	auto cmdfd=tmpfile_filedesc();
-
-	if (cmdfd < 0)
-		return;
-	cmdfd->write_all("status\n");
-
-	int fd[2]={cmdfd->fd, statussocket->fd};
-
-	request_send_fd(pubsocket, fd, 2);
-}
-
-// Create a pipe, both ends of the pipe have CLOEXEC set.
-// fork a child process, child process closes the write end of the pipe,
-// runs vera_pub() listening on the read end of the pipe, when it closes
-// it exits.
-//
-// Returns the write end of the pipe to the parent process.
-
-int start_vera_pub()
-{
-	int pipefd[2];
-
-	while (pipe2(pipefd, O_CLOEXEC|O_NONBLOCK) < 0)
-	{
-		log_message(_("pipe failed"));
-		sleep(5);
-	}
-
-	pid_t p;
-
-	while ((p=fork()) < 0)
-	{
-		log_message(_("fork failed"));
-		sleep(5);
-	}
-
-	if (!p)
-	{
-		close(pipefd[1]);
-
-		fcntl(pipefd[0], F_SETFD, 0);
-
-		std::ostringstream o;
-
-		o.imbue(std::locale{"C"});
-
-		o << pipefd[0];
-
-		execl(exename.c_str(),
-		      exename.c_str(),
-		      PUB_PROCESS_SIGNATURE,
-		      o.str().c_str(),
-		      nullptr);
-
-		perror(exename.c_str());
-
-		_exit(1);
-	}
-
-	close(pipefd[0]);
-	return pipefd[1];
-}
-
-// Separate process that listens on the public socket and forwards
-// requests to the main vera init daemon.
-//
-// The vera init daemon creates a pipe and forks. The original, parent
-// process, becomes the main init daemon and closes the read end of the pipe.
-//
-// The pipe gets closed if the main init daemon gets re-execed.
-//
-// The child process listens on the public socket and proxies public requests.
-// It closes the write end of the pipe, and exits when the read end of the
-// pipe gets closed.
-
-void vera_pub(char *parentfd)
-{
-	umask(000);
-	int fd=create_vera_socket(PUBCMDSOCKET ".tmp",
-				  PUBCMDSOCKET);
-
-	umask(077);
-
-	int parent_fd_pipe=-1;
-
-	{
-		sigset_t ss;
-
-		sigemptyset(&ss);
-		sigaddset(&ss, SIGHUP);
-		sigaddset(&ss, SIGTERM);
-		sigaddset(&ss, SIGINT);
-		sigaddset(&ss, SIGQUIT);
-
-		sigprocmask(SIG_BLOCK, &ss, NULL);
-
-		std::istringstream i;
-
-		i.imbue(std::locale{"C"});
-
-		i.str(parentfd);
-		i >> parent_fd_pipe;
-
-		while (*parentfd)
-			*parentfd++=' ';
-	}
-
-	if (parent_fd_pipe < 0)
-	{
-		throw std::runtime_error{
-			"public process cannot read pipe file descriptor"
-				" from parent process."};
-	}
-
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
-	{
-		throw std::runtime_error{
-			"public process cannot set FD_CLOEXEC on the"
-				" pipe file descriptor from parent process."};
-	}
-
-	polledfd poll_for_exit{parent_fd_pipe,
-		[]
-		(int fd)
-		{
-			_exit(0);
-		}};
-
-	// Poll the public command socket for connections. Call do_pub_request()
-	// for each accepted connection.
-
-	polledfd poll_cmd{fd,
-		[]
-		(int fd)
-		{
-			struct sockaddr addr;
-			socklen_t addrlen=sizeof(addr);
-
-			// Accept the new connection, make sure it has the
-			// close-on-exec bit set.
-
-			int conn_fd=accept4(fd,
-					    &addr,
-					    &addrlen,
-					    SOCK_CLOEXEC);
-
-			if (conn_fd < 0)
-				return;
-
-			int opt=1;
-
-			if (setsockopt(
-				    conn_fd, SOL_SOCKET, SO_PASSCRED, &opt,
-				    sizeof(opt)
-			    ) < 0)
-			{
-				close(conn_fd);
-				return;
-			}
-
-			do_pub_request(std::make_shared<external_filedescObj>(
-					       conn_fd
-				       ));
-		}};
-
-	while (1)
-		do_poll();
-}
-
 #define DEFAULT_PATH \
-	"/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin";
+	"/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin"
 
 constexpr std::string_view default_path()
 {
@@ -1451,17 +1450,18 @@ void vera()
 //
 // Send commands to the vera daemon
 
-external_filedesc connect_vera_priv()
+std::tuple<external_filedesc,
+	std::vector<external_filedesc>> connect_vera_priv()
 {
-	auto fd=try_connect_vera_priv();
+	auto ret=try_connect_vera_priv();
 
-	if (!fd)
+	if (std::get<1>(ret).empty())
 	{
 		perror(PRIVCMDSOCKET);
 		exit(1);
 	}
 
-	return fd;
+	return ret;
 }
 
 bool do_chmod_override(std::string configname,
@@ -1608,19 +1608,34 @@ void do_override(const std::string &name,
 	exit(exit_code);
 }
 
-// start command request
-static void vlad_start(const std::string &unit)
+// send start/stop/restart/reload request
+static std::tuple<external_filedesc, external_filedesc> vlad_ssrr(
+	void (*send_command)(const external_filedesc &, std::string),
+	std::string unit)
 {
-	auto fd=connect_vera_priv();
+	auto [cmdfd, cmdfds]=connect_vera_priv();
 
 	external_filedesc stdoutcc;
 
 	if (!nowait_flag)
-		stdoutcc=create_stdoutcc(fd);
+	{
+		auto [socket1, socket2]=create_vera_socketpair();
 
-	send_start(fd, unit);
+		stdoutcc=std::move(socket1);
+		cmdfds.push_back(std::move(socket2));
+	}
 
-	auto ret=get_start_status(fd);
+	send_command(cmdfds[0], std::move(unit));
+	request_send_fd(cmdfd, cmdfds);
+
+	return {cmdfd, stdoutcc};
+}
+
+void vlad_start(std::string unit)
+{
+	auto [cmdfd, stdoutcc]=vlad_ssrr(send_start, unit);
+
+	auto ret=get_start_status(cmdfd);
 
 	if (!ret.empty())
 	{
@@ -1631,9 +1646,10 @@ static void vlad_start(const std::string &unit)
 	if (nowait_flag)
 		return;
 
-	forward_carbon_copy(stdoutcc, 1);
+	if (stdoutcc)
+		forward_carbon_copy(stdoutcc, 1);
 
-	if (!get_start_result(fd))
+	if (!get_start_result(cmdfd))
 	{
 		std::cerr << unit
 			  << _(": could not be started, check the "
@@ -1647,11 +1663,13 @@ static void vlad_start(const std::string &unit)
 
 static void vlad_switch(const std::string &runlevel)
 {
-	auto conn=connect_vera_priv();
+	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_runlevel(conn, runlevel);
+	request_runlevel(cmdfds[0], runlevel);
 
-	auto ret=get_runlevel_status(conn);
+	request_send_fd(cmdfd, cmdfds);
+
+	auto ret=get_runlevel_status(cmdfd);
 
 	if (!ret.empty())
 	{
@@ -1660,18 +1678,20 @@ static void vlad_switch(const std::string &runlevel)
 	}
 
 	if (waitrunlevel_flag)
-		wait_runlevel(conn);
+		wait_runlevel(cmdfd);
 }
 
 // freeze request
 
 static void vlad_freeze(const std::string &name)
 {
-	auto conn=connect_vera_priv();
+	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_freeze(conn, name);
+	request_freeze(cmdfds[0], name);
 
-	auto ret=get_freeze_thaw_status(conn);
+	request_send_fd(cmdfd, cmdfds);
+
+	auto ret=get_freeze_thaw_status(cmdfd);
 
 	if (!ret.empty())
 	{
@@ -1684,11 +1704,13 @@ static void vlad_freeze(const std::string &name)
 
 static void vlad_thaw(const std::string &name)
 {
-	auto conn=connect_vera_priv();
+	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_thaw(conn, name);
+	request_thaw(cmdfds[0], name);
 
-	auto ret=get_freeze_thaw_status(conn);
+	request_send_fd(cmdfd, cmdfds);
+
+	auto ret=get_freeze_thaw_status(cmdfd);
 
 	if (!ret.empty())
 	{
@@ -2142,16 +2164,9 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "stop")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, stdoutcc]=vlad_ssrr(send_stop, args[1]);
 
-		external_filedesc stdoutcc;
-
-		if (!nowait_flag)
-			stdoutcc=create_stdoutcc(fd);
-
-		send_stop(fd, args[1]);
-
-		auto ret=get_stop_status(fd);
+		auto ret=get_stop_status(cmdfd);
 
 		if (!ret.empty())
 		{
@@ -2164,22 +2179,15 @@ void vlad(std::vector<std::string> args)
 
 		forward_carbon_copy(stdoutcc, 1);
 
-		wait_stop(fd);
+		wait_stop(cmdfd);
 		return;
 	}
 
 	if (args.size() == 2 && args[0] == "restart")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, stdoutcc]=vlad_ssrr(send_restart, args[1]);
 
-		external_filedesc stdoutcc;
-
-		if (!nowait_flag)
-			stdoutcc=create_stdoutcc(fd);
-
-		send_restart(fd, args[1]);
-
-		auto ret=get_restart_status(fd);
+		auto ret=get_restart_status(cmdfd);
 
 		if (!ret.empty())
 		{
@@ -2192,7 +2200,7 @@ void vlad(std::vector<std::string> args)
 
 		forward_carbon_copy(stdoutcc, 1);
 
-		int rc=wait_restart(fd);
+		int rc=wait_restart(cmdfd);
 
 		if (WIFSIGNALED(rc))
 		{
@@ -2217,16 +2225,9 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "reload")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, stdoutcc]=vlad_ssrr(send_reload, args[1]);
 
-		external_filedesc stdoutcc;
-
-		if (!nowait_flag)
-			stdoutcc=create_stdoutcc(fd);
-
-		send_reload(fd, args[1]);
-
-		auto ret=get_reload_status(fd);
+		auto ret=get_reload_status(cmdfd);
 
 		if (!ret.empty())
 		{
@@ -2239,7 +2240,7 @@ void vlad(std::vector<std::string> args)
 
 		forward_carbon_copy(stdoutcc, 1);
 
-		int rc=wait_reload(fd);
+		int rc=wait_reload(cmdfd);
 
 		if (WIFSIGNALED(rc))
 		{
@@ -2266,7 +2267,9 @@ void vlad(std::vector<std::string> args)
 				 args[0] == "u" ||
 				 args[0] == "U"))
 	{
-		request_reexec(connect_vera_priv());
+		auto [cmdfd, cmdfds]=connect_vera_priv();
+		request_reexec(cmdfd);
+		cmdfd->readln();
 		return;
 	}
 
@@ -2278,11 +2281,12 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 1 && args[0] == "current")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		request_current_runlevel(fd);
+		request_current_runlevel(cmdfds[0]);
+		request_send_fd(cmdfd, cmdfds);
 
-		auto s=get_current_runlevel(fd);
+		auto s=get_current_runlevel(cmdfd);
 
 		if (s.empty())
 		{
@@ -2306,19 +2310,18 @@ void vlad(std::vector<std::string> args)
 	{
 		pager();
 
-		auto fdfp=tmpfile_filedesc();
+		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		if (fdfp->fd < 0)
-			return;
-
-		auto fd=connect_vera_pub();
-
-		request_status_pub(fd, fdfp);
+		if (!request_status(cmdfd, cmdfds))
+		{
+			perror("request_status");
+			exit(1);
+		}
 
 		if (args.size() >= 2)
 			stopped_flag=1;
 
-		auto status=get_status(fd, fdfp->fd);
+		auto status=get_status(cmdfd, cmdfds);
 
 		update_status_overrides(
 			status,
@@ -2370,9 +2373,9 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 1 && args[0] == "vera-up")
 	{
-		auto fd=try_connect_vera_pub(PUBCMDSOCKET);
+		auto [cmdfd, cmdfds]=try_connect_vera_priv();
 
-		if (fd)
+		if (cmdfd)
 			exit(0);
 		exit(1);
 	}
@@ -2411,7 +2414,7 @@ void vlad(std::vector<std::string> args)
 		unhook("/etc/rc.d",
 		       "/sbin",
 		       "/usr/sbin",
-		       PUBCMDSOCKET,
+		       PRIVCMDSOCKET,
 		       HOOKFILE);
 		std::cout << "Reinstalled init." << std::endl;
 		exit(0);
@@ -2518,12 +2521,13 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 3 && args[0] == "sysdown")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		send_sysdown(fd, std::move(args[1]),
-			     std::move(args[2]));
+		send_sysdown(cmdfds[0], std::move(args[1]),
+				     std::move(args[2]));
+		request_send_fd(cmdfd, cmdfds);
 
-		auto ret=get_sysdown_status(fd);
+		auto ret=get_sysdown_status(cmdfd);
 
 		if (!ret.empty())
 		{
@@ -2535,18 +2539,20 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() == 3 && args[0] == "setenv")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		send_setenv(fd, args[1], args[2]);
-		exit(wait_setunsetenv(fd));
+		send_setenv(cmdfds[0], args[1], args[2]);
+		request_send_fd(cmdfd, cmdfds);
+		exit(wait_setunsetenv(cmdfd));
 	}
 
 	if (args.size() == 2 && args[0] == "unsetenv")
 	{
-		auto fd=connect_vera_priv();
+		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		send_unsetenv(fd, args[1]);
-		exit(wait_setunsetenv(fd));
+		send_unsetenv(cmdfds[0], args[1]);
+		request_send_fd(cmdfd, cmdfds);
+		exit(wait_setunsetenv(cmdfd));
 	}
 
 	// Handle one-character init-style commands.
@@ -2750,7 +2756,7 @@ void vlad(std::vector<std::string> args)
 	}
 
 	if ((args.size() >= 3 && args[0] == "set-resource") ||
-	    (args.size() == 3 && args[1] == "delete-resource"))
+	    (args.size() == 3 && args[0] == "delete-resource"))
 	{
 		set_or_add_resource(
 			args,
@@ -2804,13 +2810,6 @@ int main(int argc, char **argv)
 
 	try {
 
-		if (argc >= 3 &&
-		    std::string_view{argv[1]} == PUB_PROCESS_SIGNATURE)
-		{
-			set_global_locale();
-			vera_pub(argv[2]);
-		}
-
 		if (exename.substr(slash) == "vlad" || argc > 1)
 		{
 			umask(022);
@@ -2828,20 +2827,22 @@ int main(int argc, char **argv)
 
 					auto p=s.find('=');
 
-					auto fd=connect_vera_priv();
+					auto [cmdfd, cmdfds]=
+						connect_vera_priv();
 
 					if (p != s.npos)
 					{
-						send_setenv(fd,
+						send_setenv(cmdfds[0],
 							    s.substr(0, p),
 							    s.substr(p+1));
 					}
 					else
 					{
-						send_unsetenv(fd, s);
+						send_unsetenv(cmdfds[0], s);
 					}
+					request_send_fd(cmdfd, cmdfds);
 
-					if (wait_setunsetenv(fd))
+					if (wait_setunsetenv(cmdfd))
 						exit(1);
 			       }
 

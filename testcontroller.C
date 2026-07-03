@@ -60,10 +60,10 @@ void test_start_and_stop()
 	if (err.empty())
 		throw "proc_container_start didn't fail for a nonexistent unit";
 
-	auto [stopa, stopb] = create_fake_request();
+	auto [stopa, stopb, cmdfd] = create_fake_request();
 
-	send_stop(stopa, "b");
-	proc_do_request(stopb);
+	send_stop(cmdfd[0], "b");
+	proc_do_request(stopb, cmdfd, {});
 	stopb=nullptr;
 
 	err=get_stop_status(stopa);
@@ -73,11 +73,11 @@ void test_start_and_stop()
 
 	stopb=nullptr;
 
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, socketcmdfd] = create_fake_request();
 
-	send_start(socketa, "a");
+	send_start(socketcmdfd[0], "a");
 
-	proc_do_request(socketb);
+	proc_do_request(socketb, socketcmdfd, {});
 	socketb=nullptr;
 
 	err=get_start_status(socketa);
@@ -308,11 +308,11 @@ void test_start_failed_fork()
 		container_install::update
 	);
 
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_start(socketa, "failed_fork");
+	send_start(cmdfd[0], "failed_fork");
 
-	proc_do_request(socketb);
+	proc_do_request(socketb, cmdfd, {});
 	socketb=nullptr;
 
 	auto err=get_start_status(socketa);
@@ -1126,27 +1126,21 @@ void test_install()
 
 
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		request_status(privsocketa);
+		if (!request_status(privsocketa, cmdfd))
+			throw "request_status failed";
 
-		if (privsocketb->readln() != "status")
-			throw "Did not receive status command";
+		auto [received_fds, ignore]=receive_fds(privsocketb);
 
-		auto fp=tmpfile_filedesc();
+		if (received_fds.size() != 2)
+			throw "did not receive expected file descriptor";
 
-		request_fd(privsocketb);
-
-		request_fd_wait(privsocketa);
-
-		request_send_fd(privsocketa, &fp->fd, 1);
-
-		proc_do_status_request(privsocketb,
-				       request_regfd(privsocketb));
+		proc_do_request(privsocketb, received_fds, {1, 1, 1});
 
 		privsocketb=nullptr;
 
-		auto ret=get_status(privsocketa, fp->fd);
+		auto ret=get_status(privsocketa, cmdfd);
 
 		for (auto &[name, state] : ret)
 			state.timestamp=0;
@@ -1162,21 +1156,6 @@ void test_install()
 		}
 	}
 
-	{
-		auto [privsocketa, privsocketb] = create_fake_request();
-
-		FILE *fp=fopen("/dev/null", "r+");
-
-		if (!fp)
-			throw "cannot open /dev/null?";
-
-		int fpfd=fileno(fp);
-		request_send_fd(privsocketa, &fpfd, 1);
-
-		if (request_regfd(privsocketb))
-			throw "received special file descriptor unexpectedly";
-		fclose(fp);
-	}
 	logged_state_changes.clear();
 
 	call_install(container_install::update,
@@ -1367,10 +1346,10 @@ void test_runlevels()
 	logged_state_changes.clear();
 
 	{
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_current_runlevel(socketa);
-		proc_do_request(socketb);
+		request_current_runlevel(cmdfd[0]);
+		proc_do_request(socketb, cmdfd, {});
 		socketb=nullptr;
 
 		auto current_runlevel=get_current_runlevel(socketa);
@@ -1972,10 +1951,10 @@ void manualstopearly()
 		throw "Unexpected state changes after early container stop";
 	}
 
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_stop(socketa, "manualstopearly");
-	proc_do_request(socketb);
+	send_stop(cmdfd[0], "manualstopearly");
+	proc_do_request(socketb, cmdfd, {});
 
 	if (!get_stop_status(socketa).empty())
 		throw "Unexpected error stopping container";
@@ -2385,11 +2364,11 @@ void testmultiplestart()
 		throw "unexpected state changes after start";
 	}
 
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_start(socketa, "multiplestart");
+	send_start(cmdfd[0], "multiplestart");
 
-	proc_do_request(socketb);
+	proc_do_request(socketb, cmdfd, {});
 	socketb=nullptr;
 
 	err=get_start_status(socketa);
@@ -2811,10 +2790,10 @@ void testmultirunlevels()
 		throw "unexpected runlevel (1): " + runlevel;
 
 	{
-		auto [a, b]=create_fake_request();
+		auto [a, b, cmdfd] = create_fake_request();
 
-		request_reexec(a);
-		proc_do_request(b);
+		request_reexec(cmdfd[0]);
+		proc_do_request(b, cmdfd, {});
 	}
 
 	while (!poller_is_transferrable())
@@ -2911,10 +2890,10 @@ void testmultirunlevels()
 	}
 
 	logged_state_changes.clear();
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_runlevel(socketa, "default");
-	proc_do_request(socketb);
+	request_runlevel(cmdfd[0], "default");
+	proc_do_request(socketb, cmdfd, {});
 	socketb=nullptr;
 
 	if (!get_runlevel_status(socketa).empty())
@@ -3055,9 +3034,9 @@ void testsysdown()
 {
 	call_install(container_install::update);
 
-	auto [sda, sdb] = create_fake_request();
+	auto [sda, sdb, cmdfd] = create_fake_request();
 
-	send_sysdown(sda,
+	send_sysdown(cmdfd[0],
 		     "0",
 		     "echo RUNLEVEL:$RUNLEVEL >sysdown.out; exec ./testcontroller2fdleak");
 
@@ -3071,7 +3050,7 @@ void testsysdown()
 
 	if (p == 0)
 	{
-		proc_do_request(sdb);
+		proc_do_request(sdb, cmdfd, {});
 		fprintf(stderr, "Should not've finished the request");
 		exit(1);
 	}
@@ -3205,10 +3184,10 @@ void testalternategroups()
 
 	call_install(container_install::update, a, b, c, d);
 
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_start(socketa, "a");
-	proc_do_request(socketb);
+	send_start(cmdfd[0], "a");
+	proc_do_request(socketb, cmdfd, {});
 
 	if (logged_state_changes != std::vector<std::string>{
 			"a: " + STATE_START_PENDING_MANUAL::label.label_str(),
@@ -3260,10 +3239,11 @@ void testalternategroups()
 	logged_state_changes.clear();
 	logged_runners.clear();
 
-	std::tie(socketa, socketb) = create_fake_request();
+	cmdfd.clear();
+	std::tie(socketa, socketb, cmdfd) = create_fake_request();
 
-	send_start(socketa, "b");
-	proc_do_request(socketb);
+	send_start(cmdfd[0], "b");
+	proc_do_request(socketb, cmdfd, {});
 
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 
@@ -3343,15 +3323,13 @@ void testalternategroups()
 
 static std::vector<std::string> capturetimestamps()
 {
-	FILE *fp=tmpfile();
-	auto [socketa, socketb] = create_fake_request();
+	auto fp=tmpfile_filedesc();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	proc_do_status_request(
-		socketb,
-		std::make_shared<external_filedescObj>(dup(fileno(fp)))
-	);
+	cmdfd.push_back(fp);
+	proc_do_status_request(socketb, fp);
 
-	auto s=get_status(socketa, fileno(fp));
+	auto s=get_status(socketa, cmdfd);
 
 	std::vector<std::string> ret;
 
@@ -3391,10 +3369,10 @@ void teststatustimestamp()
 	call_install(container_install::update, a, b, c, d);
 
 	{
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		send_start(socketa, "a");
-		proc_do_request(socketb);
+		send_start(cmdfd[0], "a");
+		proc_do_request(socketb, cmdfd, {});
 	}
 
 	auto ts=capturetimestamps();
@@ -3450,27 +3428,21 @@ void testparentsterm()
 	create_fake_proc(12, 11, "exe2", {"exe2","e", "f"});
 	create_fake_proc(13, 10, "exe2", {"exe2","g", "h"});
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		request_status(privsocketa);
+		if (!request_status(privsocketa, cmdfd))
+			throw "Failed to request status.";
 
-		if (privsocketb->readln() != "status")
-			throw "Did not receive status command";
+		auto [recvfds, ignore]=receive_fds(privsocketb);
 
-		auto fp=tmpfile_filedesc();
+		if (recvfds.size() != 2)
+			throw "Did not receive expected number of file descriptors.";
 
-		request_fd(privsocketb);
-
-		request_fd_wait(privsocketa);
-
-		request_send_fd(privsocketa, &fp->fd, 1);
-
-		proc_do_status_request(privsocketb,
-				       request_regfd(privsocketb));
+		proc_do_request(privsocketb, recvfds, {});
 
 		privsocketb=nullptr;
 
-		auto ret=get_status(privsocketa, fp->fd);
+		auto ret=get_status(privsocketa, cmdfd);
 
 		struct stat exe1, exe2;
 
@@ -3529,19 +3501,19 @@ void testparentsterm()
 void testenv()
 {
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_setenv(privsocketa, "LANG", "en_US.UTF-8");
-		proc_do_request(privsocketb);
+		send_setenv(cmdfd[0], "LANG", "en_US.UTF-8");
+		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
 			throw "Unexpected error setting an env var";
 	}
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_setenv(privsocketa, "LC_ALL", "en_US.UTF-8");
-		proc_do_request(privsocketb);
+		send_setenv(cmdfd[0], "LC_ALL", "en_US.UTF-8");
+		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
 			throw "Unexpected error setting an env var";
@@ -3563,10 +3535,10 @@ void testenv()
 	}
 
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_setenv(privsocketa, "LC_ALL", "en_UK.UTF-8");
-		proc_do_request(privsocketb);
+		send_setenv(cmdfd[0], "LC_ALL", "en_UK.UTF-8");
+		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
 			throw "Unexpected error setting an env var";
@@ -3588,20 +3560,20 @@ void testenv()
 	}
 
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_unsetenv(privsocketa, "LC_ALL");
-		proc_do_request(privsocketb);
+		send_unsetenv(cmdfd[0], "LC_ALL");
+		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
 			throw "Unexpected error setting an env var";
 	}
 
 	{
-		auto [privsocketa, privsocketb] = create_fake_request();
+		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_unsetenv(privsocketa, "Z");
-		proc_do_request(privsocketb);
+		send_unsetenv(cmdfd[0], "Z");
+		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
 			throw "Unexpected error setting an env var";
@@ -3637,10 +3609,10 @@ void testreexec_stopped()
 	runner_finished(1, 0);
 
 	{
-		auto [a, b]=create_fake_request();
+		auto [a, b, cmdfd] = create_fake_request();
 
-		request_reexec(a);
-		proc_do_request(b);
+		request_reexec(cmdfd[0]);
+		proc_do_request(b, cmdfd, {});
 	}
 
 	while (!poller_is_transferrable())
@@ -3704,9 +3676,9 @@ void testfreezethaw()
 	};
 
 	{
-		auto [socketa, socketb] = create_fake_request();
-		request_freeze(socketa, "a");
-		proc_do_request(socketb);
+		auto [socketa, socketb, cmdfd] = create_fake_request();
+		request_freeze(cmdfd[0], "a");
+		proc_do_request(socketb, cmdfd, {});
 		socketb=nullptr;
 
 		if (!get_freeze_thaw_status(socketa).empty())
@@ -3725,9 +3697,9 @@ void testfreezethaw()
 	}
 
 	{
-		auto [socketa, socketb] = create_fake_request();
-		request_thaw(socketa, "a");
-		proc_do_request(socketb);
+		auto [socketa, socketb, cmdfd] = create_fake_request();
+		request_thaw(cmdfd[0], "a");
+		proc_do_request(socketb, cmdfd, {});
 		socketb=nullptr;
 
 		if (!get_freeze_thaw_status(socketa).empty())
@@ -3868,6 +3840,99 @@ void teststopwhilestartpending()
 		throw "Unexpected state changes after container is empty";
 	}
 
+}
+
+void test_enoperm()
+{
+	proc_new_container_set pcs;
+
+	auto a=std::make_shared<proc_new_containerObj>("a");
+
+	pcs.insert(a);
+	proc_containers_install(
+		loaded_containers{pcs},
+		container_install::update
+	);
+
+	for (auto [testfunc, cmdname] : std::array<
+		std::tuple<
+			void(*)(const external_filedesc &,
+			std::string),
+			const char*
+		>, 4>({
+			{
+				send_start,
+				"start"
+			},
+			{
+				send_stop,
+				"stop"
+			},
+			{
+				send_reload,
+				"reload"
+			},
+			{
+				send_restart,
+				"restart"
+			}
+	}))
+	{
+		auto [fakea, fakeb, fakecmd] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
+
+		cmdfd[0]=fakea;
+		testfunc(fakea, "a");
+		logged_state_changes.clear();
+		proc_check_and_do_request(socketa, cmdfd, ucred{0, 0, 0});
+		cmdfd.clear();
+		fakea=nullptr;
+
+		std::vector<std::string> result;
+
+		for (std::string n; (n=fakeb->readln()) != "";)
+		{
+			result.push_back(n);
+		}
+		if (result != std::vector<std::string>{
+
+			// testfunc's results were not read at all
+			cmdname,
+			"a"
+		} || logged_state_changes != std::vector<std::string>{
+			"bad command file descriptor received from uid 0"
+		})
+		{
+			throw "unexpected result after bad command invocation";
+		}
+
+		result.clear();
+
+		std::tie(socketa, socketb, cmdfd) = create_fake_request();
+
+		testfunc(cmdfd[0], "a");
+		logged_state_changes.clear();
+		proc_check_and_do_request(socketb, cmdfd, ucred{
+			.pid=1,
+			.uid=1,
+			.gid=1
+		});
+
+		socketb=nullptr;
+		for (std::string n; (n=socketa->readln()) != "";)
+		{
+			result.push_back(n);
+		}
+		if (result != std::vector<std::string>{
+				"Not allowed"
+			} || logged_state_changes != std::vector<std::string>{
+				"root is required for command: " +
+				std::string(cmdname) + " from uid 1"
+			})
+		{
+			throw "unexpected result after permission denied";
+		}
+	}
 }
 
 int main(int argc, char **argv)
@@ -4077,6 +4142,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="teststopwhilestartpending";
 		teststopwhilestartpending();
+
+		test_reset();
+		test="test_enoperm";
+		test_enoperm();
 
 		test_finished();
 	} catch (const char *e)

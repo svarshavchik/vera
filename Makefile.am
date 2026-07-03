@@ -212,7 +212,6 @@ install-data-local:
 uninstall-hook:
 	rm -rf $(DESTDIR)$(INSTALLCONFIGDIR)/system
 	rm -rf $(DESTDIR)$(localstatedir)/vera.priv
-	rm -rf $(DESTDIR)$(localstatedir)/vera.pub
 	rm -rf $(DESTDIR)$(SWITCHLOGDIR)
 	rm -rf $(DESTDIR)$(sysconfdir)/vera
 

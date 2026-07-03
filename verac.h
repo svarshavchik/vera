@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 #define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
-#define PUBCMDSOCKET LOCALSTATEDIR "/vera.pub"
 #define HOOKFILE CONFIGDIR "/hook"
 
 #define HOOKED_ON	"hooked=on"

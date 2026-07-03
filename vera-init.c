@@ -3,9 +3,7 @@
 #include "configdirs.h"
 
 #include <unistd.h>
-#include <errno.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 
 int main(int argc, char **argv)
@@ -23,13 +21,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	/*
-	** When root: poke the private socket, to avoid interference from
-	** non-root.
-	*/
-
-	vera_socket=
-		connect_sun_socket(geteuid() ? PUBCMDSOCKET:PRIVCMDSOCKET);
+	vera_socket=connect_sun_socket(PRIVCMDSOCKET);
 
 	if (vera_socket >= 0)
 	{

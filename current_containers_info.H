@@ -452,15 +452,18 @@ public:
 		   external_filedesc requester_stdout);
 
 	void restart(const external_filedesc &requester,
+		     std::string name,
 		     external_filedesc requester_stdout);
 
 	void reload(const external_filedesc &requester,
+		    std::string name,
 		    external_filedesc requester_stdout);
 
 
 private:
 	void reload_or_restart(
 		const external_filedesc &requester,
+		std::string name,
 		external_filedesc requester_stdout,
 		std::string proc_container_metaObj::*command,
 		const char *no_command_error);

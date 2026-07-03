@@ -5,8 +5,8 @@
 #include "config.h"
 #include "hook.H"
 #include "messages.H"
+#include "configdirs.h"
 #include "verac.h"
-#include <functional>
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <array>
 #include <sys/stat.h>
 #include <sys/time.h>
 
@@ -35,7 +36,8 @@ int try_create_vera_socket(const char *tmpname, const char *finalname)
 	strcpy(sun.sun_path, tmpname);
 
 	// Make sure it's nonblocking and has close-on-exec
-	// set.
+	// set. We don't need to worry about closing the listening socket
+	// after forking and executing a command.
 
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 &&
 	    fcntl(fd, F_SETFL, O_NONBLOCK) == 0 &&
@@ -50,16 +52,6 @@ int try_create_vera_socket(const char *tmpname, const char *finalname)
 }
 
 // Connect to the public socket.
-
-external_filedesc try_connect_vera_pub(const char *socketname)
-{
-	int fd=connect_sun_socket(socketname);
-
-	if (fd < 0)
-		return {nullptr};
-
-	return std::make_shared<external_filedescObj>(fd);
-}
 
 static void sethookfile(const std::string &hookfile,
 			bool once)
@@ -398,6 +390,54 @@ bool rehook_sbin_init(std::string sbindir, std::string vera_init)
 	return false;
 }
 
+// Connect to the private socket.
+
+std::tuple<external_filedesc,
+	   std::vector<external_filedesc>> try_connect_vera_priv(
+		std::string socketname
+	   )
+{
+	std::tuple<external_filedesc, std::vector<external_filedesc>> ret;
+
+	auto cmdfd=tmpfile_filedesc();
+
+	if (cmdfd->fd < 0)
+		return ret;
+
+	int fd=socket(PF_UNIX, SOCK_STREAM, 0);
+
+	if (fd < 0)
+		return ret;
+
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	{
+		close(fd);
+		return ret;
+	}
+
+	struct sockaddr_un sun{};
+
+	sun.sun_family=AF_UNIX;
+	strcpy(sun.sun_path, socketname.c_str());
+
+	if (connect(fd, reinterpret_cast<sockaddr *>(&sun), sizeof(sun)) < 0)
+	{
+		close(fd);
+		return ret;
+	}
+
+	std::get<0>(ret)=std::make_shared<external_filedescObj>(fd);
+	std::get<1>(ret).push_back(cmdfd);
+
+	return ret;
+}
+
+std::tuple<external_filedesc,
+	   std::vector<external_filedesc>> try_connect_vera_priv()
+{
+	return try_connect_vera_priv(PRIVCMDSOCKET);
+}
+
 void unhook(std::string etc_sysinit_dir,
 	    std::string sbindir,
 	    std::string usr_sbindir,
@@ -408,9 +448,9 @@ void unhook(std::string etc_sysinit_dir,
 
 	std::filesystem::remove(hookfile, ec);
 
-	auto fd=try_connect_vera_pub(pubcmdsocket.c_str());
+	auto [cmdfd, cmdfds]=try_connect_vera_priv(pubcmdsocket);
 
-	if (fd)
+	if (cmdfd)
 	{
 		throw std::runtime_error{
 			"Reboot and execute the unhook command again."

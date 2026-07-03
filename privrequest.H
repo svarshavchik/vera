@@ -11,9 +11,9 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <string>
+#include <array>
 #include <vector>
 #include <tuple>
-#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <map>
@@ -148,16 +148,35 @@ void request_current_runlevel(const external_filedesc &efd);
 
 std::vector<std::string> get_current_runlevel(const external_filedesc &efd);
 
-// Create a pair of sockets for the fake requests.
+/*! Create sockets for status request.
 
-// This is used mostly for unit tests, but we also use this to queue up
-// a synthesized request to switch to the default run level, at startup.
+  This is used mostly for unit tests, but we also use this to queue up
+  a synthesized request to switch to the default run level, at startup.
 
-std::tuple<external_filedesc, external_filedesc> create_fake_request();
+  Additionally we create a memfd file to hold a fake command and return a
+  vector containing one external_file_desc, the memfd file.
+*/
+
+std::tuple<external_filedesc, external_filedesc,
+	std::vector<external_filedesc>> create_fake_request();
 
 // Send a status request to the daemon
+//
+// efd and fds are returned from a successful try_connect_vera_priv()
+//
+// Returns true if the request was sent, false otherwise.
+//
+// try_connect_vera_priv() is defined in hook.H and hook.C, and it returns
+// (if successful)  the connection to the vera daemon, and a vector containing
+// one external_filedesc, which is a temporary file descriptor into which the
+// command to the daemon gets written. request_status() writes the status
+// request, and creates a 2nd temp filedesc that gets added to fds. This can
+// now be sent to the daemon.
 
-void request_status(const external_filedesc &efd);
+bool request_status(
+	const external_filedesc &efd,
+	std::vector<external_filedesc> &fds
+);
 
 /*! What receive_fd() returns
 
@@ -167,7 +186,7 @@ void request_status(const external_filedesc &efd);
 */
 
 typedef std::tuple<std::vector<external_filedesc>,
-		   std::optional<ucred>> receive_fds_ret_t;
+		   std::array<char,32> > receive_fds_ret_t;
 
 /*! Helper function used to receive the file descriptors over a socket.
 
@@ -178,27 +197,32 @@ typedef std::tuple<std::vector<external_filedesc>,
 
 receive_fds_ret_t receive_fds(const external_filedesc &efd);
 
-// Helper function used to receive the file descriptor for a plain file.
+/*! Send file descriptors to the vera daemon
 
-// Parameter is the connection to the requester.
-//
-// Receives and returns the file descriptor, verifying that it is IS_REG.
+  efd is the connection to the daemon (requesting it to ead the file
+  descriptors).
 
-external_filedesc request_regfd(const external_filedesc &efd);
+  fds is the vector of file descriptors to send. The first file descriptor is
+  a memfd file descriptor containing the requested command. A status command
+  also uses a second memfd file descriptor into which the daemon writes the
+  status. Start, stop, restart, and reload commands optionally pass in an
+  additional file descriptor that's receives the redirected standard output
+  and error from the commands executed as a result of the request.
 
-// Handshake: daemon: request a file descriptor
+  The daemon replies when the command is processed. Typically an empty line
+  indicates a success, otherwise an error message. Success means that for
+  the status command the status has been written to the second file
+  descriptor.
+*/
 
-void request_fd(const external_filedesc &efd);
+void request_send_fd(
+	const external_filedesc &efd,
+	const std::vector<external_filedesc> &fds
+);
 
-// Handshake: requester: wait for the daemon to request a file descriptor
+// Create a socket pair for vera requests
 
-void request_fd_wait(const external_filedesc &efd);
-
-// Send file descriptors to the requesting daemon
-
-void request_send_fd(const external_filedesc &efd, const int *fds, size_t nfds);
-
-external_filedesc create_stdoutcc(const external_filedesc &efd);
+std::tuple<external_filedesc, external_filedesc> create_vera_socketpair();
 
 struct container_state_info {
 	std::string state;
@@ -252,10 +276,9 @@ inline bool container_state_info::operator==(
 
 /*! Receive and parse the container state.
 
-  This is the end result of the following sequence: request_status, followed
-  by request_fd_wait, followed by request_send_fd(). get_status() gets
-  called with the daemon connection and the temporary file descriptor that
-  was passed to request_sendfd().
+  The sequence of events was request_status() followed by request_send_fd().
+  get_status() waits for the response from the daemon, at which point the
+  statusfd has the daemon status, which get_status() parses and returns.
 
   Returns a map, the key is the container name.
 
@@ -264,7 +287,7 @@ inline bool container_state_info::operator==(
 
 std::unordered_map<std::string, container_state_info> get_status(
 	const external_filedesc &efd,
-	int statusfd
+	const std::vector<external_filedesc> &cmdfds
 );
 
 /*! "/proc/"

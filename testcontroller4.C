@@ -18,9 +18,9 @@ std::string test_forward_carbon_copy(
 	std::function<void ()> before_read
 )
 {
-	auto [forwarda, forwardb] = create_fake_request();
+	auto [forwarda, forwardb, cmdfd] = create_fake_request();
 
-	auto [stdouta, stdoutb] = create_fake_request();
+	auto [stdouta, stdoutb, ignorefd] = create_fake_request();
 
 	std::thread writer_thread{
 		[forwardb, &writer]

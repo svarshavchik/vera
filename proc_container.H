@@ -10,7 +10,8 @@
 #include <time.h>
 #include <functional>
 #include <libintl.h>
-
+#include <sys/socket.h>
+#include <sys/un.h>
 #include "external_filedesc.H"
 #include "proc_containerfwd.H"
 #include "proc_loaderfwd.H"
@@ -43,15 +44,33 @@ std::vector<std::tuple<proc_container, proc_container_state>
 
 proc_container_set current_proc_containers();
 
+/*! Sanity check the received command file descriptors and credentials.
+
+Do sanity checks on the received command file descriptors and the
+credentials.  If all checks pass, call proc_do_request.
+
+*/
+
+void proc_check_and_do_request(
+	external_filedesc socketfd,
+	const std::vector<external_filedesc> &cmdfds,
+	const ucred &credentials
+);
+
 //! Process a command from a new connection
 
-void proc_do_request(external_filedesc);
+void proc_do_request(
+	external_filedesc socketfd,
+	const std::vector<external_filedesc> &cmdfds,
+	const ucred &identity);
 
 //! Process a command from a new connection, with a stdout CC to a filedesc
 
-void proc_do_request(std::string command,
-		     external_filedesc cmd,
-		     external_filedesc requester_stdout);
+void proc_do_request(
+	external_filedesc socketfd,
+	std::string ln,
+	const std::vector<external_filedesc> &cmdfds
+);
 
 //! Process the STATUS request, writing the result to this file descriptor
 

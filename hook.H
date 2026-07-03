@@ -6,8 +6,9 @@
 #define hook_H
 
 #include <string>
+#include <tuple>
+#include <vector>
 #include "external_filedesc.H"
-#include <functional>
 
 //! Attempt to create an AF_UNIX socket
 
@@ -22,7 +23,8 @@ int try_create_vera_socket(const char *tmpname, const char *finalname);
 
 //! This is done to execute a command, or to check if the daemon is up.
 
-external_filedesc try_connect_vera_pub(const char *socketname);
+std::tuple<external_filedesc,
+	   std::vector<external_filedesc>> try_connect_vera_priv();
 
 enum class hook_op {
 	once,

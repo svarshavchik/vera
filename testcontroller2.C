@@ -155,7 +155,7 @@ std::tuple<int, std::string, std::string> do_test_or_restart(
 	const std::function<do_test_or_restart_t(external_filedesc &)>
 	&callback)
 {
-	auto [stdouta, stdoutb]=create_fake_request();
+	auto [stdouta, stdoutb, cmdfd] = create_fake_request();
 
 	auto [filedesc, statusfunc, waitfunc]=callback(stdoutb);
 
@@ -195,10 +195,10 @@ void test_restart()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_restart(socketa, "nonexistent");
-			proc_do_request(socketb);
+			send_restart(cmdfd[0], "nonexistent");
+			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
@@ -217,10 +217,10 @@ void test_restart()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_restart(socketa, "restart");
-			proc_do_request(socketb);
+			send_restart(cmdfd[0], "restart");
+			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
@@ -231,18 +231,17 @@ void test_restart()
 		throw "Unexpected result of non-started restart";
 
 	{
-		auto [a, b] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		auto [socketa, socketb] = create_fake_request();
+		send_start(cmdfd[0], "restart");
+		auto [stdouta, stdoutb, stdignore] = create_fake_request();
 
-		socketa->write_all("restart\n");
+		cmdfd.push_back(stdoutb);
 
-		auto [stdouta, stdoutb] = create_fake_request();
-
-		proc_do_request("start", socketb, stdoutb);
+		proc_do_request(socketb, cmdfd, {});
 
 		stdoutb=nullptr;
-
+		cmdfd.clear();
 		if (get_start_status(socketa) != "")
 			throw "Unexpected failure of start restarta";
 
@@ -262,11 +261,12 @@ void test_restart()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			socketa->write_all("restart\n");
+			send_restart(cmdfd[0], "restart");
+			cmdfd.push_back(stdoutcc);
 
-			proc_do_request("restart", socketb, stdoutcc);
+			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
 				socketa, get_restart_status, wait_restart};
@@ -282,20 +282,20 @@ void test_restart()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_reload(socketa, "restart");
-			proc_do_request(socketb);
+			send_reload(cmdfd[0], "restart");
+			proc_do_request(socketb, cmdfd, {});
 
 			auto ret2=do_test_or_restart(
 				[]
 				(external_filedesc &stdoutcc)
 				{
-					auto [socketa, socketb] =
+					auto [socketa, socketb, cmdfd] =
 						create_fake_request();
 
-					send_restart(socketa, "restart");
-					proc_do_request(socketb);
+					send_restart(cmdfd[0], "restart");
+					proc_do_request(socketb, cmdfd, {});
 
 					return do_test_or_restart_t{
 						socketa, get_restart_status,
@@ -324,11 +324,12 @@ void test_restart()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			socketa->write_all("restart\n");
+			send_reload(cmdfd[0], "restart");
+			cmdfd.push_back(stdoutcc);
 
-			proc_do_request("reload", socketb, stdoutcc);
+			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
 				socketa, get_reload_status, wait_reload};
@@ -344,11 +345,13 @@ void test_restart()
 		[&]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			socketa->write_all("restart\n");
+			send_stop(cmdfd[0], "restart");
 
-			proc_do_request("stop", socketb, stdoutcc);
+			cmdfd.push_back(stdoutcc);
+
+			proc_do_request(socketb, cmdfd, {});
 
 			populated(b->new_container, false);
 			return do_test_or_restart_t{
@@ -403,10 +406,10 @@ void test_envvars()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			request_runlevel(socketa, "networking");
-			proc_do_request(socketb);
+			request_runlevel(cmdfd[0], "networking");
+			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
 				socketa, get_runlevel_status, wait_runlevel
@@ -433,10 +436,10 @@ void test_envvars()
 		[]
 		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb] = create_fake_request();
+			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			request_runlevel(socketa, "boot");
-			proc_do_request(socketb);
+			request_runlevel(cmdfd[0], "boot");
+			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
 				socketa, get_runlevel_status, wait_runlevel
@@ -460,10 +463,10 @@ void test_envvars()
 
 void proc_request_reexec()
 {
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_reexec(socketa);
-	proc_do_request(socketb);
+	request_reexec(cmdfd[0]);
+	proc_do_request(socketb, cmdfd, {});
 }
 
 void test_reexec_nofork()

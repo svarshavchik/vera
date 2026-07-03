@@ -66,10 +66,10 @@ void respawn1_setup(const std::vector<std::string> &args)
 		execlp("/bin/sh", "/bin/sh", "-c", cmd.c_str(), nullptr);
 	};
 
-	auto [socketa, socketb] = create_fake_request();
+	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_reexec(socketa);
-	proc_do_request(socketb);
+	request_reexec(cmdfd[0]);
+	proc_do_request(socketb, cmdfd, {});
 	proc_check_reexec();
 	throw "Expected to exec()";
 }
@@ -134,10 +134,10 @@ void respawn3_setup(const std::vector<std::string> &args)
 
 	logged_state_changes.clear();
 	{
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(socketa);
-		proc_do_request(socketb);
+		request_reexec(cmdfd[0]);
+		proc_do_request(socketb, cmdfd, {});
 		proc_check_reexec();
 	}
 
@@ -241,10 +241,10 @@ void noreexec1()
 	proc_container_start("noreexec1");
 
 	{
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(socketa);
-		proc_do_request(socketb);
+		request_reexec(cmdfd[0]);
+		proc_do_request(socketb, cmdfd, {});
 	}
 
 	do_poll(0);
@@ -271,10 +271,10 @@ void noreexec2()
 	logged_state_changes.clear();
 
 	{
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(socketa);
-		proc_do_request(socketb);
+		request_reexec(cmdfd[0]);
+		proc_do_request(socketb, cmdfd, {});
 	}
 
 	do_poll(0);
@@ -304,10 +304,10 @@ void noreexec3()
 	logged_state_changes.clear();
 
 	{
-		auto [socketa, socketb] = create_fake_request();
+		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(socketa);
-		proc_do_request(socketb);
+		request_reexec(cmdfd[0]);
+		proc_do_request(socketb, cmdfd, {});
 	}
 
 	do_poll(0);

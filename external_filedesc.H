@@ -35,7 +35,9 @@ public:
 
 	/*! Read a line from the socket
 
-	  On the public socket we pass in a maximum size of the command
+	  On the public socket we pass in a maximum size of the command to
+	  read. Only "status" is accepted from non-root users. We will trust
+	  root callers for additional parameters.
 	*/
 	std::string readln(size_t maxsize=0);
 

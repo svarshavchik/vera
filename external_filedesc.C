@@ -33,6 +33,14 @@ void external_filedescObj::write_all(std::string_view msg)
 		// memfd_create is used on public sockets, which are E_NOTSOCK,
 		// this minimal usage is fine to try and fallback each time.
 
+		// Our default external file descriptors are sockets, we must
+		// use send() on them initially in order to guard against
+		// EPIPE when the other side of the socket has closed.
+		//
+		// If the fd is not a socket, we'll fall back to write(), and
+		// continue using write() for all subsequent calls (if there
+		// ever are any more calls).
+
 		if (sock)
 		{
 			n=send(fd, p, s, MSG_NOSIGNAL);

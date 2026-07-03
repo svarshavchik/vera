@@ -12,7 +12,6 @@
 #include "privrequest.H"
 #include "log.H"
 #include <unistd.h>
-#include <string.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -211,11 +210,11 @@ void reexec()
 
 std::string proc_container_start(const std::string &name)
 {
-	auto [a, b] = create_fake_request();
+	auto [a, b, cmdfd] = create_fake_request();
 
-	send_start(a, name);
+	send_start(cmdfd[0], name);
 
-	proc_do_request(b);
+	proc_do_request(b, cmdfd, {});
 
 	b=nullptr;
 
@@ -225,11 +224,11 @@ std::string proc_container_start(const std::string &name)
 
 std::string proc_container_stop(const std::string &name)
 {
-	auto [a, b] = create_fake_request();
+	auto [a, b, cmdfd] = create_fake_request();
 
-	send_stop(a, name);
+	send_stop(cmdfd[0], name);
 
-	proc_do_request(b);
+	proc_do_request(b, cmdfd, {});
 
 	b=nullptr;
 
@@ -240,11 +239,11 @@ std::string proc_container_stop(const std::string &name)
 std::string proc_container_restart(const std::string &name,
 				   const std::function<void (int)> &completed)
 {
-	auto [a, b] = create_fake_request();
+	auto [a, b, cmdfd] = create_fake_request();
 
-	send_restart(a, name);
+	send_restart(cmdfd[0], name);
 
-	proc_do_request(b);
+	proc_do_request(b, cmdfd, {});
 
 	b=nullptr;
 
@@ -253,11 +252,11 @@ std::string proc_container_restart(const std::string &name,
 
 std::string proc_container_runlevel(const std::string &new_runlevel)
 {
-	auto [a, b] = create_fake_request();
+	auto [a, b, cmdfd] = create_fake_request();
 
-	request_runlevel(a, new_runlevel);
+	request_runlevel(cmdfd[0], new_runlevel);
 
-	proc_do_request(b);
+	proc_do_request(b, cmdfd, {});
 
 	b=nullptr;
 
@@ -266,10 +265,10 @@ std::string proc_container_runlevel(const std::string &new_runlevel)
 
 std::string current_runlevel()
 {
-	auto [a, b] = create_fake_request();
+	auto [a, b, cmdfd] = create_fake_request();
 
-	request_current_runlevel(a);
-	proc_do_request(b);
+	request_current_runlevel(cmdfd[0]);
+	proc_do_request(b, cmdfd, {});
 	b=nullptr;
 
 	auto ret=get_current_runlevel(a);

@@ -1972,29 +1972,80 @@ std::string current_containers_infoObj::runlevel(
 	return "";
 }
 
-void proc_do_request(external_filedesc efd)
+void proc_check_and_do_request(
+	external_filedesc socketfd,
+	const std::vector<external_filedesc> &cmdfds,
+	const ucred &credentials
+)
 {
-	// The connection is on a trusted socket, so we can block.
+	// Sanity check: the first fd is the command name (a regular
+	// fd) followed by the parameters (all valid commands
+	// will pass us a regular fd here)
 
-	auto ln=efd->readln();
+	// We don't need to check for an empty cmdfds because this
+	// intentionally teed up as an error result when reading from the
+	// control socket. If we got here there's at least one fd in there.
 
-	if (ln != "cc")
+	if (!cmdfds.front()->regular())
 	{
-		proc_do_request(std::move(ln), std::move(efd), {});
+		log_message("bad command file descriptor received from uid " +
+			std::to_string(credentials.uid));
+		socketfd->write_all(_("Bad command invocation\n"));
 		return;
 	}
 
-	request_fd(efd);
+	proc_do_request(std::move(socketfd), cmdfds, credentials);
+}
 
-	const auto &[filedescs, ignore]=receive_fds(efd);
+void proc_do_request(
+	external_filedesc socketfd,
+	const std::vector<external_filedesc> &cmdfd,
+	const ucred &cred
+)
+{
+	// We get a socket on which a request was written, and a vector of
+	// file descriptors. The first is the command to execute. If root
+	// is doing this, all commands are accessible, non-root can only do
+	// the status command.
+	auto &efd=cmdfd.at(0);
 
-	if (filedescs.empty())
+	// The caller wrote to the command file descriptor which is a temp
+	// file, and passed it in, we need to seek back to the beginning
+	// before reading.
+
+	if (lseek(efd->fd, 0L, SEEK_SET) < 0)
 		return;
 
-	auto requester_stdout=filedescs.front();
-
-	if (!requester_stdout)
+	auto ln=efd->readln(256);
+	if (cred.uid && ln != "status")
+	{
+		log_message("root is required for command: " + ln +
+				    " from uid " + std::to_string(cred.uid));
+		socketfd->write_all(_("Not allowed\n"));
 		return;
+	}
+
+	proc_do_request(socketfd, std::move(ln), cmdfd);
+}
+
+/*! Retrieve the file descriptor for capturing executed commands' stdout.
+
+The output of any executed commands, as a result of start, stop, restart,
+and reload commands is captured and sent to the requester via this file
+descriptor, which is an optional second file descriptor passed in.
+
+*/
+
+external_filedesc receive_requester_stdout(
+	const std::vector<external_filedesc> &cmdfd
+)
+{
+	external_filedesc requester_stdout;
+
+	if (cmdfd.size() < 2)
+		return requester_stdout;
+
+	requester_stdout=cmdfd.at(1);
 
 	// We get a request. We redirect everyone's stdout to the requester's
 	// stdout.
@@ -2015,49 +2066,58 @@ void proc_do_request(external_filedesc efd)
 		requester_stdout={};
 	}
 
-	auto cmd=efd->readln();
-
-	proc_do_request(std::move(cmd), std::move(efd),
-			std::move(requester_stdout));
+	return requester_stdout;
 }
 
-void proc_do_request(std::string ln,
-		     external_filedesc efd,
-		     external_filedesc requester_stdout)
+void proc_do_request(
+	external_filedesc socketfd,
+	std::string ln,
+	const std::vector<external_filedesc> &cmdfd
+)
 {
+	auto &efd=cmdfd.at(0);
+
 	if (ln == "start")
 	{
-		auto name=efd->readln();
+		auto name=efd->readln(NAME_MAX+1);
 
 		get_containers_info(nullptr)->start(
 			name,
-			efd, std::move(requester_stdout)
+			socketfd,
+			receive_requester_stdout(cmdfd)
 		);
 		return;
 	}
 
 	if (ln == "stop")
 	{
-		auto name=efd->readln();
+		auto name=efd->readln(NAME_MAX+1);
 
 		get_containers_info(nullptr)->stop(
 			name,
-			efd, std::move(requester_stdout)
+			socketfd,
+			receive_requester_stdout(cmdfd)
 		);
 		return;
 	}
 
 	if (ln == "restart")
 	{
+		auto name=efd->readln(NAME_MAX+1);
 		get_containers_info(nullptr)->restart(
-			efd, std::move(requester_stdout));
+			socketfd,
+			name,
+			receive_requester_stdout(cmdfd));
 		return;
 	}
 
 	if (ln == "reload")
 	{
+		auto name=efd->readln(NAME_MAX+1);
 		get_containers_info(nullptr)->reload(
-			efd, std::move(requester_stdout));
+			socketfd,
+			name,
+			receive_requester_stdout(cmdfd));
 		return;
 	}
 
@@ -2071,7 +2131,7 @@ void proc_do_request(std::string ln,
 		switchlog_stop();
 		setenv("RUNLEVEL", runlevel.c_str(), 1);
 		execl("/bin/sh", "/bin/sh", "-c", command.c_str(), nullptr);
-		efd->write_all(command + ": " + strerror(errno));
+		socketfd->write_all(command + ": " + strerror(errno));
 		return;
 	}
 
@@ -2085,26 +2145,24 @@ void proc_do_request(std::string ln,
 	{
 		auto ret=get_containers_info(nullptr)->runlevel(
 			efd->readln(),
-			efd);
+			socketfd);
 
-		efd->write_all(ret + "\n");
+		socketfd->write_all(ret + "\n");
 		return;
 	}
 
 	if (ln == "getrunlevel")
 	{
-		get_containers_info(nullptr)->getrunlevel(efd);
+		get_containers_info(nullptr)->getrunlevel(socketfd);
 		return;
 	}
 
 	if (ln == "status")
 	{
-		request_fd(efd);
+		if (cmdfd.size() < 2)
+			return;
 
-		auto tmp=request_regfd(efd);
-
-		if (tmp)
-			proc_do_status_request(efd, tmp);
+		proc_do_status_request(socketfd, cmdfd.at(1));
 		return;
 	}
 
@@ -2124,7 +2182,7 @@ void proc_do_request(std::string ln,
 				log_message(errmsg);
 			});
 
-		efd->write_all(last_errmsg);
+		socketfd->write_all(last_errmsg + "\n");
 		return;
 	}
 
@@ -2143,28 +2201,28 @@ void proc_do_request(std::string ln,
 				log_message(errmsg);
 			});
 
-		efd->write_all(last_errmsg);
+		socketfd->write_all(last_errmsg + "\n");
 		return;
 	}
 
 	if (ln == "freeze")
 	{
-		auto name=efd->readln();
+		auto name=efd->readln(NAME_MAX+1);
 
 		get_containers_info(nullptr)->freeze(
 			name,
-			efd
+			socketfd
 		);
 		return;
 	}
 
 	if (ln == "thaw")
 	{
-		auto name=efd->readln();
+		auto name=efd->readln(NAME_MAX+1);
 
 		get_containers_info(nullptr)->thaw(
 			name,
-			efd
+			socketfd
 		);
 		return;
 	}
@@ -4194,6 +4252,9 @@ void current_containers_infoObj::populated(const std::string &s,
 	if (is_populated)
 		return;
 
+	if (is_restored && cc->first->meta->stop_type == stop_type_t::target)
+		return;
+
 	// It's possible that the starting or the stopping process finished
 	// but we get the populated notification first, from cgroups.events.
 	//
@@ -4365,10 +4426,12 @@ void current_containers_infoObj::stopped(const std::string &s)
 
 void current_containers_infoObj::restart(
 	const external_filedesc &requester,
+	std::string name,
 	external_filedesc requester_stdout
 )
 {
 	return reload_or_restart(requester,
+				 std::move(name),
 				 std::move(requester_stdout),
 				 &proc_container_metaObj::restarting_command,
 				 _(": is not restartable\n"));
@@ -4376,10 +4439,12 @@ void current_containers_infoObj::restart(
 
 void current_containers_infoObj::reload(
 	const external_filedesc &requester,
+	std::string name,
 	external_filedesc requester_stdout
 )
 {
 	return reload_or_restart(requester,
+				 std::move(name),
 				 std::move(requester_stdout),
 				 &proc_container_metaObj::reloading_command,
 				 _(": is not reloadable\n"));
@@ -4387,11 +4452,11 @@ void current_containers_infoObj::reload(
 
 void current_containers_infoObj::reload_or_restart(
 	const external_filedesc &requester,
+	std::string name,
 	external_filedesc requester_stdout,
 	std::string proc_container_metaObj::*command,
 	const char *no_command_error)
 {
-	auto name=requester->readln();
 	auto iter=containers.find(name);
 
 	if (iter == containers.end() ||
