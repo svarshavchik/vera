@@ -56,7 +56,7 @@ static void testlogrotatehook(int ec1, int ec2)
 					 "result from logrotate hook\n");
 	}
 
-	std::ofstream{"testhook.pkgdata/logrotate.conf.vera"};
+	std::ofstream touched_file{"testhook.pkgdata/logrotate.conf.vera"};
 
 	if (WEXITSTATUS(system("testhook.sbin/logrotate "
 			       "testhook.pkgdata/logrotate.conf")) != ec2)
@@ -151,10 +151,10 @@ void testhook()
 		if (ec)
 			throw std::runtime_error{"Cannot link vera-logrotate"};
 
-		std::filesystem::permissions(
-			"testhook.pkgdata/vera-logrotate",
-			std::filesystem::perms::owner_all);
 	}
+	std::filesystem::permissions(
+		"testhook.pkgdata/vera-logrotate",
+		std::filesystem::perms::owner_all);
 
 	testlogrotatehook(11, 11);
 
@@ -382,15 +382,15 @@ void testrehook()
 	std::filesystem::remove_all("testhook.sbin/init.init", ec);
 	std::filesystem::remove_all("testhook.sbin/vera-init", ec);
 
-	std::ofstream{"testhook.sbin/init"};
-	std::ofstream{"testhook.sbin/vera-init"};
+	std::ofstream touch1{"testhook.sbin/init"};
+	std::ofstream touch2{"testhook.sbin/vera-init"};
 
 	if (rehook_sbin_init("testhook.sbin", "testhook.sbin/vera-init"))
 		throw std::runtime_error(
 			"rehook_sbin_init unexpectedly worked"
 		);
 
-	std::ofstream{"testhook.sbin/init.init"};
+	std::ofstream touch3{"testhook.sbin/init.init"};
 
 	if (!rehook_sbin_init("testhook.sbin", "testhook.sbin/vera-init"))
 		throw std::runtime_error(

@@ -13,6 +13,7 @@
 #include "log.H"
 #include "poller.H"
 #include "switchlog.H"
+#include "uid_sessionid.H"
 #include "verac.h"
 #include <stdio.h>
 #include <unordered_map>
@@ -23,6 +24,7 @@
 #include <set>
 #include <type_traits>
 #include <iostream>
+#include <charconv>
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -30,6 +32,7 @@
 #include <string.h>
 #include <string_view>
 #include <fstream>
+#include <utility>
 
 const char system_runlevel[]="system/runlevel";
 
@@ -697,6 +700,53 @@ void proc_check_reexec()
 	get_containers_info(nullptr)->check_reexec();
 }
 
+namespace {
+
+/*! Prepare active session connections for re-exec.
+
+  A visitor for a uid_sessionid_t. The entry for an installed_session_t
+  is simply ignored. The only work needs to be done is for an
+  active_session_t.
+
+*/
+struct prepare_active_session_connection_reexec {
+
+	const active_session_info &info;
+	FILE *fp;
+
+	void operator()(const active_session_t &);
+	void operator()(const installed_session_t &) {}
+};
+
+void prepare_active_session_connection_reexec::operator()(
+	const active_session_t &as
+)
+{
+	// REEXEC SAVE: session sessionuid
+
+	// REEXEC SAVE: session sessionid
+
+	// REEXEC SAVE: session fd
+
+	if (info.current_manager)
+		// turn off closeexec
+		fcntl(info.current_manager->fd->fd, F_SETFD, 0);
+
+	fprintf(fp, " session %s %s %d\n",
+		std::to_string(as.uid).c_str(),
+		std::to_string(as.sessionid).c_str(),
+		info.current_manager ?
+			info.current_manager->fd->fd:
+			-1
+	);
+
+	log_message(_("saved session ") +
+		std::to_string(as.uid) + "/" + std::to_string(as.sessionid)
+	);
+}
+
+}
+
 void current_containers_infoObj::check_reexec()
 {
 	if (!reexec_requested)
@@ -726,11 +776,11 @@ void current_containers_infoObj::check_reexec()
 			if (pc->meta->type != proc_container_type::loaded)
 				continue;
 
-			// REEXEC FILE: container name
+			// REEXEC SAVE: container name
 
 			o << pc->name << "\n";
 
-			// REEXEC FILE: container status
+			// REEXEC SAVE: container status
 
 			if (!run_info.is_transferrable(pc, o))
 				return;
@@ -746,11 +796,24 @@ void current_containers_infoObj::check_reexec()
 
 	if (fp)
 	{
-		// REEXEC FILE: version
+		// REEXEC SAVE: version
 
-		// REEXEC FILE: runlevel
+		fprintf(fp, "1\n");
 
-		fprintf(fp, "1\n%s\n",
+		// REEXEC SAVE: active sessions
+
+		for (const auto &[uid_session, info] : active_sessions)
+		{
+			prepare_active_session_connection_reexec prepare{
+				info,
+				fp
+			};
+			std::visit(prepare, uid_session);
+		}
+
+		// REEXEC SAVE: runlevel
+
+		fprintf(fp, "%s\n",
 			active_runlevel ? active_runlevel->name.c_str():"");
 
 		if ((s.size() > 0 && fwrite(s.data(), s.size(), 1, fp) != 1) ||
@@ -807,6 +870,8 @@ void current_containers_infoObj::check_reexec()
 
 void current_containers_infoObj::restore_reexec(
 	std::vector<proc_container> &restored_containers,
+	std::unordered_map<uid_sessionid_t,
+				   active_session_info> &restored_sessions,
 	std::string &active)
 {
 	restored_containers.clear();
@@ -848,7 +913,7 @@ void current_containers_infoObj::restore_reexec(
 
 	std::istringstream i{std::move(s)};
 
-	// REEXEC FILE: version
+	// REEXEC LOAD: version
 	if (!std::getline(i, s))
 		return;
 
@@ -857,7 +922,84 @@ void current_containers_infoObj::restore_reexec(
 	if (!(std::istringstream{s} >> version) || version != 1)
 		return;
 
-	// REEXEC FILE: runlevel
+	// REEXEC LOAD: active sessions
+
+	while (i.peek() == ' ')
+	{
+		uid_t uid;
+		size_t sessionid;
+		int fd;
+
+		std::getline(i, s);
+		std::string_view sv{s};
+
+		// REEXEC LOAD: session
+		sv.remove_prefix(1); // Get rid of the leading space.
+
+		size_t space_pos=sv.find(' ');
+
+		if (space_pos == std::string_view::npos)
+			continue;
+
+		if (sv.substr(0, space_pos) != "session")
+			continue;
+
+		sv.remove_prefix(space_pos+1);
+		space_pos=sv.find(' ');
+
+		if (space_pos == std::string_view::npos)
+			continue;
+
+		// REEXEC LOAD: session uid
+		if (std::from_chars(sv.data(), sv.data()+space_pos, uid
+			).ec != std::errc{})
+			continue;
+
+		sv.remove_prefix(space_pos+1);
+		space_pos=sv.find(' ');
+
+		if (space_pos == std::string_view::npos)
+			continue;
+
+		// REEXEC LOAD: session sessionid
+		if (std::from_chars(sv.data(), sv.data()+space_pos, sessionid
+			).ec != std::errc{})
+			continue;
+
+		sv.remove_prefix(space_pos+1);
+
+		if (sv.empty())
+			continue;
+
+		// REEXEC LOAD: session fd
+
+		if (std::from_chars(sv.data(), sv.data()+sv.size(), fd
+			).ec != std::errc{})
+			continue;
+
+		// Put back the cloexec flag, which we removed before re-execing
+		// ourselves.
+
+		if (fd >= 0)
+			fcntl(fd, F_SETFD, FD_CLOEXEC);
+
+		auto efd=std::make_shared<external_filedescObj>(fd);
+
+		restored_sessions.emplace(
+			std::piecewise_construct,
+			std::forward_as_tuple(active_session_t{uid, sessionid}),
+			std::forward_as_tuple(std::move(efd), sessionid)
+		);
+
+		log_message(
+			_("re-exec, session: ") +
+			std::to_string(uid) +
+			"/" +
+			std::to_string(sessionid)
+		);
+	}
+
+	// REEXEC LOAD: runlevel
 
 	if (!std::getline(i, active))
 		return;
@@ -869,7 +1011,7 @@ void current_containers_infoObj::restore_reexec(
 
 	auto me=shared_from_this();
 
-	// REEXEC FILE: container name
+	// REEXEC LOAD: container name
 
 	while (std::getline(i, s))
 	{
@@ -883,7 +1025,7 @@ void current_containers_infoObj::restore_reexec(
 			temp_container,
 			proc_container_run_info{}).first;
 
-		// REEXEC FILE: container status
+		// REEXEC LOAD: container status
 
 		group_create_info gci{me, iter};
 
@@ -947,17 +1089,65 @@ void proc_containers_reset()
 	get_containers_info(&replacement);
 }
 
-void proc_containers_install(const loaded_containers &lc,
-			     container_install mode)
-{
-	proc_containers_install(loaded_containers{lc}, mode);
-}
-
-void proc_containers_install(loaded_containers &&lc,
-			     container_install mode)
+void proc_containers_load(loaded_containers lc, container_install_t mode)
 {
 	install_sighandlers();
-	get_containers_info(nullptr)->install(lc, mode);
+	get_containers_info(nullptr)->load(std::move(lc), mode);
+}
+
+active_session_connection::active_session_connection(
+	external_filedesc fd,
+	size_t sessionid
+)
+	: fd{std::move(fd)},
+	  poller{this->fd->fd,
+		[sessionid]
+		(int fd)
+		{
+			get_containers_info(
+				nullptr
+			)->handle_session_fd(sessionid);
+		}
+	}
+{
+}
+
+void current_containers_infoObj::handle_session_fd(size_t sessionid)
+{
+	auto iter=active_sessions.find(sessionid);
+	if (iter == active_sessions.end() ||
+	    !iter->second.current_manager)
+		return;
+
+	// Zero errno before receiving. This is so that we can
+	// tell when the read on the non-blocking socket failed
+	// because there's nothing to read (spurious wake-up).
+	// All other error conditions, indicated by an empty
+	// fds array, is an error and we remove this file
+	// descriptor from the poller, which closes it.
+	//
+	// All commands must pass in at least one file
+	// descriptor with the command itself and its parameters
+	// so if some clown sends us an empty file descriptor
+	// array, we treat it as an error and remove this file
+	// descriptor from the poller, which closes it.
+
+	errno=0;
+	auto [cmdfds, legacy_cmd]=receive_fds(
+		iter->second.current_manager->fd
+	);
+	if (cmdfds.empty())
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			// Note the file desc is still polled,
+			// so we'll get another chance at
+			// reading.
+			return;
+
+		log_session(iter->first, _("session manager disconnected"));
+
+		active_sessions.erase(iter);
+	}
 }
 
 namespace {
@@ -973,10 +1163,10 @@ namespace {
 // an entry for "unit" and "unit/subunit".
 
 struct new_containers_lookup_t : std::unordered_multimap<
-	std::string, proc_new_container_set::iterator
+	std::string, proc_new_container_set::const_iterator
 	>
 {
-	iterator add(proc_new_container_set::iterator new_iter)
+	iterator add(proc_new_container_set::const_iterator new_iter)
 	{
 
 		auto b=(*new_iter)->new_container->name.begin(),
@@ -1037,7 +1227,7 @@ define_dependency().
 struct propagate_dependencies_t {
 	typedef current_containers_infoObj::all_dependencies all_dependencies;
 	typedef current_containers_infoObj::extra_dependency_info
-	extra_dependency_info;
+		extra_dependency_info;
 
 	//! Where to record dependencies
 	current_containers_infoObj::new_all_dependency_info_t &new_all_dependency_info;
@@ -1260,19 +1450,19 @@ void propagate_dependencies_t::doit2(
 {
 #endif
 }
-std::unordered_set<std::string_view>
+std::unordered_set<active_session_t>
 current_containers_infoObj::all_active_sessions() const
 {
-	std::unordered_set<std::string_view> rv;
+	std::unordered_set<active_session_t> rv;
 
 	for (auto &pc: containers)
 	{
 		auto &name=pc.first->name;
 
-		if (!is_in_session(name, ACTIVE_SESSIONS_PREFIX))
-			continue;
+		auto id=active_session_uidsessid_from_path(name);
 
-		rv.insert(is_in_session_prefix(name));
+		if (id && std::holds_alternative<active_session_t>(*id))
+			rv.insert(std::get<active_session_t>(*id));
 	}
 
 	return rv;
@@ -1280,30 +1470,104 @@ current_containers_infoObj::all_active_sessions() const
 
 void loaded_containers::recreate_new_sessions_from_installed(
 	const current_containers_info &installed_containers,
+	container_install_t mode,
 	const std::function<void (
 			const std::string_view &name,
 			const std::string_view &message
 		)> &callback)
 {
+	// We are rebuilding, so clear out any existing active sessions, and
+	// we will recreate them from the installed containers.
+
+	auto installed_session=all_sessions[installed_session_t{}];
+	all_sessions.clear();
+	all_sessions.emplace(installed_session_t{}, installed_session);
+
 	auto sessions=installed_containers->all_active_sessions();
 
 	for (auto &session: sessions)
 	{
-		if (create_new_session(
-			static_cast<std::string>(session),
-			callback
-		))
+		if (create_new_session(session, callback))
 		{
-			callback(session, _("successfully restored"));
+			uid_sessionid_to_chars ssid_string{session};
+			callback(ssid_string.path(),
+				_("successfully restored"));
+		}
+	}
+
+	if (kind(mode) == container_install_kind::new_session)
+	{
+		auto &active_session=
+			std::get<container_install::new_session>(
+				mode
+			).new_active_session;
+
+		if (create_new_session(active_session, callback))
+		{
+			uid_sessionid_to_chars ssid_string{active_session};
+
+			callback(ssid_string.path(),
+				_("successfully created"));
 		}
 	}
 }
 
-void current_containers_infoObj::install(
-	loaded_containers &lc,
-	container_install mode
+void current_containers_infoObj::load(
+	loaded_containers lc,
+	container_install_t mode
 )
 {
+	for (auto &[name, runlevel] : runlevel_configuration)
+	{
+		// If someone was foolish enough to hijack the internal
+		// RUNLEVEL_PREFIX, quietly get rid of it, and replace it
+		// with our own.
+
+		std::string prefixed_name;
+
+		prefixed_name.reserve(sizeof(RUNLEVEL_PREFIX)-1+name.size());
+		prefixed_name += RUNLEVEL_PREFIX;
+		prefixed_name += name;
+
+		auto fool=lc.containers.find(prefixed_name);
+
+		if (fool != lc.containers.end())
+			lc.containers.erase(fool);
+
+		auto runlevel_container=
+			*lc.containers.insert(
+				std::make_shared<proc_new_containerObj>(
+					prefixed_name
+				)).first;
+
+		// What goes into the RUNLEVEL environment variable gets
+		// kept in the description.
+		runlevel_container->new_container->meta->description=name;
+
+		for (auto &alias:runlevel.aliases)
+		{
+			if (alias.size() == 1 &&
+			    alias[0] >= '0' && alias[0] <= '9')
+			{
+				runlevel_container->new_container->meta
+					->description=alias;
+			}
+		}
+
+		runlevel_container->new_container->meta->type=
+			proc_container_type::runlevel;
+	}
+
+	currently_loaded_containers=std::move(lc);
+
+	install(mode);
+}
+
+void current_containers_infoObj::install(
+	container_install_t mode
+)
+{
+	auto lc=currently_loaded_containers;
 	proc_new_container_set &new_containers=lc.containers;
 
 	current_containers new_current_containers;
@@ -1312,11 +1576,15 @@ void current_containers_infoObj::install(
 	// If this is the initial installation check if we were just re-execed.
 
 	std::vector<proc_container> restored_containers;
+
 	std::string active;
 
-	if (mode == container_install::initial)
-		restore_reexec(restored_containers, active);
-
+	if (kind(mode) == container_install_kind::initial)
+		restore_reexec(restored_containers,
+				active_sessions,
+				active);
+	else if (active_runlevel)
+		active=active_runlevel->name;
 	// Generate stubs for runlevels.
 	//
 	// Run level config has, for example:
@@ -1340,39 +1608,18 @@ void current_containers_infoObj::install(
 
 	for (auto &[name, runlevel] : runlevel_configuration)
 	{
-		// If someone was foolish enough to hijack the internal
-		// RUNLEVEL_PREFIX, quietly get rid of it, and replace it
-		// with our own.
+		std::string prefixed_name;
 
-		std::string prefixed_name=RUNLEVEL_PREFIX + name;
+		prefixed_name.reserve(sizeof(RUNLEVEL_PREFIX)-1+name.size());
+		prefixed_name += RUNLEVEL_PREFIX;
+		prefixed_name += name;
 
-		auto fool=new_containers.find(prefixed_name);
+		auto iter=new_containers.find(prefixed_name);
 
-		if (fool != new_containers.end())
-			new_containers.erase(fool);
+		if (iter==new_containers.end())
+			continue; // Should be there, though, see load()
 
-		auto runlevel_container=
-			*new_containers.insert(
-				std::make_shared<proc_new_containerObj>(
-					prefixed_name
-				)).first;
-
-		// What goes into the RUNLEVEL environment variable gets
-		// kept in the description.
-		runlevel_container->new_container->meta->description=name;
-
-		for (auto &alias:runlevel.aliases)
-		{
-			if (alias.size() == 1 &&
-			    alias[0] >= '0' && alias[0] <= '9')
-			{
-				runlevel_container->new_container->meta
-					->description=alias;
-			}
-		}
-
-		runlevel_container->new_container->meta->type=
-			proc_container_type::runlevel;
+		auto &runlevel_container=*iter;
 
 		for (auto &alias:runlevel.aliases)
 			new_runlevel_aliases.emplace(
@@ -1387,13 +1634,14 @@ void current_containers_infoObj::install(
 
 	lc.recreate_new_sessions_from_installed(
 		shared_from_this(),
+		mode,
 		[&]
 		(const auto &container_name,
 		 const auto &message)
 		{
 			std::string msg;
 
-			msg += "restore: ";
+			msg += "sessions: ";
 			msg += container_name;
 			msg += ": ";
 			msg += message;
@@ -1697,8 +1945,14 @@ void current_containers_infoObj::install(
 
 			if (remove_this_container)
 				to_remove.push_back(iter->first);
-			else if (mode == container_install::update)
-			{
+			else switch(kind(mode)) {
+			case container_install_kind::initial:
+				break;
+
+			case container_install_kind::new_session:
+				break;
+
+			case container_install_kind::update:
 				// Log changes to the container.
 				//
 				// required-by changes do not need to be
@@ -1720,6 +1974,7 @@ void current_containers_infoObj::install(
 					b->first, new_all_dependency_info,
 					&dependency_info::all_stopping_first,
 					": stopping dependencies changes");
+				break;
 			}
 			continue;
 		}
@@ -1834,7 +2089,7 @@ void current_containers_infoObj::install(
 	// Race condition. When re-execing, pick up any child processes that
 	// managed to zombify themselves while we were re-execing.
 
-	if (mode == container_install::initial)
+	if (kind(mode) == container_install_kind::initial)
 	{
 		int wstatus;
 		pid_t p;
@@ -2070,11 +2325,34 @@ void proc_do_request(
 		return;
 
 	auto ln=efd->readln(256);
-	if (cred.uid && ln != "status")
+	if (cred.uid && (ln != "status" && ln != "session-start"))
 	{
 		log_message("root is required for command: " + ln +
 				    " from uid " + std::to_string(cred.uid));
 		socketfd->write_all(_("Not allowed\n"));
+		return;
+	}
+
+	if (ln == "session-start")
+	{
+		std::optional<uid_sessionid_t> uidsessionid=
+			proc_get_sessionid(
+				efd,
+				cred,
+				[&](const std::string &s){
+					socketfd->write_all(s + "\n");
+					log_message("session-start: " + s);
+				}
+			);
+
+		if (!uidsessionid)
+		{
+			return;
+		}
+
+		get_containers_info(nullptr)->session_start(
+			*uidsessionid, socketfd
+		);
 		return;
 	}
 
@@ -2106,7 +2384,7 @@ external_filedesc receive_requester_stdout(
 	// A unit executes another command. Detect that by keeping a weak
 	// reference to the requester_stdout. If we get here, we will quietly
 	// ignore the 2nd requester's stdout, and not forward it to
-	// do_proc_request().
+	// proc_do_request().
 
 	static std::weak_ptr<external_filedescObj> active_requester;
 
@@ -4812,4 +5090,62 @@ void current_containers_infoObj::thaw(
 		return;
 
 	requester->write_all(name + _(": no processes to thaw\n"));
+}
+
+void current_containers_infoObj::session_start(
+	const uid_sessionid_t &uidsessionid,
+	const external_filedesc &socketfd
+)
+{
+	auto sessionid=std::visit(
+		extract_sessionid{},
+		uidsessionid
+	);
+
+	// Ok, can be actually create a new session. It's possible that it
+	// exists, if so this session manager is attempting to regain ownership
+	// of it. Figure this out.
+
+	const auto &[iter, inserted]=active_sessions.emplace(
+		std::piecewise_construct,
+		std::forward_as_tuple(uidsessionid),
+		std::forward_as_tuple()
+	);
+
+	// We there is already a current manager, get rid of the newcomer.
+	if (iter->second.current_manager)
+	{
+		socketfd->write_all(
+			_("session already started: ") +
+			std::to_string(sessionid) + "\n"
+		);
+
+		return;
+	}
+
+	// This is either a new session, or an old one that we just
+	// re-established contact with its session manager.
+
+	iter->second.current_manager.emplace(socketfd, sessionid);
+
+	if (inserted &&
+		std::holds_alternative<active_session_t>(uidsessionid)
+		// Should be the case
+	)
+	{
+		// This is the very first connection for this session.
+		// Actually install it.
+
+		install(
+			container_install::new_session{
+				std::get<active_session_t>(uidsessionid)
+			}
+		);
+	}
+
+	log_session(
+		uidsessionid,
+		inserted ? "session-start" : "session-start (reconnected)"
+	);
+	socketfd->write_all(_("\n"));
 }

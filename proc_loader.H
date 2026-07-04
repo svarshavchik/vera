@@ -8,13 +8,13 @@
 #include "proc_loaderfwd.H"
 #include "proc_container.H"
 #include "current_containers_infofwd.H"
+#include "uid_sessionid.H"
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <iostream>
 #include <string_view>
 #include <optional>
-#include <tuple>
 
 /*! Find pathnames to load
 
@@ -188,7 +188,7 @@ struct loaded_containers {
 	and their dependencies also have their prefixes replaced.
 
 	*/
-	std::unordered_map<std::string, proc_container_set> all_sessions;
+	std::unordered_map<uid_sessionid_t, proc_container_set> all_sessions;
 
 	/*! Create a new session
 
@@ -208,7 +208,7 @@ struct loaded_containers {
 	*/
 
 	bool create_new_session(
-		const std::string &active_session_path,
+		const active_session_t &active_session,
 		const std::function<void (
 			const std::string_view &container_name,
 			const std::string_view &error_message
@@ -222,6 +222,7 @@ struct loaded_containers {
 
 	void recreate_new_sessions_from_installed(
 		const current_containers_info &installed_containers,
+		container_install_t mode,
 		const std::function<void (
 			const std::string_view &name,
 			const std::string_view &message
@@ -368,8 +369,6 @@ Returns the corresponding prefix if "path" is in either, or an empty
 string if neither.
 */
 std::string_view is_in_session_prefix(std::string_view path);
-
-typedef std::tuple<uid_t, size_t> uid_sessionid_t;
 
 /*! If "path" is in ACTIVE_SESSIONS_PREFIX/uid/sessionid, then return
     the uid and sessionid.

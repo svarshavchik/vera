@@ -4,7 +4,9 @@
 */
 #include "config.h"
 #include "proc_loader.H"
+#include "session_container_factory.H"
 #include "messages.H"
+#include "uid_sessionid.H"
 #include "yaml_writer.H"
 #include "parsed_yaml.H"
 #include <algorithm>
@@ -444,7 +446,7 @@ std::optional<uid_sessionid_t> active_session_uidsessid_from_path(
 	if (r1.ec != std::errc{} || r2.ec != std::errc{})
 		return {};
 
-	return {{uid, sessid}};
+	return {active_session_t{uid, sessid}};
 }
 
 static bool proc_load_container(
@@ -1240,9 +1242,6 @@ proc_override proc_get_validated_override(const std::string &config_override,
 }
 
 namespace {
-#if 0
-}
-#endif
 
 struct proc_loader : proc_find {
 
@@ -1262,7 +1261,7 @@ struct proc_loader : proc_find {
 		  error{error}
 	{
 		newly_loaded_containers.all_sessions.emplace(
-			INSTALLED_SESSIONS_PREFIX,
+			installed_session_t{},
 			proc_container_set{}
 		);
 	}
@@ -1277,9 +1276,6 @@ struct proc_loader : proc_find {
 		const std::string &message) override;
 };
 
-#if 0
-{
-#endif
 }
 
 void proc_loader::found(
@@ -1332,33 +1328,31 @@ void proc_loader::found(
 			))
 		for (auto &pc:results)
 			newly_loaded_containers.all_sessions[
-				INSTALLED_SESSIONS_PREFIX
+				installed_session_t{}
 			].insert(pc->new_container);
 	newly_loaded_containers.containers.merge(std::move(results));
 }
 
 bool loaded_containers::create_new_session(
-	const std::string &active_session_path,
+	const active_session_t &active_session,
 	const std::function<void (
 		const std::string_view &container_name,
 		const std::string_view &error_message
 	)> &error)
 {
+	session_container_factory scf{active_session, error};
+
 	// Sanity check: can't create a session that already exists.
 
-	if (all_sessions.find(active_session_path) !=
-		all_sessions.end())
+	if (all_sessions.find(active_session) != all_sessions.end())
 	{
-		error(
-			active_session_path,
-			"session already exists"
-		);
+		error(scf.ssid_string.path(),
+		      _("session already exists"));
+
 		return false;
 	}
 
-	proc_new_container_set new_session;
-
-	for (auto &pc: all_sessions[INSTALLED_SESSIONS_PREFIX])
+	for (auto &pc: all_sessions[installed_session_t{}])
 	{
 		auto nc=containers.find(pc);
 
@@ -1370,50 +1364,13 @@ bool loaded_containers::create_new_session(
 			);
 			return false;
 		}
-		auto new_container=std::make_shared<proc_new_containerObj>(
-			INSTALLED_SESSIONS_PREFIX,
-			active_session_path,
-			*nc
-		);
-		if (!proc_validpath(new_container->new_container->name))
-		{
-			error(
-				new_container->new_container->name,
-				"invalid path"
-			);
+
+		if (!(scf << *nc))
 			return false;
-		}
-		if (!new_container->new_container->alternative_group.empty() &&
-		    !proc_validpath(
-			    new_container->new_container->alternative_group
-		    ))
-		{
-			error(
-				new_container->new_container->alternative_group,
-				"invalid alternative group"
-			);
-			return false;
-		}
+	}
 
-		for (const auto &dependency_list :
-			proc_new_containerObj::all_dependencies)
-		{
-			for (auto &existing_dependency :
-				(*new_container).*dependency_list)
-			{
-				if (!proc_validpath(existing_dependency))
-				{
-					error(
-						existing_dependency,
-						"invalid dependency"
-					);
-
-					return false;
-				}
-			}
-		}
-		new_session.insert(new_container);
-
+	for (auto &new_container : scf.new_session)
+	{
 		// Sanity check: this container doesn't alredy exist!
 
 		if (containers.find(new_container) != containers.end())
@@ -1434,12 +1391,12 @@ bool loaded_containers::create_new_session(
 	//
 	// * Add the containers to the containers set.
 
-	auto &new_session_containers = all_sessions[active_session_path];
+	auto &new_session_containers = all_sessions[active_session];
 
-	for (auto &nc : new_session)
+	for (auto &nc : scf.new_session)
 		new_session_containers.insert(nc->new_container);
 
-	containers.merge(std::move(new_session));
+	containers.merge(std::move(scf.new_session));
 
 	return true;
 }
@@ -1478,7 +1435,7 @@ void proc_load_dump(const loaded_containers &loaded)
 {
 	auto &set=loaded.containers;
 	auto installed_sessions_it=
-		loaded.all_sessions.find(INSTALLED_SESSIONS_PREFIX);
+		loaded.all_sessions.find(installed_session_t{});
 
 	std::vector<proc_new_container> list;
 

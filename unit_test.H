@@ -7,10 +7,7 @@
 #include <string>
 #include <unistd.h>
 #include <time.h>
-#include <sstream>
 #include <string>
-#include "privrequest.H"
-#include "switchlog.H"
 #include "proc_loader.H"
 
 extern std::vector<std::string> logged_state_changes;
@@ -18,12 +15,7 @@ extern struct timespec fake_time;
 extern std::vector<std::tuple<pid_t, int>> sent_sigs;
 extern std::vector<std::string> completed_switchlog;
 
-#define UNIT_TEST
-#include "log.C"
-#undef UNIT_TEST
-
 extern std::vector<std::string> logged_runners;
-
 extern pid_t next_pid;
 extern bool all_forks_fail;
 
@@ -33,103 +25,14 @@ void populated(const proc_container &container, bool isit);
 
 std::string populated_sh(const proc_container &container, bool isit=false);
 
-#ifndef UNIT_TEST_RUNNER
-
-static pid_t get_next_pid(const proc_container &container,
-			  std::vector<std::vector<char>> &argv)
-{
-	pid_t pid=next_pid++;
-
-	if (next_pid == 0)
-		++next_pid;
-
-	if (all_forks_fail)
-		pid= -1;
-
-	std::ostringstream o;
-
-	o << container->name << ":";
-
-	const char *sep=" ";
-
-	for (auto &c:argv)
-	{
-		o << sep << c.data();
-		sep="|";
-	}
-
-	o << " (pid " << pid << ")";
-
-	logged_runners.push_back(o.str());
-
-	if (pid != -1)
-		populated(container, true);
-	return pid;
-}
-
-#define UNIT_TEST_RUNNER (get_next_pid(container, argv))
-#endif
-
-#define UNIT_TEST() UNIT_TEST_RUNNER
-#include "proc_container_runner.C"
-#undef UNIT_TEST
 
 extern std::function<void ()> reexec_handler;
 
-void test_reset(bool keep_cgroupfs=false)
-{
-	proc_containers_reset();
-
-	for (const auto &[pc, ignore] : get_proc_containers())
-		proc_container_stopped(pc->name);
-
-	logged_state_changes.clear();
-	logged_runners.clear();
-	next_pid=1;
-	all_forks_fail=false;
-	fake_time.tv_sec=1;
-	switchlog_stop();
-	completed_switchlog.clear();
-
-	if (!keep_cgroupfs)
-	{
-		std::filesystem::remove_all(
-			proc_container_group_data::get_cgroupfs_base_path()
-		);
-		std::filesystem::create_directory(
-			proc_container_group_data::get_cgroupfs_base_path()
-		);
-	}
-
-	std::filesystem::remove_all(slashprocslash);
-	std::filesystem::remove_all(environconfig());
-	environconfigvars.clear();
-
-	sent_sigs.clear();
-	reexec_handler=[]
-	{
-		throw "unexpected call to reexec.";
-	};
-
-	std::filesystem::remove_all(overrideconfigdir());
-	std::filesystem::create_directory(overrideconfigdir());
-}
-
-void test_finished()
-{
-	test_reset();
-
-	std::filesystem::remove_all(
-		proc_container_group_data::get_cgroupfs_base_path()
-	);
-	std::filesystem::remove_all(overrideconfigdir());
-}
-
-void test_advance(time_t interval)
-{
-	fake_time.tv_sec += interval;
-	run_timers();
-}
+std::string installconfigdir();
+std::string localconfigdir();
+void test_reset(bool keep_cgroupfs=false);
+void test_finished();
+void test_advance(time_t interval);
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -169,17 +72,32 @@ concept proc_new_container_list =
 	(... && std::convertible_to<Args, proc_new_container>);
 
 template<proc_new_container_list ...Args>
-void call_install(container_install mode, Args && ...args)
+void call_install(container_install_t mode, Args && ...args)
 {
 	if constexpr (sizeof...(args) > 0)
-		proc_containers_install(
+		proc_containers_load(
 			loaded_containers{proc_new_container_set{{
 				std::forward<Args>(args)...
 			}}},
 			mode
 		);
 	else
-		proc_containers_install(loaded_containers{}, mode);
+		proc_containers_load(loaded_containers{}, mode);
 }
+
+struct unit_dependency_dump {
+	std::string name;
+	std::unordered_set<std::string>
+		all_requires,
+		all_required_by,
+		all_starting_first,
+		all_stopping_first;
+
+	bool operator==(const unit_dependency_dump &other) const = default;
+};
+
+std::vector<unit_dependency_dump> dump_unit_dependencies();
+
+std::vector<std::string> dump_active_sessions();
 
 #endif

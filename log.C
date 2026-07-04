@@ -90,6 +90,26 @@ void log_container_output(const proc_container &pc, const std::string &msg)
 #endif
 }
 
+void log_session(const uid_sessionid_t &ssid, const std::string &msg)
+{
+	uid_sessionid_to_chars to_chars(ssid);
+	std::string_view ssid_string=to_chars;
+
+	std::string formatted_msg;
+
+	formatted_msg.reserve(
+		sizeof("session ")-1+
+		ssid_string.size()+2+msg.size()
+	);
+
+	formatted_msg += "session ";
+	formatted_msg += ssid_string;
+	formatted_msg += ": ";
+	formatted_msg += msg;
+
+	log_message(formatted_msg);
+}
+
 void log_message(const std::string &msg)
 {
 #ifdef UNIT_TEST

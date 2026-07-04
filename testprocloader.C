@@ -7,6 +7,7 @@
 #include "unit_test.H"
 #include "proc_loader.H"
 #include "privrequest.H"
+#include "current_containers_info.H"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -337,9 +338,15 @@ int main(int argc, char **argv)
 				ACTIVE_SESSIONS_PREFIX "/";
 			session_path += args[i];
 
-			std::cout << (
+			auto as=active_session_uidsessid_from_path(
+				session_path + "/x"
+			);
+
+			std::cout << (as && std::holds_alternative<
+					active_session_t
+				>(*as) &&
 				loaded.create_new_session(
-					session_path,
+					std::get<active_session_t>(*as),
 					[&]
 					(const auto &container_name,
 					 const auto &error_message)
@@ -393,15 +400,16 @@ int main(int argc, char **argv)
 			));
 		}
 
-		proc_containers_install(
+		proc_containers_load(
 			loaded_containers{pcs},
-			container_install::update
+			container_install::update{}
 		);
 
 		auto ci=get_containers_info(nullptr);
 
 		loaded.recreate_new_sessions_from_installed(
 			ci,
+			container_install::update{},
 			[&]
 			(const auto &container_name,
 			 const auto &error_message)

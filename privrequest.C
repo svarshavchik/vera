@@ -689,6 +689,14 @@ void request_thaw(const external_filedesc &efd,
 	efd->write_all(std::string{"thaw\n"} + name + "\n");
 }
 
+void request_session_start(
+	const external_filedesc &efd,
+	const std::string &name
+)
+{
+	efd->write_all(std::string{"session-start\n"} + name + "\n");
+}
+
 std::string get_freeze_thaw_status(const external_filedesc &efd)
 {
 	return efd->readln();

@@ -10,6 +10,7 @@
 
 #include "proc_container_statefwd.H"
 #include "proc_containerfwd.H"
+#include "uid_sessionid.H"
 
 //! Record a change in a container's state
 void log_state_change(const proc_container &,
@@ -35,6 +36,9 @@ void log_container_message(const proc_container &, const std::string &);
 
 //! Log container's output
 void log_container_output(const proc_container &, const std::string &);
+
+//! Log a session-related message
+void log_session(const uid_sessionid_t &ssid, const std::string &);
 
 //! Log a generic message
 void log_message(const std::string &);

@@ -46,7 +46,7 @@ void respawn1_setup(const std::vector<std::string> &args)
 	a->new_container->meta->respawn_attempts=2;
 	a->new_container->meta->respawn_limit=60;
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("respawn");
 
@@ -83,7 +83,7 @@ void respawn1_reexec()
 	a->new_container->meta->respawn_attempts=2;
 	a->new_container->meta->respawn_limit=60;
 
-	call_install(container_install::initial, a);
+	call_install(container_install::initial{}, a);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"re-exec: respawn",
@@ -127,7 +127,7 @@ void respawn3_setup(const std::vector<std::string> &args)
 	a->new_container->meta->respawn_attempts=2;
 	a->new_container->meta->respawn_limit=60;
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("respawn3");
 	runner_finished(2, 0);
@@ -180,7 +180,7 @@ void respawn3_reexec()
 	a->new_container->meta->respawn_attempts=2;
 	a->new_container->meta->respawn_limit=60;
 
-	call_install(container_install::initial, a);
+	call_install(container_install::initial{}, a);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"re-exec: respawn3",
@@ -236,7 +236,7 @@ void noreexec1()
 
 	a->new_container->meta->starting_command="start";
 
-	call_install(container_install::initial, a);
+	call_install(container_install::initial{}, a);
 
 	proc_container_start("noreexec1");
 
@@ -263,7 +263,7 @@ void noreexec2()
 
 	a->new_container->meta->stopping_command="start";
 
-	call_install(container_install::initial, a);
+	call_install(container_install::initial{}, a);
 
 	proc_container_start("noreexec2");
 	proc_container_stop("noreexec2");
@@ -293,18 +293,15 @@ void noreexec3()
 
 	a->new_container->meta->restarting_command="restart";
 
-	call_install(container_install::initial, a);
+	call_install(container_install::initial{}, a);
 
 	proc_container_start("noreexec3");
-	proc_container_restart("noreexec3",
-			       [](int)
-			       {
-			       });
+	proc_container_restart("noreexec3");
 
 	logged_state_changes.clear();
 
 	{
-		auto [socketa, socketb, cmdfd] = create_fake_request();
+		auto [ocketa, socketb, cmdfd] = create_fake_request();
 
 		request_reexec(cmdfd[0]);
 		proc_do_request(socketb, cmdfd, {});

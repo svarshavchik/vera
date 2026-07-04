@@ -9,12 +9,15 @@
 #include <unordered_set>
 #include <time.h>
 #include <functional>
+#include <optional>
 #include <libintl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include "external_filedesc.H"
 #include "proc_containerfwd.H"
+#include "proc_container_statefwd.H"
 #include "proc_loaderfwd.H"
+#include "uid_sessionid.H"
 #include "log.H"
 
 //! Container type
@@ -269,6 +272,24 @@ public:
 	//! Destructor
 	~proc_containerObj();
 
+	/*! Validate a cloned container
+
+	After cloning a container for a new session, re-check its
+	properties.
+
+	The constructor creates the new name and alternative_group
+	parameters, but other than that, it's just a clone. Here, we go
+	back and verify our work.
+
+	The error function is called to report the first problem is_valid()
+	finds.
+	*/
+
+	bool is_valid(const std::function<void (
+		const std::string_view &container_name,
+		const std::string_view &error_message
+	)> &error) const;
+
 	//! Report changes
 
 	//! When reloading container configuration, see if this container's
@@ -354,6 +375,10 @@ public:
 	//! These process containers stop after this one.
 	std::unordered_set<std::string> stopping_after;
 
+	bool is_valid(const std::function<void (const std::string_view &container_name,
+		const std::string_view &error_message)
+	> &error) const;
+
 	//! All dependency sets, for convenience
 	static inline constexpr std::array<
 		std::unordered_set<std::string> proc_new_containerObj::*, 7
@@ -405,36 +430,57 @@ typedef std::unordered_map<std::string, runlevel> runlevels;
 
 //! Container installation mode.
 
-enum class container_install {
+struct container_install {
 
-	//! Updated list of containers
+	/*! Updated list of containers
 
-	//! Replaces the current set of containers.
-	update,
+	 Replaces the current set of containers.
+	 */
+
+	struct update {};
 
 	/*! Initial list of containers
 
 	  This also checks if we have been re-execed, and if so restores
 	  the existing containers' state.
 	*/
-	initial,
+	struct initial {};
+
+	/*!
+	  Start a new session.
+	*/
+
+	struct new_session {
+		active_session_t new_active_session;
+	};
 };
+
+enum class container_install_kind {
+	update,
+	initial,
+	new_session
+};
+
+typedef std::variant<
+	container_install::update,
+	container_install::initial,
+	container_install::new_session
+> container_install_t;
+
+constexpr container_install_kind kind(const container_install_t &c)
+{
+	return static_cast<container_install_kind>(c.index());
+}
 
 //! Install process containers
 
-void proc_containers_install(const loaded_containers &lc,
-			     container_install mode);
-void proc_containers_install(loaded_containers &&lc,
-			     container_install mode);
+void proc_containers_load(loaded_containers lc, container_install_t mode);
 
 //! Trigger a restart
 
 //! A non-empty error message gets returned if the triggering failed.
-//! Otherwise the passed-in callback gets invoked when the restart finishes
-//! and it receives the exit status.
 
-std::string proc_container_restart(const std::string &,
-				   const std::function<void (int)> &);
+std::string proc_container_restart(const std::string &);
 
 //! Trigger a reload
 
@@ -443,6 +489,22 @@ std::string proc_container_restart(const std::string &,
 //! and it receives the exit status.
 std::string proc_container_reload(const std::string &,
 				  const std::function<void (int)> &);
+
+/*! Get session id from a connection.
+
+  Used when a session command is received. We already have the ucred.
+  Validate that the pid is valid, then read /proc to read the process's
+  sessionid, attach it to the uid, and call it a day.
+
+  Verifies that the connection is from the save dev+inode as the pid 1
+  process.
+
+*/
+std::optional<uid_sessionid_t> proc_get_sessionid(
+	const external_filedesc &efd,
+	const ucred &cred,
+	const std::function<void (const std::string &)> &error
+);
 
 //! For unit tests
 void proc_containers_reset();

@@ -1,5 +1,5 @@
 /*
-** Copyright 2022 S. Varshavchik
+** Copyright 2022-2026 S. Varshavchik
 ** See COPYING for distribution information.
 */
 #ifndef current_containers_info_h
@@ -9,6 +9,7 @@
 #include "proc_container_runnerfwd.H"
 #include "proc_container.H"
 #include "external_filedesc.H"
+#include "proc_loader.H"
 #include <sys/wait.h>
 #include <functional>
 #include <unordered_map>
@@ -37,6 +38,63 @@ struct active_unit_info {
 	time_t time_end;
 };
 
+/*! 
+  A connection to the session manager for a session
+*/
+struct active_session_connection {
+
+	//! Connection to the session manager
+	external_filedesc fd;
+
+	//! Poller for the connected socket
+	polledfd poller;
+
+	/*!
+	  Constructor for an active session
+
+	  The poller needs to know about the sessionid because when we 
+	  read an IO event, the handler needs to know what the sessionid is.
+	*/
+	active_session_connection(
+		external_filedesc fd,
+		size_t sessionid
+	);
+};
+
+/*! An active session info object
+
+  Contains information about an active session.
+*/
+struct active_session_info {
+
+	/*! Whether there's an active connection to the session manager process
+
+	*/
+	std::optional<active_session_connection> current_manager;
+
+	/*!
+	  Default constructor
+
+	  Creates an empty active session info. The creator will set
+	  current_manager at some later time.
+	*/
+	active_session_info()=default;
+
+	/*! Construct after a reexec
+
+	  Reconstructs after a reexec. We know the file descriptor to the
+	  session manager, if there is one, and the session id. If they
+	  check out, we can construct the current_manager.
+	*/
+	active_session_info(external_filedesc fd, size_t sessionid)
+	{
+		if (!fd || fd->fd < 0)
+			return;
+
+		current_manager.emplace(std::move(fd), sessionid);
+	}
+};
+
 /*! Active units
 
   Units that are running a start or a stop process. A vector of: a container,
@@ -60,15 +118,12 @@ public:
 	const bool default_runlevel_override;
 private:
 
-#ifdef UNIT_TEST
-public:
-#endif
-
 	//! The containers themselves
 	current_containers containers;
-#ifdef UNIT_TEST
-private:
-#endif
+
+	//! Active sessions, connections to their session managers
+	std::unordered_map<
+		uid_sessionid_t, active_session_info> active_sessions;
 
 	//! The description field of the former runlevel
 
@@ -76,16 +131,24 @@ private:
 	std::string previous_runlevel_description;
 
 public:
+	friend struct unit_tests;
+
+	/*! Read from a session manager connection
+
+	  Called by the poller when there's data to read from a session manager
+	  for a specific sessionid. active_sessions gets looked up, and we
+	  go from there.
+	*/
+	void handle_session_fd(size_t sessionid);
 
 	/*! All active sessions
 
 	  When containers are reloaded, scan them in order to enumerate
-	  all active sessions. NOTE: the returned set references string
-	  views into the internal storage.
+	  all active sessions.
 
 	*/
 
-	std::unordered_set<std::string_view> all_active_sessions() const;
+	std::unordered_set<active_session_t> all_active_sessions() const;
 
 	//! A re-exec has been requested
 	bool reexec_requested=false;
@@ -446,11 +509,34 @@ private:
 	);
 
 public:
+	/*! Get all currently installed containers
+
+	  Used in unit tests
+	*/
 	std::vector<std::tuple<proc_container, proc_container_state>> get();
 
-	void install(loaded_containers &lc,
-		     container_install mode);
+	/*! Record loaded containers
 
+	  Containers were loaded, either initially or after a
+	  reload/reinstall.
+
+	  Saves them in currently_loaded_containers, then calls install().
+	*/
+	void load(loaded_containers lc, container_install_t mode);
+
+private:
+	//! Containers currently loaded
+	loaded_containers currently_loaded_containers;
+
+	/*! Install loaded containers
+
+	  Reads currently_loaded_containers, computes their dependencies,
+	  and stores them in containers and all_dependency_info.  Rebuilds
+	  active_sessions.
+	*/
+	void install(container_install_t mode);
+
+public:
 	std::string runlevel(std::string new_runlevel,
 			     const external_filedesc &requester);
 
@@ -496,6 +582,16 @@ private:
 public:
 	void stopped(const std::string &s);
 
+	/*! Start a session
+
+	  This is called when a session manager notifies us that a new session
+	  wishes to have its containers started.
+	*/
+	void session_start(
+		const uid_sessionid_t &uidsessionid,
+		const external_filedesc &socketfd
+	);
+
 	//! Report when the container is empty
 
 	void populated(
@@ -524,14 +620,20 @@ public:
 
 private:
 
-	//! Check if we've just been re-executed
+	/*! Check if we've just been re-executed
 
-	//! This gets called from install to check to see if this
-	//! has been re-execed. Populates a vector of placeholder containers
-	//! with a recovered run_info. The vector is left empty if this
-	//! is not a re-execution.
+	This gets called from install to check to see if this
+	has been re-execed. Populates a vector of placeholder containers
+	with a recovered run_info. The vector is left empty if this
+	is not a re-execution.
+
+	We also recover the opened file descriptors for active sessions.
+
+	*/
 	void restore_reexec(
 		std::vector<proc_container> &restored_containers,
+		std::unordered_map<uid_sessionid_t,
+					   active_session_info> &active_sessions,
 		std::string &active
 	);
 

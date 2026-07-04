@@ -6,16 +6,17 @@
 #include "config.h"
 #include "proc_container.H"
 #include "external_filedesc_privcmdsocket.H"
-
+#include "uid_sessionid.H"
 #include "proc_container_statefwd.H"
 #include "unit_test.H"
 #include "privrequest.H"
-
+#include "current_containers_info.H"
 #include <iterator>
 #include <fstream>
 #include <algorithm>
 #include "proc_loader.H"
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -50,9 +51,9 @@ void test_start_and_stop()
 
 	a->new_container->meta->stopping_command="/bin/true";
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto err=proc_container_start("b");
@@ -153,9 +154,9 @@ void test_happy_start_stop_common(const std::string &name)
 	a->new_container->meta->stopping_command="stop";
 
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto err=proc_container_start(name);
@@ -303,9 +304,9 @@ void test_start_failed_fork()
 	a->new_container->meta->starting_command="start";
 
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
@@ -346,9 +347,9 @@ void test_start_failed()
 	a->new_container->meta->starting_command="start";
 
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto err=proc_container_start("start_failed");
@@ -393,9 +394,9 @@ void test_start_timeout()
 	a->new_container->meta->starting_command="start";
 
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto err=proc_container_start("start_timeout");
@@ -577,9 +578,9 @@ proc_new_container_set test_requires_common(std::string prefix)
 
 void test_requires1()
 {
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{test_requires_common("requires1")},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto err=proc_container_start("requires1a");
@@ -760,9 +761,9 @@ void test_requires2()
 	d->new_container->meta->stopping_command="stop_d";
 	pcs.insert(d);
 
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	std::unordered_map<std::string, proc_container_type> containers;
@@ -838,7 +839,7 @@ void test_requires_common2(std::string name)
 	d->dep_required_by.insert(name + "a");
 	c->dep_required_by.insert(name + "b");
 
-	call_install(container_install::update, a, b, c, d, e);
+	call_install(container_install::update{}, a, b, c, d, e);
 
 	auto err=proc_container_start(name + "b");
 
@@ -1092,7 +1093,7 @@ void test_requires5()
 
 void test_install()
 {
-	call_install(container_install::update,
+	call_install(container_install::update{},
 		std::make_shared<proc_new_containerObj>("installa"),
 		std::make_shared<proc_new_containerObj>("installb"),
 		std::make_shared<proc_new_containerObj>("installc"));
@@ -1158,7 +1159,7 @@ void test_install()
 
 	logged_state_changes.clear();
 
-	call_install(container_install::update,
+	call_install(container_install::update{},
 		std::make_shared<proc_new_containerObj>("installa"),
 		std::make_shared<proc_new_containerObj>("installc"),
 		std::make_shared<proc_new_containerObj>("installd"));
@@ -1190,7 +1191,7 @@ void test_circular()
 	a->dep_required_by.insert("circularc");
 	b->dep_requires.insert("circularc");
 
-	call_install(container_install::update, a, b, c);
+	call_install(container_install::update{}, a, b, c);
 
 	auto err=proc_container_start("circularb");
 
@@ -1309,7 +1310,7 @@ void test_runlevels()
 	d->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
 	e->dep_required_by.insert(RUNLEVEL_PREFIX "multi-user");
 
-	call_install(container_install::update, c, d, e, f);
+	call_install(container_install::update{}, c, d, e, f);
 
 	if (proc_container_runlevel("runlevel1prog").empty() ||
 	    !logged_state_changes.empty())
@@ -1408,7 +1409,7 @@ void test_before_after1()
 	d->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	e->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	call_install(container_install::update, c, d, e);
+	call_install(container_install::update{}, c, d, e);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
@@ -1475,7 +1476,7 @@ void test_before_after2()
 	d->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	e->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	call_install(container_install::update, c, d, e);
+	call_install(container_install::update{}, c, d, e);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
@@ -1542,7 +1543,7 @@ void test_failure_with_dependencies_common(const std::string &name)
 
 	e->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	call_install(container_install::update, b, c, d, e);
+	call_install(container_install::update{}, b, c, d, e);
 }
 
 void test_failed_fork_with_dependencies()
@@ -1848,7 +1849,7 @@ void happy_oneshot()
 	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->new_container->meta->starting_command="/happyoneshot echo *";
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting " RUNLEVEL_PREFIX "graphical";
@@ -1886,7 +1887,7 @@ void sad_oneshot()
 	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->new_container->meta->starting_command="sadoneshot verysad";
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting " RUNLEVEL_PREFIX "graphical";
@@ -1929,7 +1930,7 @@ void manualstopearly()
 
 	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting " RUNLEVEL_PREFIX "graphical";
@@ -1979,7 +1980,7 @@ void automaticstopearly1()
 	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->new_container->meta->stop_type=stop_type_t::automatic;
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting " RUNLEVEL_PREFIX "graphical";
@@ -2014,7 +2015,7 @@ void automaticstopearly2()
 	b->new_container->meta->stop_type=stop_type_t::automatic;
 	b->new_container->meta->stopping_command="stop";
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting " RUNLEVEL_PREFIX "graphical";
@@ -2072,7 +2073,7 @@ void testgroup()
 	auto e=std::make_shared<proc_new_containerObj>("final");
 	e->starting_before.insert("group");
 
-	call_install(container_install::update, b, c, d, e);
+	call_install(container_install::update{}, b, c, d, e);
 
 	if (!proc_container_runlevel("default").empty())
 		throw "Unexpected error starting default runlevel";
@@ -2185,7 +2186,7 @@ void testfailcgroupcreate()
 	symlink("non/existent/path",
 		proc_container_group_data::get_cgroupfs_base_path());
 
-	call_install(container_install::update, a, b);
+	call_install(container_install::update{}, a, b);
 
 	if (!proc_container_runlevel("default").empty())
 		throw "Unexpected error starting default runlevel";
@@ -2230,7 +2231,7 @@ void testfailcgroupdelete()
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	a->new_container->meta->starting_command="startok";
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	if (!proc_container_runlevel("default").empty())
 		throw "Unexpected error starting default runlevel";
@@ -2308,7 +2309,7 @@ void testnotimeout()
 	a->new_container->meta->starting_command="infinitestart";
 	a->new_container->meta->stopping_command="infinitestop";
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("notimeout");
 
@@ -2348,7 +2349,7 @@ void testmultiplestart()
 
 	a->new_container->meta->starting_command="start";
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	auto err=proc_container_start("multiplestart");
 
@@ -2389,7 +2390,7 @@ proc_new_container commonrespawn()
 	a->new_container->meta->respawn_attempts=2;
 	a->new_container->meta->respawn_limit=60;
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("respawn");
 
@@ -2595,7 +2596,7 @@ void testrespawn3()
 	a->new_container->meta->respawn_attempts=2;
 	a->new_container->meta->respawn_limit=60;
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	all_forks_fail=true;
 	proc_container_start("respawn");
@@ -2634,7 +2635,7 @@ void testtarget1()
 	b->new_container->meta->starting_command="start";
 	c->new_container->meta->starting_command="start";
 
-	call_install(container_install::update, a, b, c);
+	call_install(container_install::update{}, a, b, c);
 
 	proc_container_start("target1a");
 
@@ -2696,7 +2697,7 @@ void testtarget2()
 
 	b->new_container->meta->stop_type=stop_type_t::target;
 
-	call_install(container_install::update, a, b);
+	call_install(container_install::update{}, a, b);
 
 	proc_container_start("target2a");
 
@@ -2721,7 +2722,7 @@ void testtarget3()
 	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->new_container->meta->stop_type=stop_type_t::automatic;
 
-	call_install(container_install::update, a, b);
+	call_install(container_install::update{}, a, b);
 
 	proc_container_start("target3a");
 	if (logged_state_changes != std::vector<std::string>{
@@ -2767,7 +2768,7 @@ void testmultirunlevels()
 	b->new_container->meta->stopping_command="stop2";
 	c->new_container->meta->starting_command="start3";
 	c->new_container->meta->stopping_command="stop3";
-	call_install(container_install::update, a, b, c);
+	call_install(container_install::update{}, a, b, c);
 
 	if (!proc_container_runlevel("single-user").empty())
 		throw "unable to request the first runlevel";
@@ -3012,7 +3013,7 @@ void testmultirunlevels()
 		throw "did not get expected messages for a re-exec";
 
 	logged_state_changes.clear();
-	call_install(container_install::initial, a, b, c);
+	call_install(container_install::initial{}, a, b, c);
 
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 	if (logged_state_changes != std::vector<std::string>{
@@ -3032,7 +3033,7 @@ void testmultirunlevels()
 
 void testsysdown()
 {
-	call_install(container_install::update);
+	call_install(container_install::update{});
 
 	auto [sda, sdb, cmdfd] = create_fake_request();
 
@@ -3182,7 +3183,7 @@ void testalternategroups()
 	c->new_container->meta->stopping_command="stopc";
 	d->new_container->meta->stopping_command="stopd";
 
-	call_install(container_install::update, a, b, c, d);
+	call_install(container_install::update{}, a, b, c, d);
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
@@ -3366,7 +3367,7 @@ void teststatustimestamp()
 	c->new_container->meta->starting_timeout=60;
 	d->new_container->meta->starting_timeout=90;
 
-	call_install(container_install::update, a, b, c, d);
+	call_install(container_install::update{}, a, b, c, d);
 
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
@@ -3417,7 +3418,7 @@ void testparentsterm()
 	a->new_container->meta->sigterm_notify=sigterm::parents;
 	a->new_container->meta->starting_command="/bin/true";
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("a");
 	runner_finished(1, 0);
@@ -3601,7 +3602,7 @@ void testreexec_stopped()
 	auto a=std::make_shared<proc_new_containerObj>("a");
 	a->new_container->meta->starting_command="start";
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("a");
 	create_fake_cgroup(a->new_container, {});
@@ -3635,7 +3636,7 @@ void testreexec_stopped()
 	populated(a->new_container, false);
 
 	logged_state_changes.clear();
-	call_install(container_install::initial, a);
+	call_install(container_install::initial{}, a);
 
 	if (logged_state_changes != std::vector<std::string>{
 			"re-exec: a",
@@ -3660,9 +3661,9 @@ void testfreezethaw()
 	a->new_container->meta->start_type=start_type_t::oneshot;
 	a->new_container->meta->starting_command="/bin/true";
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	auto err=proc_container_start("a");
@@ -3740,7 +3741,7 @@ void testbootorder()
 
 	multiuserprog->new_container->meta->starting_command="/bin/true";
 
-	call_install(container_install::update,
+	call_install(container_install::update{},
 		boot, multiuser, bootprog, multiuserprog);
 
 	if (!proc_container_runlevel("multi-user").empty())
@@ -3789,7 +3790,7 @@ void teststopwhilestartpending()
 	a->new_container->meta->starting_command="start";
 	a->new_container->meta->stopping_command="stop";
 
-	call_install(container_install::update, a);
+	call_install(container_install::update{}, a);
 
 	proc_container_start("a");
 	populated(a->new_container, true);
@@ -3849,9 +3850,9 @@ void test_enoperm()
 	auto a=std::make_shared<proc_new_containerObj>("a");
 
 	pcs.insert(a);
-	proc_containers_install(
+	proc_containers_load(
 		loaded_containers{pcs},
-		container_install::update
+		container_install::update{}
 	);
 
 	for (auto [testfunc, cmdname] : std::array<
@@ -3959,7 +3960,7 @@ void testactivesessionparse()
 		},
 		{
 			ACTIVE_SESSIONS_PREFIX "/1000/100/something",
-			{{1000, 100}}
+			active_session_t{1000, 100}
 		},
 	};
 
@@ -3973,6 +3974,286 @@ void testactivesessionparse()
 	}
 }
 
+void test_uidsessionid_t()
+{
+	std::unordered_set<uid_sessionid_t> s;
+
+	s.insert(uid_sessionid_t{active_session_t{0,0}});
+	if (s.count(uid_sessionid_t{active_session_t{0,0}}) != 1)
+	{
+		throw "test_uidsessionid_t test 1 failed";
+	}
+
+	if (s.count((size_t)0) != 1)
+	{
+		throw "test_uidsessionid_t test 2 failed";
+	}
+
+	if (s.count(active_session_t{0,0}) != 1)
+	{
+		throw "test_uidsessionid_t test 3 failed";
+	}
+}
+
+void testsessionstartstop()
+{
+	std::filesystem::create_directories(
+		installconfigdir() + "/" + INSTALLED_SESSIONS_PREFIX
+	);
+
+	{
+		std::ofstream out{
+			installconfigdir() + "/" + INSTALLED_SESSIONS_PREFIX +
+			"/process1"
+		};
+		out << "name: process1\n"
+			"required-by: shell\n"
+			"version: 1\n";
+		out.close();
+	}
+
+	proc_containers_load(
+		proc_load_all(
+			installconfigdir(),
+			localconfigdir(),
+			overrideconfigdir(),
+			[](const auto &warning)
+			{
+				throw "Unexpected warning: " + warning;
+			},
+			[](const auto &error)
+			{
+				throw "Unexpected error: " + error;
+			}
+		),
+		container_install::update{}
+	);
+
+	if (dump_unit_dependencies() != std::vector<unit_dependency_dump>{
+		{
+			"system/sessions/installed/process1",
+
+			// all_requires:
+			{
+			},
+
+			// all_required_by:
+			{
+				"system/sessions/installed/shell"
+			},
+
+			// all_starting_first:
+			{
+			},
+
+			// all_stopping_first:
+			{
+				"system/sessions/installed/shell"
+			}
+		},
+		{
+			"system/sessions/installed/shell",
+
+			// all_requires:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_required_by:
+			{
+			},
+
+			// all_starting_first:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_stopping_first:
+			{
+			}
+		}
+	})
+		throw "unexpected initial set of containers";
+
+	logged_state_changes.clear();
+	auto [socketa, socketb, cmdfd]=create_fake_request();
+	request_session_start(cmdfd[0], "shell");
+	proc_do_request(socketb, cmdfd, {1,2});
+
+	auto err=socketa->readln();
+
+	if (!err.empty())
+	{
+		throw "unexpected error: " + err;
+	}
+
+	if (logged_state_changes != std::vector<std::string>{
+		"sessions: system/sessions/active/1/2: successfully created", 
+		"session 1/2: session-start",
+	})
+		throw "unexpected state changes after session start";
+
+	logged_state_changes.clear();
+
+	std::vector<unit_dependency_dump> expected{
+		{
+			"system/sessions/active/1/2/process1",
+
+			// all_requires: 
+			{
+			},
+
+			// all_required_by: 
+			{
+				"system/sessions/active/1/2/shell"
+			},
+
+			// all_starting_first: 
+			{
+			},
+
+			// all_stopping_first: 
+			{
+				"system/sessions/active/1/2/shell"
+			}
+		},
+		{
+			"system/sessions/active/1/2/shell",
+
+			// all_requires: 
+			{
+				"system/sessions/active/1/2/process1"
+			},
+
+			// all_required_by: 
+			{
+			},
+
+			// all_starting_first: 
+			{
+				"system/sessions/active/1/2/process1"
+			},
+
+			// all_stopping_first: 
+			{
+			}
+		},
+		{
+			"system/sessions/installed/process1",
+
+			// all_requires: 
+			{
+			},
+
+			// all_required_by: 
+			{
+				"system/sessions/installed/shell"
+			},
+
+			// all_starting_first: 
+			{
+			},
+
+			// all_stopping_first: 
+			{
+				"system/sessions/installed/shell"
+			}
+		},
+		{
+			"system/sessions/installed/shell",
+
+			// all_requires: 
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_required_by: 
+			{
+			},
+
+			// all_starting_first: 
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_stopping_first: 
+			{
+			}
+		}
+	};
+	if (dump_unit_dependencies() != expected)
+		throw "unexpected dependencies after session start";
+
+	{
+		auto [a, b, cmdfd] = create_fake_request();
+
+		request_reexec(cmdfd[0]);
+		proc_do_request(b, cmdfd, {});
+	}
+
+	while (!poller_is_transferrable())
+		do_poll(0);
+	reexec_handler=[]{ throw 0; };
+	bool caught=false;
+
+	try {
+		proc_check_reexec();
+	} catch (int)
+	{
+		caught=true;
+	}
+	if (!caught)
+		throw "did not reexec";
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+	if (logged_state_changes != std::vector<std::string>{
+		"saved session 1/2", 
+		"system/sessions/active/1/2/process1: preserving state: stopped", 
+		"system/sessions/installed/process1: preserving state: stopped"
+	})
+		throw "unexpected state changes before reexec";
+
+	logged_state_changes.clear();
+
+	proc_containers_reset();
+	proc_containers_load(
+		proc_load_all(
+			installconfigdir(),
+			localconfigdir(),
+			overrideconfigdir(),
+			[](const auto &warning)
+			{
+				throw "Unexpected warning: " + warning;
+			},
+			[](const auto &error)
+			{
+				throw "Unexpected error: " + error;
+			}
+		),
+		container_install::initial{}
+	);
+
+	if (dump_unit_dependencies() != expected)
+		throw "unexpected dependencies after reexec";
+
+	std::sort(logged_state_changes.begin(), logged_state_changes.end());
+
+	if (logged_state_changes != std::vector<std::string>{
+		"re-exec, session: 1/2", 
+		"re-exec: system/sessions/active/1/2/process1", 
+		"re-exec: system/sessions/installed/process1", 
+		"sessions: system/sessions/active/1/2: successfully restored", 
+		"system/sessions/active/1/2/process1: restored preserved state: stopped", 
+		"system/sessions/installed/process1: restored preserved state: stopped" 
+	})
+		throw "unexpected state changes after reexec";
+
+	if (dump_active_sessions() != std::vector<std::string>{
+		"1/2: manager connected"
+	})
+		throw "unexpected active sessions after reexec";
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -3982,6 +4263,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="test_proc_new_container_set";
 		test_proc_new_container_set();
+
+		test_reset();
+		test="test_uidsessionid_t";
+		test_uidsessionid_t();
 
 		test_reset();
 		test="test_start_and_stop";
@@ -4188,6 +4473,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="testactivesessionparse";
 		testactivesessionparse();
+
+		test_reset();
+		test="testsessionstartstop";
+		testsessionstartstop();
 
 		test_finished();
 	} catch (const char *e)

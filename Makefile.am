@@ -91,8 +91,12 @@ libvera_a_SOURCES=						\
 	proc_loaderfwd.H					\
 	proc_loader2.C						\
 	proc_loader3.C						\
+	session_container_factory.C				\
+	session_container_factory.H				\
 	switchlog.C						\
 	switchlog.H						\
+	uid_sessionid.C						\
+	uid_sessionid.H						\
 	unit_test.H						\
 	verac_connect_sun_socket.c				\
 	verac_check_hook.c					\
@@ -101,6 +105,10 @@ libvera_a_SOURCES=						\
 	verac.h							\
 	yaml_writer.C						\
 	yaml_writer.H
+
+UNIT_TEST_LOG=unit_test_log.C
+UNIT_TEST_LOG_AND_RUNNER=$(UNIT_TEST_LOG) \
+	unit_test_proc_container_runner.C
 
 configdirs.h: config.status Makefile
 	echo '#define INSTALLCONFIGDIR "$(INSTALLCONFIGDIR)"' >configdirs.h.tmp
@@ -126,27 +134,34 @@ vlad: vera
 	rm -f vlad; ln vera vlad
 CLEANFILES += vlad
 
-testcontroller_SOURCES=testcontroller.C unit_test.C
+testcontroller_SOURCES=testcontroller.C unit_test.C \
+	$(UNIT_TEST_LOG_AND_RUNNER)
 testcontroller_LDADD=libvera.a @YAMLLIBS@
 
-testcontroller2_SOURCES=testcontroller2.C unit_test.C
+testcontroller2_SOURCES=testcontroller2.C unit_test.C \
+	$(UNIT_TEST_LOG)
 testcontroller2_LDADD=libvera.a @YAMLLIBS@
 
 testcontroller2fdleak_SOURCES=testcontroller2fdleak.C
 
-testcontroller3_SOURCES=testcontroller3.C unit_test.C
+testcontroller3_SOURCES=testcontroller3.C unit_test.C \
+	$(UNIT_TEST_LOG_AND_RUNNER)
 testcontroller3_LDADD=libvera.a @YAMLLIBS@
 
-testcontroller4_SOURCES=testcontroller4.C unit_test.C
+testcontroller4_SOURCES=testcontroller4.C unit_test.C \
+	$(UNIT_TEST_LOG_AND_RUNNER)
 testcontroller4_LDADD=libvera.a @YAMLLIBS@ -lpthread
 
-testdepcomputations_SOURCES=testdepcomputations.C unit_test.C
+testdepcomputations_SOURCES=testdepcomputations.C unit_test.C \
+	$(UNIT_TEST_LOG_AND_RUNNER)
 testdepcomputations_LDADD=libvera.a @YAMLLIBS@
 
-testprocloader_SOURCES=testprocloader.C unit_test.C
+testprocloader_SOURCES=testprocloader.C unit_test.C \
+	$(UNIT_TEST_LOG_AND_RUNNER)
 testprocloader_LDADD=libvera.a @YAMLLIBS@
 
-testpoller_SOURCES=testpoller.C unit_test.C
+testpoller_SOURCES=testpoller.C unit_test.C \
+	$(UNIT_TEST_LOG_AND_RUNNER)
 testpoller_LDADD=libvera.a @YAMLLIBS@
 
 testinittab_SOURCES=testinittab.C parsed_yaml.C inittab.C yaml_writer.C \

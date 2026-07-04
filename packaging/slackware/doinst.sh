@@ -1,6 +1,13 @@
 #! /bin/sh
 
 set -e
+
+# Set a capability on the executable so it gets run in secure mode. The
+# purported cap_net_bind_service capability itself is immaterial; what
+# matters is that the executable runs in secure mode.
+
+setcap cap_net_bind_service+ep /sbin/vlad || :
+
 /sbin/vlad inittab
 /sbin/vlad rehook || :
 if test -f /sbin/init.init

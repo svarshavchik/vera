@@ -6,11 +6,8 @@
 #define proc_container_state_h
 
 #include "proc_container_statefwd.H"
-#include <string>
 #include <variant>
 #include <type_traits>
-#include <functional>
-#include <string>
 #include "proc_container_runnerfwd.H"
 #include "proc_container_timerfwd.H"
 #include "external_filedesc.H"

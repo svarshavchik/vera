@@ -51,6 +51,9 @@
 #include <algorithm>
 #include <charconv>
 #include <iterator>
+#include <limits>
+#include <sys/prctl.h>
+#include <sys/auxv.h>
 
 #ifndef MAX_NONROOT_CONNECTIONS
 #define MAX_NONROOT_CONNECTIONS 5
@@ -135,6 +138,10 @@ std::tuple<runlevels, bool> load_runlevelconfig()
 
 	return std::tuple{std::move(rl), overridden};
 }
+
+/*! Override default constructor in unit tests, they do not load load
+the runlevel config file.
+*/
 
 current_containers_infoObj::current_containers_infoObj()
 	: current_containers_infoObj{load_runlevelconfig()}
@@ -759,9 +766,9 @@ void check_reload_config(const char *filename)
 	if (error)
 		return;
 
-	proc_containers_install(
-		new_config,
-		container_install::update
+	proc_containers_load(
+		std::move(new_config),
+		container_install::update{}
 	);
 }
 
@@ -1080,6 +1087,180 @@ polled_socket_connection::~polled_socket_connection()
 		active_connections_by_uid.erase(iter);
 }
 
+external_filedesc send_session_start_request(
+	external_filedesc parent_socket,
+	const std::string &name
+)
+{
+	if (!name.empty() && !proc_validpath(name))
+	{
+		std::cerr << _("Invalid session: ") << name << "\n" << std::flush;
+		exit(1);
+	}
+	auto [cmdfd, cmdfds]=connect_vera_priv();
+
+	request_session_start(cmdfds[0], name);
+	request_send_fd(cmdfd, cmdfds);
+	auto response=cmdfd->readln();
+
+	int errcode=0;
+
+	if (!response.empty())
+	{
+		std::cerr << response << "\n" << std::flush;
+		errcode=1;
+	}
+
+	write(parent_socket->fd, &errcode, sizeof(errcode));
+	parent_socket={};
+
+	return cmdfd;
+}
+
+void session_start(
+	external_filedesc parent_socket,
+	const std::string &name
+)
+{
+	auto cmdfd=send_session_start_request(parent_socket, name);
+
+	std::string cmd;
+
+	while (!(cmd=cmdfd->readln()).empty())
+	{
+	}
+	exit(0);
+}
+
+std::optional<uid_sessionid_t> proc_get_sessionid(
+	const external_filedesc &efd,
+	const ucred &cred,
+	const std::function<void (const std::string &)> &error)
+{
+#ifdef SO_PEERPIDFD
+	int pidfdn = -1;
+	socklen_t pidfd_len = sizeof(pidfdn);
+
+	if (getsockopt(efd->fd, SOL_SOCKET, SO_PEERPIDFD,
+			&pidfdn, &pidfd_len) < 0)
+	{
+		error(_("failed to read your pidfd\n"));
+		return {};
+	}
+
+	auto pidfd=std::make_shared<external_filedescObj>(pidfdn);
+
+	if (syscall(__NR_pidfd_send_signal, pidfd->fd, 0, nullptr, 0) < 0)
+	{
+		error("failed to send signal to pidfd\n");
+		return {};
+	}
+#endif
+	char pidbuf[std::numeric_limits<pid_t>::digits10 + 2];
+	auto [last, ec]=std::to_chars(pidbuf, pidbuf + sizeof(pidbuf), cred.pid);
+
+	std::string_view pidbuf_sv{pidbuf, (size_t)(last-pidbuf)};
+
+	std::string proc_pid;
+
+	proc_pid.reserve(pidbuf_sv.size() + sizeof("/proc//sessionid"));
+	proc_pid+="/proc/";
+	proc_pid+=pidbuf_sv;
+	proc_pid+="/exe";
+
+	struct stat peer_stat;
+	struct stat my_stat;
+
+	if (stat(proc_pid.c_str(), &peer_stat) < 0)
+	{
+		error("cannot stat exe symlink for " + proc_pid + ": "
+		      + strerror(errno));
+		return {};
+	}
+
+	if (stat("/proc/self/exe", &my_stat) < 0)
+	{
+		error("cannot stat exe symlink for /proc/self/exe: "
+		      + std::string{strerror(errno)});
+		return {};
+	}
+
+	if (peer_stat.st_ino != my_stat.st_ino ||
+	    peer_stat.st_dev != my_stat.st_dev)
+	{
+		error("exe symlinks do not match");
+		return {};
+	}
+
+#if 0
+	std::error_code fs_ec;
+	std::string symlink=std::filesystem::read_symlink(proc_pid, fs_ec);
+
+	if (fs_ec)
+	{
+		error("cannot read exe symlink for " + proc_pid +
+			": " + fs_ec.message());
+		return {};
+	}
+#endif
+	proc_pid.clear();
+	proc_pid += "/proc/";
+	proc_pid += pidbuf_sv;
+	proc_pid += "/auxv";
+
+	bool secure_execution=false;
+	std::ifstream auxv{proc_pid};
+
+	// Read the file structure using the platform's native unsigned
+	// long word-size
+	unsigned long entry[2];
+	while (auxv.read(reinterpret_cast<char*>(entry), sizeof(entry)))
+	{
+		unsigned long key=entry[0];
+		unsigned long value=entry[1];
+
+		if (key == AT_SECURE && value == 1)
+		{
+			secure_execution=true;
+			break;
+		}
+
+		if (key == 0 && value == 0)
+		{
+			break;
+		}
+	}
+
+	if (!secure_execution)
+	{
+		error("session-start not executed from a secure context");
+		return {};
+	}
+
+	proc_pid.clear();
+	proc_pid += "/proc/";
+	proc_pid += pidbuf_sv;
+	proc_pid += "/sessionid";
+
+	std::ifstream sessid{proc_pid};
+
+	std::string line;
+
+	size_t sessid_n=0;
+	if (!sessid || !std::getline(sessid, line) ||
+		std::from_chars(
+			line.c_str(),
+			line.c_str()+line.size(),
+			sessid_n
+		).ec != std::errc{})
+	{
+		error("failed to read your session id\n");
+		return {};
+	}
+
+	return uid_sessionid_t{active_session_t{cred.uid, sessid_n}};
+}
+
 void sigusr2()
 {
 	log_message("closing sockets");
@@ -1182,6 +1363,9 @@ void vera_init()
 				(void) ioctl(f, KDSIGACCEPT, SIGWINCH);
 				close(f);
 			}
+
+			// No core dumps and no debugging, please.
+			prctl(PR_SET_DUMPABLE, 0);
 		}
 
 		proc_gc(installconfigdir(),
@@ -1235,7 +1419,7 @@ void vera_init()
 	// of any errors, so we just log them, on the initial load, and
 	// hope for the best.
 
-	proc_containers_install(
+	proc_containers_load(
 		proc_load_all(
 			installconfigdir(),
 			localconfigdir(),
@@ -1250,7 +1434,7 @@ void vera_init()
 			{
 				log_message(error_message);
 			}),
-		container_install::initial);
+		container_install::initial{});
 
 	if (initial && is_pid_1)
 	{
@@ -2772,6 +2956,40 @@ void vlad(std::vector<std::string> args)
 		get_resource(args[1], args[2]);
 		exit (0);
 	}
+
+	if (args.size() >= 1 && args[0] == "session-start")
+	{
+		auto [s1, s2]=create_vera_socketpair();
+
+		pid_t p=fork();
+
+		if (p < 0)
+		{
+			perror("fork");
+			exit(1);
+		}
+		if (p == 0)
+		{
+			s1={};
+
+			if (fcntl(s2->fd, F_SETFD, FD_CLOEXEC) < 0)
+			{
+				perror("fcntl");
+				_exit(1);
+			}
+
+			session_start(s2, args.size() > 1 ? args[1]:"");
+		}
+
+		s2={};
+
+		int errcode=1;
+
+		read(s1->fd, &errcode, sizeof(errcode));
+
+		_exit(errcode);
+	}
+
 	std::cerr << "Unknown command" << std::endl;
 	exit(1);
 }

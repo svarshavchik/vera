@@ -178,6 +178,13 @@ bool request_status(
 	std::vector<external_filedesc> &fds
 );
 
+/*! Session start request */
+
+void request_session_start(
+	const external_filedesc &efd,
+	const std::string &name
+);
+
 /*! What receive_fd() returns
 
   It returns a list of file descriptors received over the socket, and,

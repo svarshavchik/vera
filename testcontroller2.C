@@ -6,9 +6,9 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_loader.H"
-
-#define UNIT_TEST_RUNNER (next_pid=fork())
 #include "unit_test.H"
+#define UNIT_TEST() (next_pid=fork())
+#include "proc_container_runner.C"
 #include "privrequest.H"
 #include <sys/wait.h>
 #include <unistd.h>
@@ -29,7 +29,7 @@ void test_failedexec()
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 	b->new_container->meta->starting_command="/no/such/path/failedexec";
 
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -57,7 +57,7 @@ void test_capture()
 	b->new_container->meta->start_type=start_type_t::oneshot;
 	b->new_container->meta->stop_type=stop_type_t::automatic;
 
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
@@ -189,7 +189,7 @@ void test_restart()
 	b->new_container->meta->restarting_command="echo restarting-cmd; exit 10";
 	b->new_container->meta->reloading_command="echo reloading-cmd; exit 9";
 
-	call_install(container_install::update, b);
+	call_install(container_install::update{}, b);
 
 	auto ret=do_test_or_restart(
 		[]
@@ -398,7 +398,7 @@ void test_envvars()
 		"echo \"second|stop|$PREVRUNLEVEL|$RUNLEVEL\" >>log; "
 		+ populated_sh(second->new_container);
 
-	call_install(container_install::update, first, second);
+	call_install(container_install::update{}, first, second);
 
 	unlink("log");
 
@@ -475,7 +475,7 @@ void test_reexec_nofork()
 
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 
-	call_install(container_install::update,
+	call_install(container_install::update{},
 		a,
 		std::make_shared<proc_new_containerObj>("reexec_b"));
 
@@ -528,7 +528,7 @@ static int common_reexec_setup()
 		a->new_container->meta->starting_command=cmd.str();
 	}
 
-	call_install(container_install::update,
+	call_install(container_install::update{},
 		a,
 		std::make_shared<proc_new_containerObj>("reexec_b"));
 
@@ -665,12 +665,35 @@ void test_reexec_do(const std::string &command)
 {
 	int fd=common_reexec_setup();
 
+	auto [socketa, socketb, cmdfd] = create_fake_request();
+
+	request_session_start(cmdfd[0], "shell");
+	proc_do_request(socketb, cmdfd, {});
+
+	if (socketa->readln() != "")
+		throw "Unexpected result of session start request";
+
+	{
+		auto [cmd2socketa, cmd2socketb, cmd2cmdfd] = create_fake_request();
+		request_session_start(cmd2cmdfd[0], "shell");
+		proc_do_request(cmd2socketb, cmd2cmdfd, {});
+
+		if (cmd2socketa->readln() != "session already started: 2")
+			throw "Unexpected result of session start request";
+	}
+	if (fcntl(socketa->fd, F_SETFD, 0) < 0)
+		throw "cloexec failed";
+
+	if (fcntl(socketb->fd, F_SETFD, 0) < 0)
+		throw "cloexec failed";
+
 	std::ostringstream formatted_command;
 
 	formatted_command.imbue(std::locale{"C"});
 
-	formatted_command << "set -e; " << command << " testreexec_after "
-			  << fd;
+	formatted_command << "set -e; " << command << " testreexec_after \""
+			  << fd << " " << socketa->fd << " "
+			  << socketb->fd << "\"";
 
 	reexec_handler=[command=formatted_command.str()]
 	{
@@ -697,17 +720,18 @@ void testreexec_after(const std::string &socket_str)
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
 	a->new_container->meta->starting_command="exit 0";
 
-	call_install(container_install::initial,
-		a,
+	call_install(container_install::initial{}, a,
 		std::make_shared<proc_new_containerObj>("reexec_b"));
 
 	std::istringstream i{socket_str};
 	int socketfd;
+	int socketafd;
+	int socketbfd;
 
 	i.imbue(std::locale{"C"});
 
-	if (!(i >> socketfd))
-		throw "cannot parse socket file descriptor parameter";
+	if (!(i >> socketfd >> socketafd >> socketbfd))
+		throw "cannot parse socket file descriptor parameters";
 
 	write(socketfd, "2", 1);
 
@@ -722,6 +746,7 @@ void testreexec_after(const std::string &socket_str)
 		  logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
+			"re-exec, session: 1/2",
 			"re-exec: reexec_a",
 			"re-exec: reexec_b",
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
@@ -792,7 +817,7 @@ int main(int argc, char **argv)
 			test_reset();
 			test_reexec_do(args[2]);
 		}
-		else if (args.size() == 3 && args[1] == "testreexec_after")
+		else if (args.size() == 3 &&  args[1] == "testreexec_after")
 		{
 			test="testreexec_after";
 			test_reset(true);

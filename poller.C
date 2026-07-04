@@ -9,7 +9,6 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
 #include <errno.h>
 #include <dirent.h>
 #include "log.H"
@@ -31,7 +30,7 @@ struct global_epoll {
 
 	int *current_timeout=nullptr;
 
-	std::unordered_map<int, std::function<void (int)>> callbacks;
+	poll_callbacks_t callbacks;
 
 	global_epoll();
 
@@ -91,18 +90,30 @@ polledfd::polledfd(int fd, std::function<void (int)> &&callback)
 	if (ep.epollfd < 0)
 		return; // Static initialization order fiasco.
 
-	epoll_event ev{};
+	auto prev_iter=ep.callbacks.find(fd);
 
-	ev.events=EPOLLIN | EPOLLRDHUP;
-	ev.data.fd=fd;
+	// If this fd is not seen before, EPOLL_CTL_ADD it. It's possible
+	// that when a file descriptor is transplanted to a different
+	// container, we'll see the same fd number again. Don't do anything
+	// in that case, we'll expect other references to the same fd to
+	// go out of scope and get destroyed before we get around to polling
+	// it again.
 
-	while (epoll_ctl(ep.epollfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+	if (prev_iter == ep.callbacks.end())
 	{
-		log_message(_("EPOLL_CTL_ADD failed, trying again..."));
-		sleep(5);
+		epoll_event ev{};
+
+		ev.events=EPOLLIN | EPOLLRDHUP;
+		ev.data.fd=fd;
+
+		while (epoll_ctl(ep.epollfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+		{
+			log_message(_("EPOLL_CTL_ADD failed, trying again..."));
+			sleep(5);
+		}
 	}
 
-	ep.callbacks[fd]=std::move(callback);
+	my_cb_iter=ep.callbacks.emplace(fd, std::move(callback));
 }
 
 polledfd::~polledfd()
@@ -117,15 +128,22 @@ void polledfd::destroy()
 	if (fd < 0 || ep.epollfd < 0)
 		return; // Static initialization order fiasco.
 
-	epoll_event ev{};
-	while (epoll_ctl(ep.epollfd, EPOLL_CTL_DEL, fd, &ev) < 0)
+	ep.callbacks.erase(my_cb_iter);
+
+	// No other references to the same fd are left, so it can be removed
+	// from the epoll instance.
+
+	if (ep.callbacks.find(fd) == ep.callbacks.end())
 	{
-		if (errno == EBADF)
-			break;
-		log_message(_("EPOLL_CTL_DEL failed, trying again..."));
-		sleep(5);
+		epoll_event ev{};
+		while (epoll_ctl(ep.epollfd, EPOLL_CTL_DEL, fd, &ev) < 0)
+		{
+			if (errno == EBADF)
+				break;
+			log_message(_("EPOLL_CTL_DEL failed, trying again..."));
+			sleep(5);
+		}
 	}
-	ep.callbacks.erase(fd);
 	fd= -1;
 }
 
@@ -138,6 +156,8 @@ polledfd &polledfd::operator=(polledfd &&moved_from)
 {
 	destroy();
 	std::swap(fd, moved_from.fd);
+	std::swap(my_cb_iter, moved_from.my_cb_iter);
+
 	return *this;
 }
 
@@ -174,11 +194,19 @@ void do_poll(int timeout)
 
 		for (int i=0; i<n; ++i)
 		{
-			auto iter=ep.callbacks.find(events[i].data.fd);
+			auto [b, e]=ep.callbacks.equal_range(events[i].data.fd);
 
-			if (iter == ep.callbacks.end())
+			if (b == e)
 				continue;
 
+			auto iter=b;
+			if (++b != e)
+			{
+				log_message("Internal error: multiple pollers "
+					    "for fd " + std::to_string(
+						    events[i].data.fd
+					    ));
+			}
 			iter->second(iter->first);
 		}
 		timeout=0; // Drain, but don't wait any more.

@@ -7,10 +7,22 @@
 
 #include <functional>
 #include <sys/types.h>
-#include <variant>
 #include <string>
 #include <memory>
 #include <filesystem>
+
+/*! Container for all active file descriptor pollers.
+
+  It is keyed by the file descriptor, and the value is the callback
+  to invoke when the file descriptor becomes readable. It is possible for
+  multiple pollers to be registered for the same file descriptor, when a
+  poller gets moved from one polling source to another, so this needs to
+  be a multimap. By the time we try polling the move should be finished and
+  we should have only one entry for each file descriptor.
+
+*/
+typedef std::unordered_multimap<int,
+				std::function<void (int)>> poll_callbacks_t;
 
 //! A polled file descriptor
 
@@ -26,6 +38,8 @@
 class polledfd {
 
 	int fd{-1};
+
+	poll_callbacks_t::iterator my_cb_iter;
 
 	void destroy();
 

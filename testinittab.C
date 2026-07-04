@@ -6,7 +6,6 @@
 #include "inittab.H"
 #include "configdirs.h"
 #include "proc_loader.H"
-#include <fstream>
 #include <filesystem>
 #include <string>
 #include <string_view>

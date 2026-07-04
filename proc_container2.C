@@ -5,6 +5,7 @@
 #include "config.h"
 #include "proc_container.H"
 #include "proc_loader.H"
+#include "parsed_yaml.H"
 
 proc_containerObj::proc_containerObj(const std::string &name)
 	: name{name},
@@ -81,6 +82,32 @@ proc_new_containerObj::proc_new_containerObj(
 	}
 }
 
+/*! Check that all container paths in the new container object are valid.
+*/
+bool proc_new_containerObj::is_valid(
+	const std::function<void (const std::string_view &container_name,
+		const std::string_view &error_message)
+	> &error) const
+{
+	for (const auto &dependency_list : all_dependencies)
+	{
+		for (auto &existing_dependency : this->*dependency_list)
+		{
+			if (!proc_validpath(existing_dependency))
+			{
+				error(
+					existing_dependency,
+					"invalid dependency"
+				);
+
+				return false;
+			}
+		}
+	}
+
+	return new_container->is_valid(error);
+}
+
 proc_containerObj::proc_containerObj(
 	const std::string_view &installed_session_prefix,
 	const std::string_view &active_session_path,
@@ -104,6 +131,29 @@ proc_containerObj::proc_containerObj(
 	}
 {
 }
+
+bool proc_containerObj::is_valid(
+	const std::function<void (
+		const std::string_view &container_name,
+		const std::string_view &error_message
+	)> &error) const
+{
+	if (!proc_validpath(name))
+	{
+		error(name, "invalid container name");
+		return false;
+	}
+
+	if (!alternative_group.empty() &&
+		!proc_validpath(alternative_group))
+	{
+		error(alternative_group, "invalid alternative group");
+		return false;
+	}
+
+	return true;
+}
+
 
 proc_containerObj::~proc_containerObj()
 {

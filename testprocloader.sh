@@ -971,7 +971,7 @@ rm -rf globaldir localdir overridedir
 
 mkdir -p globaldir/system/sessions/installed localdir overridedir
 
-BIGNAME=`dd if=/dev/zero bs=128 count=1 2>/dev/null | tr '\0' 'A'`
+BIGNAME=`dd if=/dev/zero bs=228 count=1 2>/dev/null | tr '\0' 'A'`
 
 cat >globaldir/system/sessions/installed/$BIGNAME <<EOF
 name: $BIGNAME
@@ -979,10 +979,10 @@ version: 1
 EOF
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-    $BIGNAME/1 | grep '^E:' >loadtest.out
+    10001/10001 | grep '^E:' >loadtest.out || /bin/true
 
 cat >loadtest.txt <<EOF
-E: system/sessions/active/${BIGNAME}/1/${BIGNAME}: invalid path
+E: system/sessions/active/10001/10001/${BIGNAME}: invalid container name
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -995,10 +995,10 @@ version: 1
 EOF
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-    $BIGNAME/1 | grep '^E:' >loadtest.out
+    10002/10002 | grep '^E:' >loadtest.out || /bin/true
 
 cat >loadtest.txt <<EOF
-E: system/sessions/active/${BIGNAME}/1/${BIGNAME}: invalid dependency
+E: system/sessions/active/10002/10002/$BIGNAME: invalid dependency
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
@@ -1009,10 +1009,10 @@ version: 1
 EOF
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-    $BIGNAME/1 | grep '^E:' >loadtest.out
+    10002/10002 | grep '^E:' >loadtest.out || /bin/true
 
 cat >loadtest.txt <<EOF
-E: system/sessions/active/${BIGNAME}/1/${BIGNAME}: invalid alternative group
+E: system/sessions/active/10002/10002/$BIGNAME: invalid alternative group
 EOF
 
 diff -U 3 loadtest.txt loadtest.out
