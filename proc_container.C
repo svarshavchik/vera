@@ -1260,6 +1260,44 @@ void propagate_dependencies_t::doit2(
 {
 #endif
 }
+std::unordered_set<std::string_view>
+current_containers_infoObj::all_active_sessions() const
+{
+	std::unordered_set<std::string_view> rv;
+
+	for (auto &pc: containers)
+	{
+		auto &name=pc.first->name;
+
+		if (!is_in_session(name, ACTIVE_SESSIONS_PREFIX))
+			continue;
+
+		rv.insert(is_in_session_prefix(name));
+	}
+
+	return rv;
+}
+
+void loaded_containers::recreate_new_sessions_from_installed(
+	const current_containers_info &installed_containers,
+	const std::function<void (
+			const std::string_view &name,
+			const std::string_view &message
+		)> &callback)
+{
+	auto sessions=installed_containers->all_active_sessions();
+
+	for (auto &session: sessions)
+	{
+		if (create_new_session(
+			static_cast<std::string>(session),
+			callback
+		))
+		{
+			callback(session, _("successfully restored"));
+		}
+	}
+}
 
 void current_containers_infoObj::install(
 	loaded_containers &lc,
@@ -1346,6 +1384,21 @@ void current_containers_infoObj::install(
 			runlevel_container->new_container
 		);
 	}
+
+	lc.recreate_new_sessions_from_installed(
+		shared_from_this(),
+		[&]
+		(const auto &container_name,
+		 const auto &message)
+		{
+			std::string msg;
+
+			msg += "restore: ";
+			msg += container_name;
+			msg += ": ";
+			msg += message;
+			log_message(msg);
+		});
 
 	new_containers_lookup_t new_containers_lookup;
 

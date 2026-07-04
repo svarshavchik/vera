@@ -76,6 +76,17 @@ private:
 	std::string previous_runlevel_description;
 
 public:
+
+	/*! All active sessions
+
+	  When containers are reloaded, scan them in order to enumerate
+	  all active sessions. NOTE: the returned set references string
+	  views into the internal storage.
+
+	*/
+
+	std::unordered_set<std::string_view> all_active_sessions() const;
+
 	//! A re-exec has been requested
 	bool reexec_requested=false;
 

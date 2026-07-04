@@ -7,6 +7,7 @@
 
 #include "proc_loaderfwd.H"
 #include "proc_container.H"
+#include "current_containers_infofwd.H"
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -211,6 +212,19 @@ struct loaded_containers {
 			const std::string_view &container_name,
 			const std::string_view &error_message
 		)> &error);
+
+	/*! Recreate new sessions from installed sessions
+
+	This is called by the daemons after a restart, to recreate the new
+	active sessions that existed before the restart.
+	*/
+
+	void recreate_new_sessions_from_installed(
+		const current_containers_info &installed_containers,
+		const std::function<void (
+			const std::string_view &name,
+			const std::string_view &message
+		)> &callback);
 };
 
 /*! Load all container specifications

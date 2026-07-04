@@ -366,6 +366,63 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (args.size() >= 5 && args[1] == "recreatetest")
+	{
+		std::vector<std::string> messages;
+
+		auto loaded=
+			proc_load_all(
+				args[2], args[3], args[4],
+				[&]
+				(const auto &message)
+				{
+					messages.push_back("W: " + message);
+				},
+				[&]
+				(const auto &message)
+				{
+					messages.push_back("E: " + message);
+				});
+
+		proc_new_container_set pcs;
+
+		for (size_t i=5; i<args.size(); ++i)
+		{
+			pcs.insert(std::make_shared<proc_new_containerObj>(
+				args[i]
+			));
+		}
+
+		proc_containers_install(
+			loaded_containers{pcs},
+			container_install::update
+		);
+
+		auto ci=get_containers_info(nullptr);
+
+		loaded.recreate_new_sessions_from_installed(
+			ci,
+			[&]
+			(const auto &container_name,
+			 const auto &error_message)
+			{
+				std::string msg;
+
+				msg += container_name;
+				msg += ": ";
+				msg += error_message;
+				messages.push_back(msg);
+			});
+
+		proc_load_dump(loaded);
+		std::sort(messages.begin(), messages.end());
+
+		for (auto &m:messages)
+			std::cout << m << std::endl;
+
+		return 0;
+	}
+
 	if (args.size() == 3 && args[1] == "testrunlevelconfig")
 	{
 		if (!proc_set_runlevel_config(args[2], default_runlevels()))
