@@ -20,7 +20,7 @@ INSTALLED_SESSIONS_PREFIX.  If it does not, then we don't know what's going on
 and just return it unchanged.
 
 Otherwise, active_session_path is a path for a new active session,
-"system/sessions/active/<username>/<session_number>", and we compute the
+"system/sessions/active/<userid>/<session_number>", and we compute the
 path of the container in the active session by replacing
 INSTALLED_SESSIONS_PREFIX with active_session_path.
 */

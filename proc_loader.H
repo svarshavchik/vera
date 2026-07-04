@@ -14,6 +14,7 @@
 #include <iostream>
 #include <string_view>
 #include <optional>
+#include <tuple>
 
 /*! Find pathnames to load
 
@@ -192,7 +193,7 @@ struct loaded_containers {
 	/*! Create a new session
 
 	Take all the INSTALLED_SESSION_PREFIX containers, clone them using
-	the active session prefix, which should be "<username>/<number>",
+	the active session prefix, which should be "<userid>/<number>",
 	and store them under the active prefix.
 
 	Each session container's name has its prefix replaced by the active
@@ -367,6 +368,16 @@ Returns the corresponding prefix if "path" is in either, or an empty
 string if neither.
 */
 std::string_view is_in_session_prefix(std::string_view path);
+
+typedef std::tuple<uid_t, size_t> uid_sessionid_t;
+
+/*! If "path" is in ACTIVE_SESSIONS_PREFIX/uid/sessionid, then return
+    the uid and sessionid.
+
+*/
+std::optional<uid_sessionid_t> active_session_uidsessid_from_path(
+	std::string_view path
+);
 
 #define SIGINT_UNIT     "sigint"
 #define SIGHUP_UNIT     "sighup"

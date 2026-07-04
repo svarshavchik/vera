@@ -852,36 +852,36 @@ version: 1
 EOF
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-   user1/1 user2/2 user1/1 >loadtest.out
+   1001/1 1002/2 1001/1 >loadtest.out
 cat >loadtest.txt <<EOF
-Successfully created session system/sessions/active/user1/1
-Successfully created session system/sessions/active/user2/2
-Failed to create session system/sessions/active/user1/1
-system/sessions/active/user1/1/sess1:start=forking:stop=manual
-system/sessions/active/user1/1/sess1:alternative-group=system/sessions/active/user1/1/altgroup
-system/sessions/active/user1/1/sess1:sigterm:notify=parents
-system/sessions/active/user1/1/sess1:requires system/sessions/active/user1/1/sess2
+Successfully created session system/sessions/active/1001/1
+Successfully created session system/sessions/active/1002/2
+Failed to create session system/sessions/active/1001/1
+system/sessions/active/1001/1/sess1:start=forking:stop=manual
+system/sessions/active/1001/1/sess1:alternative-group=system/sessions/active/1001/1/altgroup
+system/sessions/active/1001/1/sess1:sigterm:notify=parents
+system/sessions/active/1001/1/sess1:requires system/sessions/active/1001/1/sess2
 
-system/sessions/active/user1/1/sess2:start=forking:stop=manual
-system/sessions/active/user1/1/sess2:alternative-group=system/sessions/active/user1/1/altgroup
-system/sessions/active/user1/1/sess2:sigterm:notify=parents
+system/sessions/active/1001/1/sess2:start=forking:stop=manual
+system/sessions/active/1001/1/sess2:alternative-group=system/sessions/active/1001/1/altgroup
+system/sessions/active/1001/1/sess2:sigterm:notify=parents
 
-system/sessions/active/user1/1/something:start=forking:stop=manual
-system/sessions/active/user1/1/something:sigterm:notify=parents
-system/sessions/active/user1/1/something:required-by system/sessions/active/user1/1/sess2
+system/sessions/active/1001/1/something:start=forking:stop=manual
+system/sessions/active/1001/1/something:sigterm:notify=parents
+system/sessions/active/1001/1/something:required-by system/sessions/active/1001/1/sess2
 
-system/sessions/active/user2/2/sess1:start=forking:stop=manual
-system/sessions/active/user2/2/sess1:alternative-group=system/sessions/active/user2/2/altgroup
-system/sessions/active/user2/2/sess1:sigterm:notify=parents
-system/sessions/active/user2/2/sess1:requires system/sessions/active/user2/2/sess2
+system/sessions/active/1002/2/sess1:start=forking:stop=manual
+system/sessions/active/1002/2/sess1:alternative-group=system/sessions/active/1002/2/altgroup
+system/sessions/active/1002/2/sess1:sigterm:notify=parents
+system/sessions/active/1002/2/sess1:requires system/sessions/active/1002/2/sess2
 
-system/sessions/active/user2/2/sess2:start=forking:stop=manual
-system/sessions/active/user2/2/sess2:alternative-group=system/sessions/active/user2/2/altgroup
-system/sessions/active/user2/2/sess2:sigterm:notify=parents
+system/sessions/active/1002/2/sess2:start=forking:stop=manual
+system/sessions/active/1002/2/sess2:alternative-group=system/sessions/active/1002/2/altgroup
+system/sessions/active/1002/2/sess2:sigterm:notify=parents
 
-system/sessions/active/user2/2/something:start=forking:stop=manual
-system/sessions/active/user2/2/something:sigterm:notify=parents
-system/sessions/active/user2/2/something:required-by system/sessions/active/user2/2/sess2
+system/sessions/active/1002/2/something:start=forking:stop=manual
+system/sessions/active/1002/2/something:sigterm:notify=parents
+system/sessions/active/1002/2/something:required-by system/sessions/active/1002/2/sess2
 
 system/sessions/installed/sess1:installed-session
 system/sessions/installed/sess1:start=forking:stop=manual
@@ -902,46 +902,46 @@ system/sessions/installed/something:required-by system/sessions/installed/sess2
 system/startup:start=forking:stop=manual
 system/startup:description=system startup
 system/startup:sigterm:notify=parents
-E: system/sessions/active/user1/1: session already exists
+E: system/sessions/active/1001/1: session already exists
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
 $VALGRIND ./testprocloader recreatetest globaldir localdir overridedir \
-   system/sessions/active/user1/1/sess1 \
-   system/sessions/active/user1/1/sess2 \
-   system/sessions/active/user2/2/sess1 \
-   system/sessions/active/user2/2/sess2 \
-   system/sessions/active/user1/1/something \
-   system/sessions/active/user2/2/something \
-   system/notsessions/active/user2/3/something \
+   system/sessions/active/1001/1/sess1 \
+   system/sessions/active/1001/1/sess2 \
+   system/sessions/active/1002/2/sess1 \
+   system/sessions/active/1002/2/sess2 \
+   system/sessions/active/1001/1/something \
+   system/sessions/active/1002/2/something \
+   system/notsessions/active/1002/3/something \
    system/startup >loadtest.out
 
 cat >loadtest.txt <<EOF
-system/sessions/active/user1/1/sess1:start=forking:stop=manual
-system/sessions/active/user1/1/sess1:alternative-group=system/sessions/active/user1/1/altgroup
-system/sessions/active/user1/1/sess1:sigterm:notify=parents
-system/sessions/active/user1/1/sess1:requires system/sessions/active/user1/1/sess2
+system/sessions/active/1001/1/sess1:start=forking:stop=manual
+system/sessions/active/1001/1/sess1:alternative-group=system/sessions/active/1001/1/altgroup
+system/sessions/active/1001/1/sess1:sigterm:notify=parents
+system/sessions/active/1001/1/sess1:requires system/sessions/active/1001/1/sess2
 
-system/sessions/active/user1/1/sess2:start=forking:stop=manual
-system/sessions/active/user1/1/sess2:alternative-group=system/sessions/active/user1/1/altgroup
-system/sessions/active/user1/1/sess2:sigterm:notify=parents
+system/sessions/active/1001/1/sess2:start=forking:stop=manual
+system/sessions/active/1001/1/sess2:alternative-group=system/sessions/active/1001/1/altgroup
+system/sessions/active/1001/1/sess2:sigterm:notify=parents
 
-system/sessions/active/user1/1/something:start=forking:stop=manual
-system/sessions/active/user1/1/something:sigterm:notify=parents
-system/sessions/active/user1/1/something:required-by system/sessions/active/user1/1/sess2
+system/sessions/active/1001/1/something:start=forking:stop=manual
+system/sessions/active/1001/1/something:sigterm:notify=parents
+system/sessions/active/1001/1/something:required-by system/sessions/active/1001/1/sess2
 
-system/sessions/active/user2/2/sess1:start=forking:stop=manual
-system/sessions/active/user2/2/sess1:alternative-group=system/sessions/active/user2/2/altgroup
-system/sessions/active/user2/2/sess1:sigterm:notify=parents
-system/sessions/active/user2/2/sess1:requires system/sessions/active/user2/2/sess2
+system/sessions/active/1002/2/sess1:start=forking:stop=manual
+system/sessions/active/1002/2/sess1:alternative-group=system/sessions/active/1002/2/altgroup
+system/sessions/active/1002/2/sess1:sigterm:notify=parents
+system/sessions/active/1002/2/sess1:requires system/sessions/active/1002/2/sess2
 
-system/sessions/active/user2/2/sess2:start=forking:stop=manual
-system/sessions/active/user2/2/sess2:alternative-group=system/sessions/active/user2/2/altgroup
-system/sessions/active/user2/2/sess2:sigterm:notify=parents
+system/sessions/active/1002/2/sess2:start=forking:stop=manual
+system/sessions/active/1002/2/sess2:alternative-group=system/sessions/active/1002/2/altgroup
+system/sessions/active/1002/2/sess2:sigterm:notify=parents
 
-system/sessions/active/user2/2/something:start=forking:stop=manual
-system/sessions/active/user2/2/something:sigterm:notify=parents
-system/sessions/active/user2/2/something:required-by system/sessions/active/user2/2/sess2
+system/sessions/active/1002/2/something:start=forking:stop=manual
+system/sessions/active/1002/2/something:sigterm:notify=parents
+system/sessions/active/1002/2/something:required-by system/sessions/active/1002/2/sess2
 
 system/sessions/installed/sess1:installed-session
 system/sessions/installed/sess1:start=forking:stop=manual
@@ -962,8 +962,8 @@ system/sessions/installed/something:required-by system/sessions/installed/sess2
 system/startup:start=forking:stop=manual
 system/startup:description=system startup
 system/startup:sigterm:notify=parents
-system/sessions/active/user1/1: successfully restored
-system/sessions/active/user2/2: successfully restored
+system/sessions/active/1001/1: successfully restored
+system/sessions/active/1002/2: successfully restored
 EOF
 diff -U 3 loadtest.txt loadtest.out
 

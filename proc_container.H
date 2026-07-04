@@ -253,7 +253,7 @@ public:
 
 	The passed in active_session_path is expected to have an
 	is_in_session_prefix of
-	ACTIVE_SESSIONS_PREFIX/<username>/<session number>.
+	ACTIVE_SESSIONS_PREFIX/<userid>/<session number>.
 
 	We calculate the new container's name and alternative_group based on
 	active_session_path and installed_container->name.

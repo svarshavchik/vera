@@ -46,12 +46,16 @@ CLEANFILES=configdirs.h
 noinst_LIBRARIES=libvera.a
 
 libvera_a_SOURCES=						\
+	connect_vera_priv.C					\
+	connect_vera_priv.H					\
 	current_containers_infofwd.H				\
 	current_containers_info.H				\
 	external_filedesc.H					\
 	external_filedesc.C					\
 	external_filedesc_privcmdsocket.H			\
 	external_filedesc_privcmdsocket.C			\
+	forward_carbon_copy.H					\
+	forward_carbon_copy.C					\
 	hook.C							\
 	hook.H							\
 	inittab.C						\

@@ -3935,6 +3935,44 @@ void test_enoperm()
 	}
 }
 
+void testactivesessionparse()
+{
+	static const struct {
+		const char *pathname;
+		std::optional<uid_sessionid_t> expected_result;
+	} test_cases[] = {
+		{
+			"not /a valid/pathname",
+			std::nullopt
+		},
+		{
+			ACTIVE_SESSIONS_PREFIX,
+			std::nullopt
+		},
+		{
+			ACTIVE_SESSIONS_PREFIX "/1000",
+			std::nullopt
+		},
+		{
+			ACTIVE_SESSIONS_PREFIX "/1000/100",
+			std::nullopt
+		},
+		{
+			ACTIVE_SESSIONS_PREFIX "/1000/100/something",
+			{{1000, 100}}
+		},
+	};
+
+	for (const auto &[pathname, expected_result] : test_cases)
+	{
+		auto result = active_session_uidsessid_from_path(pathname);
+		if (result != expected_result)
+		{
+			throw "unexpected result parsing active session paths";
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -4146,6 +4184,10 @@ int main(int argc, char **argv)
 		test_reset();
 		test="test_enoperm";
 		test_enoperm();
+
+		test_reset();
+		test="testactivesessionparse";
+		testactivesessionparse();
 
 		test_finished();
 	} catch (const char *e)

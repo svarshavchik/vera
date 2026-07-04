@@ -13,6 +13,8 @@
 #include "log.H"
 #include "current_containers_info.H"
 #include "external_filedesc.H"
+#include "connect_vera_priv.H"
+#include "forward_carbon_copy.H"
 #include "external_filedesc_privcmdsocket.H"
 #include "privrequest.H"
 #include "inittab.H"
@@ -1444,24 +1446,6 @@ void vera()
 	// halt.c in syvinit wants to see INIT_VERSION
 	setenv("INIT_VERSION", "vera-" PACKAGE_VERSION, 1);
 	vera_init();
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-// Send commands to the vera daemon
-
-std::tuple<external_filedesc,
-	std::vector<external_filedesc>> connect_vera_priv()
-{
-	auto ret=try_connect_vera_priv();
-
-	if (std::get<1>(ret).empty())
-	{
-		perror(PRIVCMDSOCKET);
-		exit(1);
-	}
-
-	return ret;
 }
 
 bool do_chmod_override(std::string configname,

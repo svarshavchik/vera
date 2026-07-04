@@ -6,6 +6,7 @@
 #include "config.h"
 #include "unit_test.H"
 #include "privrequest.H"
+#include "forward_carbon_copy.H"
 #include <unistd.h>
 #include <thread>
 #include <mutex>

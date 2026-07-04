@@ -20,6 +20,7 @@
 #include <memory>
 #include <unordered_set>
 #include <set>
+#include <charconv>
 #include <errno.h>
 #include <dirent.h>
 #include <ranges>
@@ -375,7 +376,7 @@ std::string_view is_in_session_prefix(std::string_view path)
 		size_t j=0;
 
 		// We have:
-		// ACTIVE_SESSIONS_PREFIX/<username>/<session-number>/<unitname>
+		// ACTIVE_SESSIONS_PREFIX/<userid>/<session-number>/<unitname>
 		//
 		// Search for the third slash, which delimits the session name
 		// prefix.
@@ -395,6 +396,55 @@ std::string_view is_in_session_prefix(std::string_view path)
 		return path.substr(0, i);
 	}
 	return {};
+}
+
+std::optional<uid_sessionid_t> active_session_uidsessid_from_path(
+	std::string_view path
+)
+{
+	if (!is_in_session(path, ACTIVE_SESSIONS_PREFIX))
+		return {};
+
+	path.remove_prefix(sizeof(ACTIVE_SESSIONS_PREFIX)-1);
+
+	if (path.empty())
+		return {};
+
+	path.remove_prefix(1); // Must be the slash
+
+	auto i=path.find('/');
+
+	if (i == std::string_view::npos)
+		return {};
+
+	auto uid_sv=path.substr(0, i);
+	path.remove_prefix(i+1);
+
+	i=path.find('/');
+
+	if (i == std::string_view::npos)
+		return {};
+
+	auto sessid_sv=path.substr(0, i);
+
+	uid_t uid;
+	size_t sessid;
+
+	auto r1=std::from_chars(
+		uid_sv.data(),
+		uid_sv.data()+uid_sv.size(),
+		uid
+	);
+	auto r2=std::from_chars(
+		sessid_sv.data(),
+		sessid_sv.data()+sessid_sv.size(),
+		sessid
+	);
+
+	if (r1.ec != std::errc{} || r2.ec != std::errc{})
+		return {};
+
+	return {{uid, sessid}};
 }
 
 static bool proc_load_container(
