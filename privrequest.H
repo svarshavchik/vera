@@ -362,4 +362,24 @@ void request_thaw(const external_filedesc &efd,
 
 std::string get_freeze_thaw_status(const external_filedesc &efd);
 
+/*! Create a fork request to the session manager
+
+Takes the argv of the command to run and the environment variables and
+creates a request to the session manager to fork accordingly.
+*/
+
+void request_fork(
+	const external_filedesc &efd,
+	const std::vector<std::string> &argv,
+	char **envp
+);
+
+/*! Session manager waits  for a fork request, and reads it
+
+*/
+
+std::tuple<std::vector<std::string>, std::vector<std::string>> receive_fork(
+	const external_filedesc &efd
+);
+
 #endif

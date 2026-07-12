@@ -62,6 +62,28 @@ void external_filedescObj::write_all(std::string_view msg)
 	}
 }
 
+std::string external_filedescObj::read_all()
+{
+	std::string ret;
+
+	if (lseek(fd, 0, SEEK_SET) < 0)
+		return ret;
+	for (;;)
+	{
+		char charbuffer[BUFSIZ];
+
+		ssize_t n=read(fd, charbuffer, sizeof(charbuffer));
+
+		if (n < 0)
+			break;
+		if (n == 0)
+			break;
+		ret.insert(ret.end(), charbuffer, charbuffer+n);
+	}
+
+	return ret;
+}
+
 std::string external_filedescObj::readln(size_t maxsize)
 {
 	std::string::iterator b, e, p;

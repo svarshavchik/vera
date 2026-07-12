@@ -3997,6 +3997,30 @@ void test_uidsessionid_t()
 
 void testsessionstartstop()
 {
+	{
+		auto tmpfile=tmpfile_filedesc();
+
+		std::vector<std::string> argv;
+		argv.push_back("ls");
+		argv.push_back("-al");
+
+		char *environ[2];
+
+		char foobarp[]="foo=bar";
+		environ[0]=foobarp;
+		environ[1]=nullptr;
+
+		request_fork(tmpfile, argv, environ);
+
+		auto [argv_ret, envp_ret] = receive_fork(tmpfile);
+
+		if (argv != argv_ret || envp_ret != std::vector<std::string>{
+			"foo=bar"
+		})
+		{
+			throw "Unexpected fork payload";
+		}
+	}
 	std::filesystem::create_directories(
 		installconfigdir() + "/" + INSTALLED_SESSIONS_PREFIX
 	);

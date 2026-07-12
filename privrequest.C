@@ -701,3 +701,98 @@ std::string get_freeze_thaw_status(const external_filedesc &efd)
 {
 	return efd->readln();
 }
+
+void request_fork(
+	const external_filedesc &efd,
+	const std::vector<std::string> &argv,
+	char **envp
+)
+{
+	std::string s;
+
+	for (auto &p:argv)
+	{
+		s.push_back('a');
+
+		size_t argsize=p.size();
+		s.push_back(static_cast<char>(argsize >> 24));
+		s.push_back(static_cast<char>(argsize >> 16));
+		s.push_back(static_cast<char>(argsize >> 8));
+		s.push_back(static_cast<char>(argsize));
+		s.append(p);
+	}
+
+	while (*envp)
+	{
+		s.push_back('e');
+
+		size_t envsize=strlen(*envp);
+
+		s.push_back(static_cast<char>(envsize >> 24));
+		s.push_back(static_cast<char>(envsize >> 16));
+		s.push_back(static_cast<char>(envsize >> 8));
+		s.push_back(static_cast<char>(envsize));
+		s.append(*envp);
+
+		envp++;
+	}
+
+	efd->write_all(s);
+}
+
+std::tuple<std::vector<std::string>, std::vector<std::string>> receive_fork(
+	const external_filedesc &efd
+)
+{
+	std::string s=efd->read_all();
+
+	std::tuple<std::vector<std::string>, std::vector<std::string>> ret;
+	std::vector<std::string> &argv=std::get<0>(ret);
+	std::vector<std::string> &envp=std::get<1>(ret);
+
+	char *b=s.data();
+	char *e=s.data() + s.size();
+
+	while (b < e)
+	{
+		char type=*b++;
+
+		if (e-b < 4)
+			break;
+		ssize_t argsize=static_cast<unsigned char>(b[0]);
+
+		argsize <<= 8;
+		argsize|=static_cast<unsigned char>(b[1]);
+		argsize <<= 8;
+		argsize|=static_cast<unsigned char>(b[2]);
+		argsize <<= 8;
+		argsize|=static_cast<unsigned char>(b[3]);
+
+		b += 4;
+
+		if (e-b < argsize)
+			break;
+		switch (type) {
+		case 'a':
+			{
+				// These will eventually be C strings, so
+				// reserve an extra byte for the null.
+
+				argv.push_back("");
+				auto &last=argv.back();
+				last.reserve(argsize+1);
+				last.append(b, b+argsize);
+			}
+			break;
+		case 'e':
+			envp.emplace_back(b, b+argsize);
+			break;
+		default:
+			break;
+		}
+
+		b += argsize;
+	}
+
+	return ret;
+}

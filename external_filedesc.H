@@ -41,6 +41,12 @@ public:
 	*/
 	std::string readln(size_t maxsize=0);
 
+	/*! Read everything here
+
+	  Reads until EOF.
+	*/
+	std::string read_all();
+
 	/*! Confirm that this file descriptor is a regular file
 
 	  When we use this, it's on a file descriptor that we expect to
