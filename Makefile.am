@@ -91,6 +91,9 @@ libvera_a_SOURCES=						\
 	proc_loaderfwd.H					\
 	proc_loader2.C						\
 	proc_loader3.C						\
+	proc_timer.C						\
+	proc_timer.H						\
+	proc_timerfwd.H						\
 	session_container_factory.C				\
 	session_container_factory.H				\
 	switchlog.C						\

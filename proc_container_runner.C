@@ -187,6 +187,9 @@ proc_container_runner create_runner(
 				  int)> &done
 )
 {
+	// parse the command into argv, note that each char vector in argv
+	// gets a \0 appended.
+
 	std::vector<std::vector<char>> argv;
 
 	if (command.find_first_of("\"'`[]{}*?~$&|#;\n\r()") ==

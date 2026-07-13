@@ -7,6 +7,7 @@
 #include "configdirs.h"
 #include "poller.H"
 #include "proc_container_group.H"
+#include "proc_timerfwd.H"
 #include "proc_loader.H"
 #include "parsed_yaml.H"
 #include "messages.H"

@@ -6,6 +6,7 @@
 #include "external_filedesc.H"
 #include "proc_container.H"
 #include "uid_sessionid.H"
+#include "proc_timerfwd.H"
 #define UNIT_TEST
 #include "current_containers_info.H"
 #undef UNIT_TEST

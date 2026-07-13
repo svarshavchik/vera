@@ -9,21 +9,10 @@
 
 class proc_container_timerObj;
 
-/*! A scheduled timeout.
+/*! A timer that's bound to a container
 
-create_timer() returns a handle for the timer. run_timers() checks for
-expired timers.
-
+If the container goes out of scope and gets destroyed, the timer never runs.
 */
-
 typedef std::shared_ptr<const proc_container_timerObj> proc_container_timer;
-
-//! Check and invoke timed out timers.
-
-//! Returns a timeout before run_timers() should be checked again, for
-//! a possible timer expiration.
-
-int run_timers();
-
 
 #endif
