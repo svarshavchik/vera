@@ -8,6 +8,7 @@
 #include "poller.H"
 #include "proc_container_group.H"
 #include "proc_timerfwd.H"
+#include "proc_timer.H"
 #include "proc_loader.H"
 #include "parsed_yaml.H"
 #include "messages.H"
@@ -254,10 +255,30 @@ void (*log_to_syslog)(int level,
 //! Last syslog message was from this unit
 std::string last_syslog_program;
 
+void update_verbose_progress_immediately();
+
 namespace {
 #if 0
 }
 #endif
+
+struct refresh_timerObj : public proc_timerObj {
+
+	refresh_timerObj() : refresh_timerObj(log_current_timespec().tv_sec)
+	{
+	}
+
+	refresh_timerObj(time_t timestamp)
+		: proc_timerObj(timestamp, timestamp+1)
+	{
+	}
+
+	~refresh_timerObj()
+	{
+	}
+
+	void triggered() override;
+};
 
 /*! We are showing verbose progress
 
@@ -273,6 +294,8 @@ struct showing_verbose_progress_t {
 
 	// How many rows there are in the bottom half
 	const size_t bottom_size=console_winsize.ws_row-separator_row-1;
+
+	proc_timer refresh_timer;
 
 	std::ostringstream o;
 
@@ -407,20 +430,6 @@ struct showing_verbose_progress_t {
 	  Then display_progress().
 
 	 */
-	void update(const active_units_t &containers, time_t timestamp)
-	{
-		/*
-		** Update the progress only once a second, or when something
-		** was started or terminated.
-		*/
-		if (timestamp == index_timestamp &&
-		    !something_was_stopped)
-			return;
-
-		index_timestamp=timestamp;
-
-		update(containers);
-	}
 
 	void update(const active_units_t &containers)
 	{
@@ -438,6 +447,8 @@ struct showing_verbose_progress_t {
 			something_was_stopped=false; // Reset
 			show_next_update=false;
 		}
+
+		schedule_refresh_timer();
 
 		if (containers.size() == 0)
 			return;
@@ -478,6 +489,7 @@ struct showing_verbose_progress_t {
 		       pids.empty() ? 0:pids[0]);
 	}
 
+private:
 	void update(const active_unit_info &container_info, size_t n, pid_t p)
 	{
 		std::string pid;
@@ -611,7 +623,14 @@ struct showing_verbose_progress_t {
 
 		display_progress();
 	}
-
+public:
+	void schedule_refresh_timer()
+	{
+		refresh_timer.reset();
+		auto timer=std::make_shared<refresh_timerObj>();
+		refresh_timer=timer;
+		install_timer(timer);
+	}
 
 	/*! Which container to show the status of, on the next update.
 
@@ -657,10 +676,25 @@ void showing_verbose_progress_off()
 	showing_verbose_progress.reset();
 }
 
+void refresh_timerObj::triggered()
+{
+	if (showing_verbose_progress)
+	{
+		showing_verbose_progress->update(
+			proc_container_inprogress()
+		);
+	}
+}
+
 void update_verbose_progress_immediately()
 {
 	if (showing_verbose_progress)
+	{
 		showing_verbose_progress->something_was_stopped=true;
+		showing_verbose_progress->update(
+			proc_container_inprogress()
+		);
+	}
 }
 
 void log_to_real_syslog(int level, const char *program,
@@ -1489,13 +1523,6 @@ void vera_init()
 					// Initial progress
 					showing_verbose_progress.emplace()
 						.update(inprogress);
-				}
-				else
-				{
-					showing_verbose_progress->update(
-						inprogress,
-						log_current_timespec().tv_sec
-					);
 				}
 			}
 		}

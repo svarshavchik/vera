@@ -14,6 +14,8 @@
 #include <fcntl.h>
 #include <sys/signal.h>
 
+extern void update_verbose_progress_immediately();
+
 //! Unordered map for all current runners.
 
 //! Each runner's handle is owned by its current state, which is stored in
@@ -364,4 +366,5 @@ void runner_finished(pid_t pid, int wstatus)
 		return;
 
 	runner->invoke(wstatus);
+	update_verbose_progress_immediately();
 }

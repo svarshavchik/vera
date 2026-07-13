@@ -37,7 +37,6 @@
 const char system_runlevel[]="system/runlevel";
 
 extern void showing_verbose_progress_off();
-extern void update_verbose_progress_immediately();
 
 #define DEP_DEBUG(x) (std::cout << x << "\n")
 
@@ -544,7 +543,6 @@ struct signal_poller {
 					break;
 
 				runner_finished(pid, wstatus);
-				update_verbose_progress_immediately();
 			}
 			return;
 		case SIGHUP:
@@ -4981,6 +4979,7 @@ proc_container current_containers_infoObj::alternate_runmode_process_switch(
 	stop_alternate_group should_stop{*this, alt, new_runlevel_containers};
 
 	verbose_logging.enabled=true;
+
 	log_message(_("Starting ") + alt.upcoming->name);
 
 	// We want to call switch_log start before doing any work, so it picks
