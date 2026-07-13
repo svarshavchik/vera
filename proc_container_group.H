@@ -70,7 +70,7 @@ struct proc_container_group_data {
 
 	//! Register the forked process in the cgroup.
 
-	bool cgroups_register();
+	bool cgroups_register(pid_t pid);
 
 	//! Install the poller and the event handler.
 
@@ -135,7 +135,7 @@ public:
 	  Move it into the container group, and redirect its standard output
 	  and error.
 	 */
-	bool forked();
+	bool forked(pid_t pid);
 
 	proc_container_group &operator=(const proc_container_group &)=delete;
 

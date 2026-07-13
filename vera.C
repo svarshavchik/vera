@@ -176,7 +176,7 @@ const char *proc_container_group_data::get_cgroupfs_base_path()
 
 // Put this forked process into the cgroup
 
-bool proc_container_group_data::cgroups_register()
+bool proc_container_group_data::cgroups_register(pid_t pid)
 {
 	auto path=cgroups_dir() + "/cgroup.procs";
 
@@ -184,8 +184,21 @@ bool proc_container_group_data::cgroups_register()
 
 	if (fd >= 0)
 	{
-		if (write(fd, "0\n", 2) != 2)
+		char buf[std::numeric_limits<pid_t>::digits10 + 3];
+		auto [end, ec]=std::to_chars(buf, buf+std::size(buf)-3, pid);
+
+		*end++='\n';
+
+		if (ec != std::errc{})
 		{
+			log_message("failed to convert pid to string");
+			close(fd);
+			return false;
+		}
+
+		if (write(fd, buf, end-buf) != (end-buf))
+		{
+			log_message("could not write pid to cgroup.procs");
 			close(fd);
 			return false;
 		}

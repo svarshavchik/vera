@@ -91,6 +91,94 @@ void update_runner_containers(const current_containers &new_current_containers)
 	}
 }
 
+namespace {
+	struct fork_status {
+		int failed_errno=0;
+		bool notregistered=true;
+	};
+}
+
+/*!
+	Fork and run a program in a container
+
+	Returns the pid of the child process, or -1 if the fork failed.
+
+	Parameters:
+	container - the container for the process.
+
+	argv - vector of vectors of characters - the program and its arguments,
+	each vector of character's last char is a \0.
+
+	exec_pipe0 and exec_pipe1 - pipe the child process uses to send a
+	failure executing the program to. The child process closes exec_pipe0
+	and closes exec_pipe1 if the program gets successfully exec-ed,
+	otherwise the reason is written to exec_pipe1. If the child process's
+	pid is returned, the exec_pipe1 is closed and the caller reads from
+	exec_pipe0 to determine if the child process failed.
+	group - the container group
+	all_containers - all containers, this is used to retrieve the current
+	and the previous runlevel for the child process's environment.
+*/
+
+static pid_t fork_and_run(
+	const proc_container &container,
+	std::vector<std::vector<char>> &argv,
+	external_filedesc &exec_pipe0,
+	external_filedesc &exec_pipe1,
+	proc_container_group &group,
+	const current_containers_info &all_containers)
+{
+#ifdef UNIT_TEST
+	pid_t p=UNIT_TEST();
+#else
+	pid_t p=fork();
+#endif
+
+	if (p != 0)
+		return p;
+
+	fork_status fs;
+	exec_pipe0.reset();
+	if (group.forked(getpid()))
+	{
+		fs.notregistered=false;
+
+		if (argv.empty())
+			_exit(0); // Nothing to do.
+
+		std::vector<char *> charvec;
+
+		charvec.reserve(argv.size()+1);
+
+		for (auto &v:argv)
+			charvec.push_back(v.data());
+
+		charvec.push_back(nullptr);
+
+		auto [prev, cur]=
+			all_containers->prev_current_runlevel();
+
+		for (auto &[var, value] : environconfigvars)
+			setenv(var.c_str(), value.c_str(), 1);
+
+		setenv("PREVRUNLEVEL", prev.c_str(), 1);
+
+		setenv("RUNLEVEL", cur.c_str(), 1);
+
+		sigset_t ss;
+
+		sigemptyset(&ss);
+		sigprocmask(SIG_SETMASK, &ss, NULL);
+
+		execvp(charvec[0], charvec.data());
+	}
+
+	fs.failed_errno=errno;
+
+	write(exec_pipe1->fd, &fs, sizeof(fs));
+	_exit(1);
+}
+
 proc_container_runner create_runner(
 	const current_containers_info &all_containers,
 	const current_container &cc,
@@ -127,7 +215,7 @@ proc_container_runner create_runner(
 
 			cmd.reserve(b-p+1);
 			cmd.insert(cmd.end(), p, b);
-			cmd.push_back(0);
+			cmd.push_back('\0');
 			argv.push_back(std::move(cmd));
 		}
 	}
@@ -165,11 +253,11 @@ proc_container_runner create_runner(
 
 	log_container_message(container, command.substr(0, newline) + suffix);
 #endif
-	int exec_pipe[2];
+	auto [exec_pipe0, exec_pipe1] = create_vera_socketpair();
 
-	if (pipe2(exec_pipe, O_CLOEXEC) < 0)
+	if (!exec_pipe0 || !exec_pipe1)
 	{
-		log_container_error(container, _("pipe2() failed"));
+		log_container_error(container, _("socketpair() failed"));
 		return {};
 	}
 
@@ -193,11 +281,14 @@ proc_container_runner create_runner(
 
 	auto &group=*cc->second.group;
 
-#ifdef UNIT_TEST
-	pid_t p=UNIT_TEST();
-#else
-	pid_t p=fork();
-#endif
+	pid_t p=fork_and_run(
+		container,
+		argv,
+		exec_pipe0,
+		exec_pipe1,
+		group,
+		all_containers
+	);
 
 	if (p == -1)
 	{
@@ -205,71 +296,22 @@ proc_container_runner create_runner(
 		return {};
 	}
 
-	if (p == 0)
-	{
-		close(exec_pipe[0]);
+	fork_status fs;
+	exec_pipe1.reset();
 
-		int n[2]={0, 1};
-		if (group.forked())
-		{
-			n[1]=0;
-
-			if (argv.empty())
-				_exit(0); // Nothing to do.
-
-			std::vector<char *> charvec;
-
-			charvec.reserve(argv.size()+1);
-
-			for (auto &v:argv)
-				charvec.push_back(v.data());
-
-			charvec.push_back(nullptr);
-
-			auto [prev, cur]=
-				all_containers->prev_current_runlevel();
-
-			for (auto &[var, value] : environconfigvars)
-				setenv(var.c_str(), value.c_str(), 1);
-
-			setenv("PREVRUNLEVEL", prev.c_str(), 1);
-
-			setenv("RUNLEVEL", cur.c_str(), 1);
-
-			sigset_t ss;
-
-			sigemptyset(&ss);
-			sigprocmask(SIG_SETMASK, &ss, NULL);
-
-			execvp(charvec[0], charvec.data());
-		}
-
-		n[0]=errno;
-
-		write(exec_pipe[1], &n, sizeof(n));
-		_exit(1);
-	}
-
-	close(exec_pipe[1]);
-
-	int n[2];
-
-	if (read(exec_pipe[0], reinterpret_cast<char *>(&n), sizeof(n))
-	    == sizeof(n))
+	if (read(exec_pipe0->fd, &fs, sizeof(fs)) == sizeof(fs))
 	{
 		// Did not exec
 
-		if (n[1] == 0) // Child process did register in the cgroup.
+		if (!fs.notregistered) // Child process did register in the cgroup.
 			group.populated=true;
 
-		close(exec_pipe[0]);
 		// child process exits upon an empty command.
 		log_container_error( container,
 				     std::string{argv[0].data()} + ": "
-				     + strerror(n[0]));
+				     + strerror(fs.failed_errno));
 		return {};
 	}
-	close(exec_pipe[0]);
 
 	// registered the container group and execed
 

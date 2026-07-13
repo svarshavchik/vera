@@ -99,7 +99,7 @@ bool proc_container_group_data::cgroups_dir_create()
 
 // The registration process consists of manually writing "populated 1"
 
-bool proc_container_group_data::cgroups_register()
+bool proc_container_group_data::cgroups_register(pid_t pid)
 {
 	auto cgroup_eventsfd=open(cgroup_events().c_str(),
 			     O_WRONLY|O_CREAT|O_TRUNC);

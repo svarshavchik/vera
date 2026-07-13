@@ -282,14 +282,14 @@ void proc_container_group_data::log_output(
 	}
 }
 
-bool proc_container_group::forked()
+bool proc_container_group::forked(pid_t pid)
 {
 	if (dup2(stdouterrpipe[1], 1) != 1 ||
 	    dup2(stdouterrpipe[1], 2) != 2 ||
 	    dup2(devnull(), 0) != 0)
 		return false;
 
-	return cgroups_register();
+	return cgroups_register(pid);
 }
 
 void proc_container_group::save_transfer_info(std::ostream &o)
