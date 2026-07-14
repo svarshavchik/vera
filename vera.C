@@ -777,6 +777,18 @@ void proc_container_group::cgroups_sendsig(pid_t p, int sig)
 
 ///////////////////////////////////////////////////////////////////////////
 
+namespace {
+
+struct debounce_reloadObj : public proc_timerObj {
+
+	using proc_timerObj::proc_timerObj;
+
+	void triggered() override;
+};
+
+std::shared_ptr<debounce_reloadObj> debounce_reload;
+}
+
 void check_reload_config(const char *filename)
 {
 	// Something in one of the config directory changed. If it's a valid
@@ -790,6 +802,60 @@ void check_reload_config(const char *filename)
 
 	if (!proc_validpath(filename))
 		return;
+
+	// We need to debounce these inotify-triggered events. tar unlinks
+	// the existing file before extracting a replacement file. So, we could
+	// catch tar, getting invoked from installpkg, after it unlinked a
+	// unit file but before it extracted the new one. The only way to
+	// avoid chaos is to debounce this.
+
+	auto current_time=log_current_timespec().tv_sec;
+
+	if (debounce_reload)
+	{
+		if ( (debounce_reload->time_end - debounce_reload->time_start)/2
+		    + debounce_reload->time_start >= current_time )
+			return;
+
+		// Ok, still getting inotify events, we'll restart the debounce
+		// interval.
+
+		debounce_reload.reset();
+		log_message(_("reload rescheduled"));
+	}
+	else
+	{
+		log_message(_("reload pending"));
+	}
+
+	time_t debounce_interval=6;
+
+	auto debounce_reload_interval =
+		environconfigvars.find("VERA_RELOAD_DELAY");
+	if (debounce_reload_interval != environconfigvars.end())
+	{
+		std::from_chars(debounce_reload_interval->second.data(),
+			debounce_reload_interval->second.data() +
+			debounce_reload_interval->second.size(),
+			debounce_interval);
+	}
+
+	if (debounce_interval < 1)
+		debounce_interval=1;
+
+	debounce_reload=std::make_shared<debounce_reloadObj>(
+		current_time,
+		current_time + debounce_interval
+	);
+	install_timer(debounce_reload);
+}
+
+void debounce_reloadObj::triggered()
+{
+	debounce_reload.reset();
+
+	log_message(_("reloading containers from ")
+		+ std::string{INSTALLCONFIGDIR});
 
 	// We now attempt to load the updated container configuration.
 

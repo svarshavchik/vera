@@ -1848,8 +1848,8 @@ enabled:
 	      <listitem>
 		<para>
 		  Similarly, <quote>system/boot</quote>-required units
-		  get started in all runlevels, and before the runlevel-
-		  specific units.
+		  get started in all runlevels, and before the
+		  runlevel-specific units.
 		</para>
 	      </listitem>
 	    </itemizedlist>
@@ -2103,12 +2103,14 @@ Version: 1</literallayout>
 	  <itemizedlist>
 	    <listitem>
 	      <para>
-		Package management software typically installs packages by
-		creating each file with a temporary name, then renaming the
-		file after its contents are complete. <command>vera</command>
-		ignores anything in <filename>@INSTALLCONFIGDIR@</filename>
-		that doesn't parse as valid <acronym>YAML</acronym> and without
-		a matching <quote>name</quote>.
+	        When using package management software that installs
+		packages by creating each file with a temporary name, then
+		renaming the file after its contents are complete,
+		<command>vera</command> ignores anything in
+		<filename>@INSTALLCONFIGDIR@</filename> that doesn't parse
+		as valid <acronym>YAML</acronym> and without a matching
+		<quote>name</quote>. In effect, it ignores the temporary files
+		until they are renamed.
 	      </para>
 	    </listitem>
 
@@ -2134,6 +2136,16 @@ Version: 1</literallayout>
               <manvolnum>7</manvolnum>
 	      </citerefentry>'s assistance.
 	  </para>
+
+	  <note>
+	    <para>
+	      There's a brief delay before the updated unit specification files
+	      get reloaded. The default delay is controlled by the
+	      <envar>VERA_RELOAD_DELAY</envar> environment variable, and
+	      defaults to 6 seconds. Use the <command>vlad setenv</command>
+	      command to change the delay.
+	    </para>
+	  </note>
 	</refsect2>
 
 	<refsect2 id="startstop">

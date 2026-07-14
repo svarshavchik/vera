@@ -50,6 +50,11 @@ int run_timers()
 
 		if (b->first > now.tv_sec)
 		{
+			// If we already ran something, we can return and
+			// indicate 0 milliseconds to wait for the next event,
+			// let the main loop do whatever elese it needs to
+			// do before returning here, and picking up the ball
+			// where we left it.
 			if (ran_something)
 				return 0;
 
@@ -72,6 +77,8 @@ int run_timers()
 
 			return ms;
 		}
+
+		// Remove the timer from current_timers, and then execute it.
 
 		auto timer=b->second.lock();
 

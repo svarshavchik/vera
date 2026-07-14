@@ -56,10 +56,4 @@ public:
 	virtual void update_timer_containers(const current_containers &);
 };
 
-/*! Insert the timer into current_timers
-
-This is called from create_timer().
-*/
-void install_timer(const std::shared_ptr<proc_timerObj> &timer);
-
 #endif

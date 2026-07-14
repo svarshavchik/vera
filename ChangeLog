@@ -1,3 +1,11 @@
+2026-07-14  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Delay container reload on inotify events in order to debounce
+	installpkg (it runs tar, and tar rm-s each file before writing a new
+	one, so we occasionally see a removed container, causing chaos). Use
+	VERA_RELOAD_DELAY environment variable to control the interval
+	between container reloads on inotify events.
+
 2026-07-04  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Refactor daemon connections and file descriptor passing logic. Use
