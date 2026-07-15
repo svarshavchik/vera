@@ -108,7 +108,7 @@ An active system process container group
 
  */
 
-class proc_container_group : proc_container_group_data {
+class proc_container_group : public proc_container_group_data {
 
 	struct cgroup_procs_file;
 public:

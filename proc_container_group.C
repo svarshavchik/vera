@@ -251,7 +251,7 @@ void proc_container_group_data::log_output(
 		buffer.insert(buffer.end(), buf, buf+l);
 
 		if (requester_stdout)
-			requester_stdout->write_all({buf, buf+l});
+			(void)requester_stdout->write_all({buf, buf+l});
 
 		auto b=buffer.begin(), e=buffer.end();
 

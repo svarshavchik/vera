@@ -63,7 +63,8 @@ void test_start_and_stop()
 
 	auto [stopa, stopb, cmdfd] = create_fake_request();
 
-	send_stop(cmdfd[0], "b");
+	if (!send_stop(cmdfd[0], "b"))
+		throw "send_stop failed";
 	proc_do_request(stopb, cmdfd, {});
 	stopb=nullptr;
 
@@ -76,7 +77,8 @@ void test_start_and_stop()
 
 	auto [socketa, socketb, socketcmdfd] = create_fake_request();
 
-	send_start(socketcmdfd[0], "a");
+	if (!send_start(socketcmdfd[0], "a"))
+		throw "send_start failed";
 
 	proc_do_request(socketb, socketcmdfd, {});
 	socketb=nullptr;
@@ -311,7 +313,8 @@ void test_start_failed_fork()
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_start(cmdfd[0], "failed_fork");
+	if (!send_start(cmdfd[0], "failed_fork"))
+		throw "send_start failed";
 
 	proc_do_request(socketb, cmdfd, {});
 	socketb=nullptr;
@@ -1349,7 +1352,8 @@ void test_runlevels()
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_current_runlevel(cmdfd[0]);
+		if (!request_current_runlevel(cmdfd[0]))
+			throw "request_current_runlevel failed";
 		proc_do_request(socketb, cmdfd, {});
 		socketb=nullptr;
 
@@ -1954,7 +1958,8 @@ void manualstopearly()
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_stop(cmdfd[0], "manualstopearly");
+	if (!send_stop(cmdfd[0], "manualstopearly"))
+		throw "send_stop failed";
 	proc_do_request(socketb, cmdfd, {});
 
 	if (!get_stop_status(socketa).empty())
@@ -2367,7 +2372,8 @@ void testmultiplestart()
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_start(cmdfd[0], "multiplestart");
+	if (!send_start(cmdfd[0], "multiplestart"))
+		throw "send_start failed";
 
 	proc_do_request(socketb, cmdfd, {});
 	socketb=nullptr;
@@ -2793,7 +2799,8 @@ void testmultirunlevels()
 	{
 		auto [a, b, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
 		proc_do_request(b, cmdfd, {});
 	}
 
@@ -2893,7 +2900,9 @@ void testmultirunlevels()
 	logged_state_changes.clear();
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_runlevel(cmdfd[0], "default");
+	if (!request_runlevel(cmdfd[0], "default"))
+		throw "request_runlevel failed";
+
 	proc_do_request(socketb, cmdfd, {});
 	socketb=nullptr;
 
@@ -3037,9 +3046,15 @@ void testsysdown()
 
 	auto [sda, sdb, cmdfd] = create_fake_request();
 
-	send_sysdown(cmdfd[0],
-		     "0",
-		     "echo RUNLEVEL:$RUNLEVEL >sysdown.out; exec ./testcontroller2fdleak");
+	if (!send_sysdown(
+		cmdfd[0],
+		"0",
+		"echo RUNLEVEL:$RUNLEVEL >sysdown.out; exec ./testcontroller2fdleak"
+	))
+	{
+		std::cerr << "send_sysdown failed\n";
+		exit(1);
+	}
 
 	pid_t p=fork();
 
@@ -3187,7 +3202,8 @@ void testalternategroups()
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	send_start(cmdfd[0], "a");
+	if (!send_start(cmdfd[0], "a"))
+		throw "send_start failed";
 	proc_do_request(socketb, cmdfd, {});
 
 	if (logged_state_changes != std::vector<std::string>{
@@ -3243,7 +3259,8 @@ void testalternategroups()
 	cmdfd.clear();
 	std::tie(socketa, socketb, cmdfd) = create_fake_request();
 
-	send_start(cmdfd[0], "b");
+	if (!send_start(cmdfd[0], "b"))
+		throw "send_start failed";
 	proc_do_request(socketb, cmdfd, {});
 
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
@@ -3372,7 +3389,8 @@ void teststatustimestamp()
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		send_start(cmdfd[0], "a");
+		if (!send_start(cmdfd[0], "a"))
+			throw "send_start failed";
 		proc_do_request(socketb, cmdfd, {});
 	}
 
@@ -3504,7 +3522,8 @@ void testenv()
 	{
 		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_setenv(cmdfd[0], "LANG", "en_US.UTF-8");
+		if (!send_setenv(cmdfd[0], "LANG", "en_US.UTF-8"))
+			throw "send_setenv failed";
 		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
@@ -3513,7 +3532,8 @@ void testenv()
 	{
 		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_setenv(cmdfd[0], "LC_ALL", "en_US.UTF-8");
+		if (!send_setenv(cmdfd[0], "LC_ALL", "en_US.UTF-8"))
+			throw "send_setenv failed";
 		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
@@ -3538,7 +3558,8 @@ void testenv()
 	{
 		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_setenv(cmdfd[0], "LC_ALL", "en_UK.UTF-8");
+		if (!send_setenv(cmdfd[0], "LC_ALL", "en_UK.UTF-8"))
+			throw "send_setenv failed";
 		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
@@ -3563,7 +3584,8 @@ void testenv()
 	{
 		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_unsetenv(cmdfd[0], "LC_ALL");
+		if (!send_unsetenv(cmdfd[0], "LC_ALL"))
+			throw "send_unsetenv failed";
 		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
@@ -3573,7 +3595,8 @@ void testenv()
 	{
 		auto [privsocketa, privsocketb, cmdfd] = create_fake_request();
 
-		send_unsetenv(cmdfd[0], "Z");
+		if (!send_unsetenv(cmdfd[0], "Z"))
+			throw "send_unsetenv failed";
 		proc_do_request(privsocketb, cmdfd, {});
 		privsocketb={};
 		if (wait_setunsetenv(privsocketa))
@@ -3612,7 +3635,9 @@ void testreexec_stopped()
 	{
 		auto [a, b, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
+
 		proc_do_request(b, cmdfd, {});
 	}
 
@@ -3678,7 +3703,8 @@ void testfreezethaw()
 
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
-		request_freeze(cmdfd[0], "a");
+		if (!request_freeze(cmdfd[0], "a"))
+			throw "request_freeze failed";
 		proc_do_request(socketb, cmdfd, {});
 		socketb=nullptr;
 
@@ -3699,12 +3725,13 @@ void testfreezethaw()
 
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
-		request_thaw(cmdfd[0], "a");
+		if (!request_thaw(cmdfd[0], "a"))
+			throw "request_thaw failed";
 		proc_do_request(socketb, cmdfd, {});
 		socketb=nullptr;
 
 		if (!get_freeze_thaw_status(socketa).empty())
-			throw "request_freeze failed";
+			throw "request_thaw failed";
 
 		std::ifstream i{cgroup_freeze};
 
@@ -3857,7 +3884,7 @@ void test_enoperm()
 
 	for (auto [testfunc, cmdname] : std::array<
 		std::tuple<
-			void(*)(const external_filedesc &,
+			bool(*)(const external_filedesc &,
 			std::string),
 			const char*
 		>, 4>({
@@ -3883,7 +3910,8 @@ void test_enoperm()
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
 		cmdfd[0]=fakea;
-		testfunc(fakea, "a");
+		if (!testfunc(fakea, "a"))
+			throw "failed to send the request";
 		logged_state_changes.clear();
 		proc_check_and_do_request(socketa, cmdfd, ucred{0, 0, 0});
 		cmdfd.clear();
@@ -4000,23 +4028,25 @@ void testsessionstartstop()
 	{
 		auto tmpfile=tmpfile_filedesc();
 
-		std::vector<std::string> argv;
-		argv.push_back("ls");
-		argv.push_back("-al");
+		std::vector<std::vector<char>> argv;
 
-		char *environ[2];
+		std::string_view ls_str{"ls"};
+		std::string_view al_str{"-al"};
+		argv.emplace_back(ls_str.data(), ls_str.data()+ls_str.size());
+		argv.emplace_back(al_str.data(), al_str.data()+al_str.size());
 
-		char foobarp[]="foo=bar";
-		environ[0]=foobarp;
-		environ[1]=nullptr;
+		std::unordered_map<std::string, std::string> environconfigvars;
+		environconfigvars.emplace("foo", "bar");
+		environconfigvars.emplace("hello", "world");
 
-		request_fork(tmpfile, argv, environ);
+		if (!request_fork(tmpfile, argv, environconfigvars))
+		{
+			throw "unexpected result after request_fork";
+		}
 
 		auto [argv_ret, envp_ret] = receive_fork(tmpfile);
 
-		if (argv != argv_ret || envp_ret != std::vector<std::string>{
-			"foo=bar"
-		})
+		if (argv != argv_ret || envp_ret != environconfigvars)
 		{
 			throw "Unexpected fork payload";
 		}
@@ -4101,7 +4131,9 @@ void testsessionstartstop()
 
 	logged_state_changes.clear();
 	auto [socketa, socketb, cmdfd]=create_fake_request();
-	request_session_start(cmdfd[0], "shell");
+	if (!request_session_start(cmdfd[0], "shell"))
+		throw "request_session_start failed";
+
 	proc_do_request(socketb, cmdfd, {1,2});
 
 	auto err=socketa->readln();
@@ -4211,7 +4243,8 @@ void testsessionstartstop()
 	{
 		auto [a, b, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
 		proc_do_request(b, cmdfd, {});
 	}
 

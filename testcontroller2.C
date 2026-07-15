@@ -197,7 +197,8 @@ void test_restart()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_restart(cmdfd[0], "nonexistent");
+			if (!send_restart(cmdfd[0], "nonexistent"))
+				throw "send_restart failed";
 			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
@@ -219,7 +220,8 @@ void test_restart()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_restart(cmdfd[0], "restart");
+			if (!send_restart(cmdfd[0], "restart"))
+				throw "send_restart failed";
 			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
@@ -233,7 +235,8 @@ void test_restart()
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		send_start(cmdfd[0], "restart");
+		if (!send_start(cmdfd[0], "restart"))
+			throw "send_start failed";
 		auto [stdouta, stdoutb, stdignore] = create_fake_request();
 
 		cmdfd.push_back(stdoutb);
@@ -263,7 +266,8 @@ void test_restart()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_restart(cmdfd[0], "restart");
+			if (!send_restart(cmdfd[0], "restart"))
+				throw "send_restart failed";
 			cmdfd.push_back(stdoutcc);
 
 			proc_do_request(socketb, cmdfd, {});
@@ -284,7 +288,8 @@ void test_restart()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_reload(cmdfd[0], "restart");
+			if (!send_reload(cmdfd[0], "restart"))
+				throw "send_reload failed";
 			proc_do_request(socketb, cmdfd, {});
 
 			auto ret2=do_test_or_restart(
@@ -294,7 +299,8 @@ void test_restart()
 					auto [socketa, socketb, cmdfd] =
 						create_fake_request();
 
-					send_restart(cmdfd[0], "restart");
+					if (!send_restart(cmdfd[0], "restart"))
+						throw "send_restart failed";
 					proc_do_request(socketb, cmdfd, {});
 
 					return do_test_or_restart_t{
@@ -326,7 +332,8 @@ void test_restart()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_reload(cmdfd[0], "restart");
+			if (!send_reload(cmdfd[0], "restart"))
+				throw "send_reload failed";
 			cmdfd.push_back(stdoutcc);
 
 			proc_do_request(socketb, cmdfd, {});
@@ -347,7 +354,8 @@ void test_restart()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			send_stop(cmdfd[0], "restart");
+			if (!send_stop(cmdfd[0], "restart"))
+				throw "send_stop failed";
 
 			cmdfd.push_back(stdoutcc);
 
@@ -408,7 +416,8 @@ void test_envvars()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			request_runlevel(cmdfd[0], "networking");
+			if (!request_runlevel(cmdfd[0], "networking"))
+				throw "request_runlevel failed";
 			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
@@ -438,7 +447,8 @@ void test_envvars()
 		{
 			auto [socketa, socketb, cmdfd] = create_fake_request();
 
-			request_runlevel(cmdfd[0], "boot");
+			if (!request_runlevel(cmdfd[0], "boot"))
+				throw "request_runlevel failed";
 			proc_do_request(socketb, cmdfd, {});
 
 			return do_test_or_restart_t{
@@ -465,7 +475,8 @@ void proc_request_reexec()
 {
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_reexec(cmdfd[0]);
+	if (!request_reexec(cmdfd[0]))
+		throw "request_reexec failed";
 	proc_do_request(socketb, cmdfd, {});
 }
 
@@ -667,7 +678,8 @@ void test_reexec_do(const std::string &command)
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_session_start(cmdfd[0], "shell");
+	if (!request_session_start(cmdfd[0], "shell"))
+		throw "request_session_start failed";
 	proc_do_request(socketb, cmdfd, {});
 
 	if (socketa->readln() != "")
@@ -675,7 +687,8 @@ void test_reexec_do(const std::string &command)
 
 	{
 		auto [cmd2socketa, cmd2socketb, cmd2cmdfd] = create_fake_request();
-		request_session_start(cmd2cmdfd[0], "shell");
+		if (!request_session_start(cmd2cmdfd[0], "shell"))
+			throw "request_session_start failed";
 		proc_do_request(cmd2socketb, cmd2cmdfd, {});
 
 		if (cmd2socketa->readln() != "session already started: 2")

@@ -68,7 +68,8 @@ void respawn1_setup(const std::vector<std::string> &args)
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
 
-	request_reexec(cmdfd[0]);
+	if (!request_reexec(cmdfd[0]))
+		throw "request_reexec failed";
 	proc_do_request(socketb, cmdfd, {});
 	proc_check_reexec();
 	throw "Expected to exec()";
@@ -136,7 +137,8 @@ void respawn3_setup(const std::vector<std::string> &args)
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
 		proc_do_request(socketb, cmdfd, {});
 		proc_check_reexec();
 	}
@@ -243,7 +245,8 @@ void noreexec1()
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
 		proc_do_request(socketb, cmdfd, {});
 	}
 
@@ -273,7 +276,8 @@ void noreexec2()
 	{
 		auto [socketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
 		proc_do_request(socketb, cmdfd, {});
 	}
 
@@ -303,7 +307,9 @@ void noreexec3()
 	{
 		auto [ocketa, socketb, cmdfd] = create_fake_request();
 
-		request_reexec(cmdfd[0]);
+		if (!request_reexec(cmdfd[0]))
+			throw "request_reexec failed";
+
 		proc_do_request(socketb, cmdfd, {});
 	}
 

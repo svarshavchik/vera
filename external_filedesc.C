@@ -18,7 +18,7 @@ external_filedescObj::~external_filedescObj()
 	close(fd);
 }
 
-void external_filedescObj::write_all(std::string_view msg)
+bool external_filedescObj::write_all(std::string_view msg)
 {
 	auto p=msg.data();
 	auto s=msg.size();
@@ -56,10 +56,11 @@ void external_filedescObj::write_all(std::string_view msg)
 		}
 
 		if (n <= 0)
-			break;
+			return false;
 		p += n;
 		s -= n;
 	}
+	return true;
 }
 
 std::string external_filedescObj::read_all()

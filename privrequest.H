@@ -65,7 +65,7 @@ struct hier_pid_info {
 // Send requests and process responses over a privileged (root) sockets.
 
 // Send a start request
-void send_start(const external_filedesc &efd, std::string name);
+[[nodiscard]] bool send_start(const external_filedesc &efd, std::string name);
 
 // Initial start attempt, did it work?
 
@@ -78,7 +78,7 @@ bool get_start_result(const external_filedesc &efd);
 #define START_RESULT_OK "0"
 
 // Send a stop request
-void send_stop(const external_filedesc &efd, std::string name);
+[[nodiscard]] bool send_stop(const external_filedesc &efd, std::string name);
 
 // Initial stop attempt, did it work?
 
@@ -89,7 +89,7 @@ std::string get_stop_status(const external_filedesc &efd);
 void wait_stop(const external_filedesc &efd);
 
 // Send a restart request
-void send_restart(const external_filedesc &efd, std::string name);
+[[nodiscard]] bool send_restart(const external_filedesc &efd, std::string name);
 
 // Initial restart attempt, did it work?
 
@@ -100,7 +100,7 @@ std::string get_restart_status(const external_filedesc &efd);
 int wait_restart(const external_filedesc &efd);
 
 // Send a reload request
-void send_reload(const external_filedesc &efd, std::string name);
+[[nodiscard]] bool send_reload(const external_filedesc &efd, std::string name);
 
 // Initial reload attempt, did it work?
 
@@ -113,7 +113,7 @@ int wait_reload(const external_filedesc &efd);
 // Request vera to terminate and replace itself with another process.
 // This is used to execute rc.0 or rc.6, which ends in a reboot.
 
-void send_sysdown(const external_filedesc &efd,
+[[nodiscard]] bool send_sysdown(const external_filedesc &efd,
 		  std::string runlevel,
 		  std::string command);
 
@@ -122,11 +122,11 @@ void send_sysdown(const external_filedesc &efd,
 std::string get_sysdown_status(const external_filedesc &efd);
 
 // Request a re-exec
-void request_reexec(const external_filedesc &efd);
+[[nodiscard]] bool request_reexec(const external_filedesc &efd);
 
 // Request a new runlevel
 
-void request_runlevel(const external_filedesc &efd,
+[[nodiscard]] bool request_runlevel(const external_filedesc &efd,
 		      const std::string &runlevel);
 
 // Wait for the runlevel request to be validated.
@@ -140,7 +140,7 @@ int wait_runlevel(const external_filedesc &efd);
 
 // Request the current runlevel and aliases
 
-void request_current_runlevel(const external_filedesc &efd);
+[[nodiscard]] bool request_current_runlevel(const external_filedesc &efd);
 
 // Returns the current runlevel and its aliases
 //
@@ -180,7 +180,7 @@ bool request_status(
 
 /*! Session start request */
 
-void request_session_start(
+[[nodiscard]] bool request_session_start(
 	const external_filedesc &efd,
 	const std::string &name
 );
@@ -222,9 +222,14 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd);
   descriptor.
 */
 
-void request_send_fd(
+[[nodiscard]] bool request_send_fd(
 	const external_filedesc &efd,
 	const std::vector<external_filedesc> &fds
+);
+
+[[nodiscard]] bool request_send_fd(
+	const external_filedesc &efd,
+	const std::vector<int> &fds
 );
 
 // Create a socket pair for vera requests
@@ -333,14 +338,14 @@ void update_status_overrides(
 
 // Send environment variable set
 
-void send_setenv(const external_filedesc &fd,
-		 std::string name,
-		 std::string value);
+[[nodiscard]] bool send_setenv(const external_filedesc &fd,
+			     std::string name,
+			     std::string value);
 
 // Send environment variable unset
 
-void send_unsetenv(const external_filedesc &fd,
-		   std::string name);
+[[nodiscard]] bool send_unsetenv(const external_filedesc &fd,
+				 std::string name);
 
 // Wait for the setenv or unsetenv to be processed
 //
@@ -350,13 +355,13 @@ int wait_setunsetenv(const external_filedesc &fd);
 
 // Request a freeze
 
-void request_freeze(const external_filedesc &efd,
-		    const std::string &name);
+[[nodiscard]] bool request_freeze(const external_filedesc &efd,
+				    const std::string &name);
 
 // Request a thaw
 
-void request_thaw(const external_filedesc &efd,
-		  const std::string &name);
+[[nodiscard]] bool request_thaw(const external_filedesc &efd,
+				  const std::string &name);
 
 // Status of the thaw command
 
@@ -368,17 +373,18 @@ Takes the argv of the command to run and the environment variables and
 creates a request to the session manager to fork accordingly.
 */
 
-void request_fork(
+[[nodiscard]] bool request_fork(
 	const external_filedesc &efd,
-	const std::vector<std::string> &argv,
-	char **envp
+	const std::vector<std::vector<char>> &argv,
+	const std::unordered_map<std::string, std::string> &environconfigvars
 );
 
-/*! Session manager waits  for a fork request, and reads it
+/*! Session manager waits for a fork request, and reads it
 
 */
 
-std::tuple<std::vector<std::string>, std::vector<std::string>> receive_fork(
+std::tuple<std::vector<std::vector<char>>,
+	std::unordered_map<std::string, std::string>> receive_fork(
 	const external_filedesc &efd
 );
 

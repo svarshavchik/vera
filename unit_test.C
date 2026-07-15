@@ -263,7 +263,8 @@ std::string proc_container_start(const std::string &name)
 {
 	auto [a, b, cmdfd] = create_fake_request();
 
-	send_start(cmdfd[0], name);
+	if (!send_start(cmdfd[0], name))
+		throw "send_start failed";
 
 	proc_do_request(b, cmdfd, {});
 
@@ -279,7 +280,8 @@ std::string proc_container_stop(const std::string &name)
 {
 	auto [a, b, cmdfd] = create_fake_request();
 
-	send_stop(cmdfd[0], name);
+	if (!send_stop(cmdfd[0], name))
+		throw "send_stop failed";
 
 	proc_do_request(b, cmdfd, {});
 
@@ -295,7 +297,8 @@ std::string proc_container_restart(const std::string &name)
 {
 	auto [a, b, cmdfd] = create_fake_request();
 
-	send_restart(cmdfd[0], name);
+	if (!send_restart(cmdfd[0], name))
+		throw "send_restart failed";
 
 	proc_do_request(b, cmdfd, {});
 
@@ -311,7 +314,8 @@ std::string proc_container_runlevel(const std::string &new_runlevel)
 {
 	auto [a, b, cmdfd] = create_fake_request();
 
-	request_runlevel(cmdfd[0], new_runlevel);
+	if (!request_runlevel(cmdfd[0], new_runlevel))
+		throw "request_runlevel failed";
 
 	proc_do_request(b, cmdfd, {});
 
@@ -326,7 +330,8 @@ std::string current_runlevel()
 {
 	auto [a, b, cmdfd] = create_fake_request();
 
-	request_current_runlevel(cmdfd[0]);
+	if (!request_current_runlevel(cmdfd[0]))
+		throw "request_current_runlevel failed";
 	proc_do_request(b, cmdfd, {});
 	b=nullptr;
 

@@ -74,7 +74,8 @@ void test_forward_carbon_copy1()
 				std::ostringstream o;
 
 				o << i << "\n";
-				efd->write_all(o.str());
+				if (!efd->write_all(o.str()))
+					throw "write failed";
 			}
 		},
 		[]
@@ -116,7 +117,8 @@ void test_forward_carbon_copy2()
 				std::ostringstream o;
 
 				o << i << "\n";
-				efd->write_all(o.str());
+				if (!efd->write_all(o.str()))
+					throw "write failed";
 			}
 			std::unique_lock l{m};
 

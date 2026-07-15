@@ -26,7 +26,7 @@ struct external_filedescObj {
 
 	external_filedescObj(const external_filedescObj &)=delete;
 
-	void write_all(std::string_view msg);
+	[[nodiscard]]bool write_all(std::string_view msg);
 
 private:
 	std::string buffer;

@@ -20,9 +20,9 @@
 #include <stdio.h>
 #include <string.h>
 
-void send_start(const external_filedesc &efd, std::string name)
+bool send_start(const external_filedesc &efd, std::string name)
 {
-	efd->write_all(std::string{"start\n"} + name + "\n");
+	return efd->write_all(std::string{"start\n"} + name + "\n");
 }
 
 std::string get_start_status(const external_filedesc &efd)
@@ -35,9 +35,9 @@ bool get_start_result(const external_filedesc &efd)
 	return efd->readln() == START_RESULT_OK;
 }
 
-void send_stop(const external_filedesc &efd, std::string name)
+bool send_stop(const external_filedesc &efd, std::string name)
 {
-	efd->write_all(std::string{"stop\n"} + name + "\n");
+	return efd->write_all(std::string{"stop\n"} + name + "\n");
 }
 
 std::string get_stop_status(const external_filedesc &efd)
@@ -50,9 +50,9 @@ void wait_stop(const external_filedesc &efd)
 	efd->readln();
 }
 
-void send_restart(const external_filedesc &efd, std::string name)
+bool send_restart(const external_filedesc &efd, std::string name)
 {
-	efd->write_all(std::string{"restart\n"} + name + "\n");
+	return efd->write_all(std::string{"restart\n"} + name + "\n");
 }
 
 std::string get_restart_status(const external_filedesc &efd)
@@ -79,9 +79,9 @@ int wait_restart(const external_filedesc &efd)
 	return n;
 }
 
-void send_reload(const external_filedesc &efd, std::string name)
+bool send_reload(const external_filedesc &efd, std::string name)
 {
-	efd->write_all(std::string{"reload\n"} + name + "\n");
+	return efd->write_all(std::string{"reload\n"} + name + "\n");
 }
 
 std::string get_reload_status(const external_filedesc &efd)
@@ -89,12 +89,12 @@ std::string get_reload_status(const external_filedesc &efd)
 	return efd->readln();
 }
 
-void send_sysdown(const external_filedesc &efd,
+bool send_sysdown(const external_filedesc &efd,
 		  std::string runlevel,
 		  std::string command)
 {
-	efd->write_all(std::string{"sysdown\n"} + runlevel + "\n" +
-		       command + "\n");
+	return efd->write_all(std::string{"sysdown\n"} + runlevel + "\n" +
+			command + "\n");
 }
 
 std::string get_sysdown_status(const external_filedesc &efd)
@@ -128,15 +128,15 @@ int wait_reload(const external_filedesc &efd)
 	return n;
 }
 
-void request_reexec(const external_filedesc &efd)
+bool request_reexec(const external_filedesc &efd)
 {
-	efd->write_all("reexec\n");
+	return efd->write_all("reexec\n");
 }
 
-void request_runlevel(const external_filedesc &efd,
+bool request_runlevel(const external_filedesc &efd,
 		      const std::string &runlevel)
 {
-	efd->write_all("setrunlevel\n" + runlevel + "\n");
+	return efd->write_all("setrunlevel\n" + runlevel + "\n");
 }
 
 std::string get_runlevel_status(const external_filedesc &efd)
@@ -144,9 +144,9 @@ std::string get_runlevel_status(const external_filedesc &efd)
 	return efd->readln();
 }
 
-void request_current_runlevel(const external_filedesc &efd)
+bool request_current_runlevel(const external_filedesc &efd)
 {
-	efd->write_all("getrunlevel\n");
+	return efd->write_all("getrunlevel\n");
 }
 
 std::vector<std::string> get_current_runlevel(const external_filedesc &efd)
@@ -232,7 +232,7 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 	return ret;
 }
 
-void request_send_fd(
+bool request_send_fd(
 	const external_filedesc &efd,
 	const std::vector<external_filedesc> &fds)
 {
@@ -243,6 +243,14 @@ void request_send_fd(
 	for (auto &fd : fds)
 		ifds.push_back(fd->fd);
 
+	return request_send_fd(efd, ifds);
+}
+
+bool request_send_fd(
+	const external_filedesc &efd,
+	const std::vector<int> &ifds
+)
+{
 	struct iovec iov{};
 	char dummy{0};
 
@@ -266,7 +274,8 @@ void request_send_fd(
 	msg.msg_iov=&iov;
 	msg.msg_iovlen=1;
 
-	sendmsg(efd->fd, &msg, MSG_NOSIGNAL);
+	return sendmsg(efd->fd, &msg, MSG_NOSIGNAL) ==
+	       (ssize_t)iov.iov_len;
 }
 
 bool request_status(
@@ -278,10 +287,8 @@ bool request_status(
 
 	if (fds.back()->fd < 0)
 		return false;
-	fds[0]->write_all("status\n");
-
-	request_send_fd(efd, fds);
-	return true;
+	return fds[0]->write_all("status\n") &&
+		request_send_fd(efd, fds);
 }
 
 std::unordered_map<std::string, container_state_info> get_status(
@@ -588,16 +595,8 @@ void update_status_overrides(
 
 static int create_socketpair(int sockets[])
 {
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
+	if (socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, sockets) < 0)
 		throw "socketpair() failed";
-
-	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0 ||
-	    fcntl(sockets[1], F_SETFD, FD_CLOEXEC) < 0)
-	{
-		close(sockets[0]);
-		close(sockets[1]);
-		return 1;
-	}
 
 	return 0;
 }
@@ -636,7 +635,7 @@ std::tuple<external_filedesc, external_filedesc,
 	return efd;
 }
 
-void send_setenv(const external_filedesc &fd,
+bool send_setenv(const external_filedesc &fd,
 		 std::string name,
 		 std::string value)
 {
@@ -648,10 +647,10 @@ void send_setenv(const external_filedesc &fd,
 				};
 	}
 
-	fd->write_all("setenv\n" + name + "\n" + value + "\n");
+	return fd->write_all("setenv\n" + name + "\n" + value + "\n");
 }
 
-void send_unsetenv(const external_filedesc &fd,
+bool send_unsetenv(const external_filedesc &fd,
 		    std::string name)
 {
 	if (name.find('\n') != name.npos)
@@ -661,7 +660,7 @@ void send_unsetenv(const external_filedesc &fd,
 				};
 	}
 
-	fd->write_all("unsetenv\n" + name + "\n");
+	return fd->write_all("unsetenv\n" + name + "\n");
 }
 
 int wait_setunsetenv(const external_filedesc &fd)
@@ -677,24 +676,24 @@ int wait_setunsetenv(const external_filedesc &fd)
 	return 0;
 }
 
-void request_freeze(const external_filedesc &efd,
-		    const std::string &name)
+bool request_freeze(const external_filedesc &efd,
+				    const std::string &name)
 {
-	efd->write_all(std::string{"freeze\n"} + name + "\n");
+	return efd->write_all(std::string{"freeze\n"} + name + "\n");
 }
 
-void request_thaw(const external_filedesc &efd,
-		  const std::string &name)
+bool request_thaw(const external_filedesc &efd,
+				  const std::string &name)
 {
-	efd->write_all(std::string{"thaw\n"} + name + "\n");
+	return efd->write_all(std::string{"thaw\n"} + name + "\n");
 }
 
-void request_session_start(
+bool request_session_start(
 	const external_filedesc &efd,
 	const std::string &name
 )
 {
-	efd->write_all(std::string{"session-start\n"} + name + "\n");
+	return efd->write_all(std::string{"session-start\n"} + name + "\n");
 }
 
 std::string get_freeze_thaw_status(const external_filedesc &efd)
@@ -702,10 +701,10 @@ std::string get_freeze_thaw_status(const external_filedesc &efd)
 	return efd->readln();
 }
 
-void request_fork(
+bool request_fork(
 	const external_filedesc &efd,
-	const std::vector<std::string> &argv,
-	char **envp
+	const std::vector<std::vector<char>> &argv,
+	const std::unordered_map<std::string, std::string> &environconfigvars
 )
 {
 	std::string s;
@@ -719,36 +718,44 @@ void request_fork(
 		s.push_back(static_cast<char>(argsize >> 16));
 		s.push_back(static_cast<char>(argsize >> 8));
 		s.push_back(static_cast<char>(argsize));
-		s.append(p);
+		s.append(p.data(), p.data()+p.size());
 	}
 
-	while (*envp)
+	for (auto & [key, value] : environconfigvars)
 	{
 		s.push_back('e');
 
-		size_t envsize=strlen(*envp);
+		size_t keysize=key.size();
+		size_t valuesize=value.size();
 
-		s.push_back(static_cast<char>(envsize >> 24));
-		s.push_back(static_cast<char>(envsize >> 16));
-		s.push_back(static_cast<char>(envsize >> 8));
-		s.push_back(static_cast<char>(envsize));
-		s.append(*envp);
-
-		envp++;
+		keysize += valuesize;
+		keysize += 4;
+		s.push_back(static_cast<char>(keysize >> 24));
+		s.push_back(static_cast<char>(keysize >> 16));
+		s.push_back(static_cast<char>(keysize >> 8));
+		s.push_back(static_cast<char>(keysize));
+		s.push_back(static_cast<char>(valuesize >> 24));
+		s.push_back(static_cast<char>(valuesize >> 16));
+		s.push_back(static_cast<char>(valuesize >> 8));
+		s.push_back(static_cast<char>(valuesize));
+		s.append(key);
+		s.append(value);
 	}
 
-	efd->write_all(s);
+	return efd->write_all(s);
 }
 
-std::tuple<std::vector<std::string>, std::vector<std::string>> receive_fork(
+std::tuple<std::vector<std::vector<char>>,
+	std::unordered_map<std::string, std::string>> receive_fork(
 	const external_filedesc &efd
 )
 {
 	std::string s=efd->read_all();
 
-	std::tuple<std::vector<std::string>, std::vector<std::string>> ret;
-	std::vector<std::string> &argv=std::get<0>(ret);
-	std::vector<std::string> &envp=std::get<1>(ret);
+	std::tuple<std::vector<std::vector<char>>,
+			std::unordered_map<std::string, std::string>> ret;
+	auto &argv=std::get<0>(ret);
+	auto &environconfigvars=std::get<1>(ret);
 
 	char *b=s.data();
 	char *e=s.data() + s.size();
@@ -778,16 +785,34 @@ std::tuple<std::vector<std::string>, std::vector<std::string>> receive_fork(
 				// These will eventually be C strings, so
 				// reserve an extra byte for the null.
 
-				argv.push_back("");
+				argv.push_back({});
 				auto &last=argv.back();
 				last.reserve(argsize+1);
-				last.append(b, b+argsize);
+				last.insert(last.end(), b, b+argsize);
 			}
 			break;
-		case 'e':
-			envp.emplace_back(b, b+argsize);
-			break;
 		default:
+			break;
+		case 'e':
+			if (argsize < 4)
+				break;
+			ssize_t valuesize=static_cast<unsigned char>(b[0]);
+			valuesize <<= 8;
+			valuesize|=static_cast<unsigned char>(b[1]);
+			valuesize <<= 8;
+			valuesize|=static_cast<unsigned char>(b[2]);
+			valuesize <<= 8;
+			valuesize|=static_cast<unsigned char>(b[3]);
+
+			if (valuesize > argsize-4)
+				break;
+			std::string key{b+4, b+argsize-valuesize};
+			std::string value{b+argsize-valuesize, b+argsize};
+			environconfigvars.emplace(
+				std::move(key),
+				std::move(value)
+			);
+
 			break;
 		}
 

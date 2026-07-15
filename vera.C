@@ -1167,7 +1167,11 @@ polled_socket_connection::polled_socket_connection(
 				// the legacy command into it.
 
 				cmdfds.push_back(tmpfile_filedesc());
-				cmdfds.back()->write_all(legacy_cmd.data());
+
+				if (!cmdfds.back()->write_all(legacy_cmd.data()))
+					throw std::runtime_error(
+						_("Failed to write legacy "
+							"command to socket"));
 			}
 
 			// Save the sock and remove the connection from the
@@ -1201,6 +1205,19 @@ polled_socket_connection::~polled_socket_connection()
 		active_connections_by_uid.erase(iter);
 }
 
+static void request_send_fd_failed()
+{
+	std::cerr << _("Failed to send file descriptor") << "\n" << std::flush;
+	exit(1);
+}
+
+template<typename ...Args>
+inline void wrap_request_send_fd(Args &&...args)
+{
+	if (!request_send_fd(std::forward<Args>(args)...))
+		request_send_fd_failed();
+}
+
 external_filedesc send_session_start_request(
 	external_filedesc parent_socket,
 	const std::string &name
@@ -1213,8 +1230,10 @@ external_filedesc send_session_start_request(
 	}
 	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_session_start(cmdfds[0], name);
-	request_send_fd(cmdfd, cmdfds);
+	if (!request_session_start(cmdfds[0], name))
+		exit(1);
+
+	wrap_request_send_fd(cmdfd, cmdfds);
 	auto response=cmdfd->readln();
 
 	int errcode=0;
@@ -1557,7 +1576,9 @@ void vera_init()
 		// This makes the daemon come up with the default runlevel.
 		auto [socketa, socketb, cmdfds] = create_fake_request();
 
-		request_runlevel(cmdfds[0], "default");
+		if (!request_runlevel(cmdfds[0], "default"))
+			throw std::runtime_error(
+				_("Failed to request default runlevel"));
 
 		proc_do_request(socketb, cmdfds, {});
 
@@ -1885,7 +1906,7 @@ void do_override(const std::string &name,
 
 // send start/stop/restart/reload request
 static std::tuple<external_filedesc, external_filedesc> vlad_ssrr(
-	void (*send_command)(const external_filedesc &, std::string),
+	bool (*send_command)(const external_filedesc &, std::string),
 	std::string unit)
 {
 	auto [cmdfd, cmdfds]=connect_vera_priv();
@@ -1900,8 +1921,12 @@ static std::tuple<external_filedesc, external_filedesc> vlad_ssrr(
 		cmdfds.push_back(std::move(socket2));
 	}
 
-	send_command(cmdfds[0], std::move(unit));
-	request_send_fd(cmdfd, cmdfds);
+	if (!send_command(cmdfds[0], std::move(unit)))
+	{
+		std::cerr << _("Failed to send command") << "\n" << std::flush;
+		exit(1);
+	}
+	wrap_request_send_fd(cmdfd, cmdfds);
 
 	return {cmdfd, stdoutcc};
 }
@@ -1940,9 +1965,10 @@ static void vlad_switch(const std::string &runlevel)
 {
 	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_runlevel(cmdfds[0], runlevel);
+	if (!request_runlevel(cmdfds[0], runlevel))
+		throw std::runtime_error(_("Failed to request runlevel"));
 
-	request_send_fd(cmdfd, cmdfds);
+	wrap_request_send_fd(cmdfd, cmdfds);
 
 	auto ret=get_runlevel_status(cmdfd);
 
@@ -1962,9 +1988,10 @@ static void vlad_freeze(const std::string &name)
 {
 	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_freeze(cmdfds[0], name);
+	if (!request_freeze(cmdfds[0], name))
+		throw std::runtime_error(_("Failed to request freeze"));
 
-	request_send_fd(cmdfd, cmdfds);
+	wrap_request_send_fd(cmdfd, cmdfds);
 
 	auto ret=get_freeze_thaw_status(cmdfd);
 
@@ -1981,9 +2008,10 @@ static void vlad_thaw(const std::string &name)
 {
 	auto [cmdfd, cmdfds]=connect_vera_priv();
 
-	request_thaw(cmdfds[0], name);
+	if (!request_thaw(cmdfds[0], name))
+		throw std::runtime_error(_("Failed to request thaw"));
 
-	request_send_fd(cmdfd, cmdfds);
+	wrap_request_send_fd(cmdfd, cmdfds);
 
 	auto ret=get_freeze_thaw_status(cmdfd);
 
@@ -2543,7 +2571,13 @@ void vlad(std::vector<std::string> args)
 				 args[0] == "U"))
 	{
 		auto [cmdfd, cmdfds]=connect_vera_priv();
-		request_reexec(cmdfd);
+
+		if (!request_reexec(cmdfd))
+		{
+			std::cerr << _("Failed to reexec") << std::endl;
+			exit(1);
+		}
+
 		cmdfd->readln();
 		return;
 	}
@@ -2558,8 +2592,14 @@ void vlad(std::vector<std::string> args)
 	{
 		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		request_current_runlevel(cmdfds[0]);
-		request_send_fd(cmdfd, cmdfds);
+		if (!request_current_runlevel(cmdfds[0]))
+		{
+			std::cerr << _("Failed to request current runlevel")
+				  << std::endl;
+			exit(1);
+		}
+
+		wrap_request_send_fd(cmdfd, cmdfds);
 
 		auto s=get_current_runlevel(cmdfd);
 
@@ -2798,9 +2838,14 @@ void vlad(std::vector<std::string> args)
 	{
 		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		send_sysdown(cmdfds[0], std::move(args[1]),
-				     std::move(args[2]));
-		request_send_fd(cmdfd, cmdfds);
+		if (!send_sysdown(cmdfds[0], std::move(args[1]),
+				std::move(args[2])))
+		{
+			std::cerr << _("Failed to send sysdown") << std::endl;
+			exit(1);
+		}
+
+		wrap_request_send_fd(cmdfd, cmdfds);
 
 		auto ret=get_sysdown_status(cmdfd);
 
@@ -2816,8 +2861,13 @@ void vlad(std::vector<std::string> args)
 	{
 		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		send_setenv(cmdfds[0], args[1], args[2]);
-		request_send_fd(cmdfd, cmdfds);
+		if (!send_setenv(cmdfds[0], args[1], args[2]))
+		{
+			std::cerr << _("Failed to send setenv") << std::endl;
+			exit(1);
+		}
+
+		wrap_request_send_fd(cmdfd, cmdfds);
 		exit(wait_setunsetenv(cmdfd));
 	}
 
@@ -2825,8 +2875,13 @@ void vlad(std::vector<std::string> args)
 	{
 		auto [cmdfd, cmdfds]=connect_vera_priv();
 
-		send_unsetenv(cmdfds[0], args[1]);
-		request_send_fd(cmdfd, cmdfds);
+		if (!send_unsetenv(cmdfds[0], args[1]))
+		{
+			std::cerr << _("Failed to send unsetenv") << std::endl;
+			exit(1);
+		}
+
+		wrap_request_send_fd(cmdfd, cmdfds);
 		exit(wait_setunsetenv(cmdfd));
 	}
 
@@ -3141,15 +3196,26 @@ int main(int argc, char **argv)
 
 					if (p != s.npos)
 					{
-						send_setenv(cmdfds[0],
-							    s.substr(0, p),
-							    s.substr(p+1));
+						if (!send_setenv(cmdfds[0],
+							s.substr(0, p),
+							s.substr(p+1)))
+						{
+							std::cerr << _("Failed to set environment variable")
+									  << std::endl;
+							exit(1);
+						}
 					}
 					else
 					{
-						send_unsetenv(cmdfds[0], s);
+						if (!send_unsetenv(cmdfds[0], s))
+						{
+							std::cerr << _("Failed to unset environment variable")
+									  << std::endl;
+							exit(1);
+						}
 					}
-					request_send_fd(cmdfd, cmdfds);
+
+					wrap_request_send_fd(cmdfd, cmdfds);
 
 					if (wait_setunsetenv(cmdfd))
 						exit(1);

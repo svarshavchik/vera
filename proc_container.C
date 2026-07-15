@@ -2107,6 +2107,11 @@ current_containers_infoObj::prev_current_runlevel() const
 		: std::string{}};
 }
 
+static void requester_socket_closed()
+{
+	log_message(_("requester socket closed"));
+}
+
 void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 {
 	std::string s{"default"};
@@ -2114,12 +2119,14 @@ void current_containers_infoObj::getrunlevel(const external_filedesc &efd)
 	if (active_runlevel)
 		s=active_runlevel->name;
 
-	efd->write_all(s + "\n");
+	if (!efd->write_all(s + "\n"))
+		return requester_socket_closed();
 
 	for (auto &[alias,c] : runlevel_aliases)
 	{
 		if (active_runlevel && active_runlevel == c)
-			efd->write_all(alias + "\n");
+			if (!efd->write_all(alias + "\n"))
+				return requester_socket_closed();
 	}
 }
 
@@ -2296,7 +2303,8 @@ void proc_check_and_do_request(
 	{
 		log_message("bad command file descriptor received from uid " +
 			std::to_string(credentials.uid));
-		socketfd->write_all(_("Bad command invocation\n"));
+		if (!socketfd->write_all(_("Bad command invocation\n")))
+			requester_socket_closed();
 		return;
 	}
 
@@ -2327,7 +2335,8 @@ void proc_do_request(
 	{
 		log_message("root is required for command: " + ln +
 				    " from uid " + std::to_string(cred.uid));
-		socketfd->write_all(_("Not allowed\n"));
+		if (!socketfd->write_all(_("Not allowed\n")))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2338,7 +2347,8 @@ void proc_do_request(
 				efd,
 				cred,
 				[&](const std::string &s){
-					socketfd->write_all(s + "\n");
+					if (!socketfd->write_all(s + "\n"))
+						return requester_socket_closed();
 					log_message("session-start: " + s);
 				}
 			);
@@ -2460,7 +2470,8 @@ void proc_do_request(
 		switchlog_stop();
 		setenv("RUNLEVEL", runlevel.c_str(), 1);
 		execl("/bin/sh", "/bin/sh", "-c", command.c_str(), nullptr);
-		socketfd->write_all(command + ": " + strerror(errno));
+		if (!socketfd->write_all(command + ": " + strerror(errno)))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2476,7 +2487,8 @@ void proc_do_request(
 			efd->readln(),
 			socketfd);
 
-		socketfd->write_all(ret + "\n");
+		if (!socketfd->write_all(ret + "\n"))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2511,7 +2523,8 @@ void proc_do_request(
 				log_message(errmsg);
 			});
 
-		socketfd->write_all(last_errmsg + "\n");
+		if (!socketfd->write_all(last_errmsg + "\n"))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2530,7 +2543,8 @@ void proc_do_request(
 				log_message(errmsg);
 			});
 
-		socketfd->write_all(last_errmsg + "\n");
+		if (!socketfd->write_all(last_errmsg + "\n"))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2561,7 +2575,8 @@ void proc_do_status_request(const external_filedesc &req,
 			    const external_filedesc &tmp)
 {
 	get_containers_info(nullptr)->status(tmp);
-	req->write_all("\n");
+	if (!req->write_all("\n"))
+		requester_socket_closed();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -2776,7 +2791,8 @@ void current_containers_infoObj::start(
 	if (iter == containers.end() ||
 	    iter->first->meta->type != proc_container_type::loaded)
 	{
-		requester->write_all(name + _(": unknown unit\n"));
+		if (!requester->write_all(name + _(": unknown unit\n")))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2795,9 +2811,10 @@ void current_containers_infoObj::start(
 	if (!eligibility.not_stopped_containers.empty()
 	    || eligibility.containers.empty())
 	{
-		requester->write_all(
+		if (!requester->write_all(
 			pc->name +
-			_(": cannot start because it's not stopped\n"));
+			_(": cannot start because it's not stopped\n")))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2837,7 +2854,8 @@ void current_containers_infoObj::start(
 		}
 
 		error_message += "\n";
-		requester->write_all(error_message);
+		if (!requester->write_all(error_message))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -2873,7 +2891,8 @@ void current_containers_infoObj::start(
 		std::move(requester_stdout)
 	);
 
-	requester->write_all("\n");
+	if (!requester->write_all("\n"))
+		return requester_socket_closed();
 	log_state_change(pc, run_info.state);
 
 	eligibility.containers.erase(pc);
@@ -2948,12 +2967,14 @@ void current_containers_infoObj::stop(
 	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		if (requester)
-			requester->write_all(name + _(": unknown unit\n"));
+			if (!requester->write_all(name + _(": unknown unit\n")))
+				return requester_socket_closed();
 		return;
 	}
 
 	if (requester)
-		requester->write_all("\n");
+		if (!requester->write_all("\n"))
+			return requester_socket_closed();
 	stop_with_all_requirements(
 		iter, requester,
 		std::move(requester_stdout));
@@ -4533,7 +4554,7 @@ static state_started &started(const current_container &cc, bool for_dependency)
 				if (!requester)
 					continue;
 
-				requester->write_all(
+				(void)requester->write_all(
 					START_RESULT_OK "\n"
 				);
 			}
@@ -4791,7 +4812,8 @@ void current_containers_infoObj::reload_or_restart(
 	if (iter == containers.end() ||
 	    iter->first->meta->type != proc_container_type::loaded)
 	{
-		requester->write_all(name + _(": unknown unit\n"));
+		if (!requester->write_all(name + _(": unknown unit\n")))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -4799,7 +4821,8 @@ void current_containers_infoObj::reload_or_restart(
 
 	if (!std::holds_alternative<state_started>(run_info.state))
 	{
-		requester->write_all(name + _(": is not currently started\n"));
+		if (!requester->write_all(name + _(": is not currently started\n")))
+			return requester_socket_closed();
 		return;
 	}
 
@@ -4807,18 +4830,21 @@ void current_containers_infoObj::reload_or_restart(
 
 	if (started.reload_or_restart_runner)
 	{
-		requester->write_all(name + _(": is already in the middle of "
-					      "another reload or restart\n"));
+		if (!requester->write_all(name + _(": is already in the middle of "
+					      "another reload or restart\n")))
+			return requester_socket_closed();
 		return;
 	}
 
 	if (((*pc->meta).*command).empty())
 	{
-		requester->write_all(name + no_command_error);
+		if (!requester->write_all(name + no_command_error))
+			return requester_socket_closed();
 		return;
 	}
 
-	requester->write_all("\n");
+	if (!requester->write_all("\n"))
+		return requester_socket_closed();
 
 	started.reload_or_restart_runner=create_runner(
 		shared_from_this(),
@@ -4844,7 +4870,8 @@ void current_containers_infoObj::reload_or_restart(
 
 			o.imbue(std::locale{"C"});
 			o << exit_status << "\n";
-			requester->write_all(o.str());
+			if (!requester->write_all(o.str()))
+				return requester_socket_closed();
 		});
 
 	started.requester_stdout=std::move(requester_stdout);
@@ -5060,14 +5087,16 @@ void current_containers_infoObj::freeze(
 	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		if (requester)
-			requester->write_all(name + _(": unknown unit\n"));
+			if (!requester->write_all(name + _(": unknown unit\n")))
+				return requester_socket_closed();
 		return;
 	}
 
 	if (iter->second.group && iter->second.group->freeze_thaw("1"))
 		return;
 
-	requester->write_all(name + _(": no processes to freeze\n"));
+	if (!requester->write_all(name + _(": no processes to freeze\n")))
+		return requester_socket_closed();
 }
 
 void current_containers_infoObj::thaw(
@@ -5081,14 +5110,16 @@ void current_containers_infoObj::thaw(
 	    iter->first->meta->type != proc_container_type::loaded)
 	{
 		if (requester)
-			requester->write_all(name + _(": unknown unit\n"));
+			if (!requester->write_all(name + _(": unknown unit\n")))
+				return requester_socket_closed();
 		return;
 	}
 
 	if (iter->second.group && iter->second.group->freeze_thaw("0"))
 		return;
 
-	requester->write_all(name + _(": no processes to thaw\n"));
+	if (!requester->write_all(name + _(": no processes to thaw\n")))
+		return requester_socket_closed();
 }
 
 void current_containers_infoObj::session_start(
@@ -5114,10 +5145,11 @@ void current_containers_infoObj::session_start(
 	// We there is already a current manager, get rid of the newcomer.
 	if (iter->second.current_manager)
 	{
-		socketfd->write_all(
+		if (!socketfd->write_all(
 			_("session already started: ") +
 			std::to_string(sessionid) + "\n"
-		);
+		))
+			return requester_socket_closed();
 
 		return;
 	}
@@ -5146,5 +5178,6 @@ void current_containers_infoObj::session_start(
 		uidsessionid,
 		inserted ? "session-start" : "session-start (reconnected)"
 	);
-	socketfd->write_all(_("\n"));
+	if (!socketfd->write_all(_("\n")))
+		return requester_socket_closed();
 }
