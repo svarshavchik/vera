@@ -38,7 +38,7 @@ struct active_unit_info {
 	time_t time_end;
 };
 
-/*! 
+/*!
   A connection to the session manager for a session
 */
 struct active_session_connection {
@@ -52,7 +52,7 @@ struct active_session_connection {
 	/*!
 	  Constructor for an active session
 
-	  The poller needs to know about the sessionid because when we 
+	  The poller needs to know about the sessionid because when we
 	  read an IO event, the handler needs to know what the sessionid is.
 	*/
 	active_session_connection(
@@ -140,6 +140,37 @@ public:
 	  go from there.
 	*/
 	void handle_session_fd(size_t sessionid);
+	/*!
+		Fork and run a program in a session container
+
+		Returns the pid of the child process, or -1 if the fork failed.
+
+		Parameters:
+		container - the container for the process.
+
+		argv - vector of vectors of characters - the program and its
+		arguments, each vector of character's last char is a \0.
+
+		exec_pipe0 and exec_pipe1 - pipe that's used to send the child
+		process's pid and a failure executing the program to.
+		exec_pipe1 is sent to the active session's manager. The
+		session manager first writes the pid to exec_pipe1, then tries
+		to execute the program. A successful execution closes
+		exec_pipe1. After reading the child process's pid, if reading
+		exec_pipe0 results in an EOF condition the child program is
+		deemed to have started successfully, otherwise a fork_status
+		gets read with more details.
+		group - the container group.
+		session - the session that the process should be running in.
+	*/
+	pid_t start_in_session(
+		const proc_container &container,
+		std::vector<std::vector<char>> &argv,
+		external_filedesc &exec_pipe0,
+		external_filedesc &exec_pipe1,
+		proc_container_group &group,
+		const active_session_t &session
+	);
 
 	/*! All active sessions
 
@@ -586,10 +617,18 @@ public:
 
 	  This is called when a session manager notifies us that a new session
 	  wishes to have its containers started.
+
+	  uidsessionid - the new session's id
+	  start - if non-empty, what container to start in the session
+	  socketfd - the socket connection that sent the session-start command
+	  session_managerfd - the socket connection to the session manager, for
+	  requests to start containers in the given session
 	*/
 	void session_start(
 		const uid_sessionid_t &uidsessionid,
-		const external_filedesc &socketfd
+		std::string start,
+		const external_filedesc &socketfd,
+		const external_filedesc &session_managerfd
 	);
 
 	//! Report when the container is empty

@@ -35,7 +35,7 @@ std::vector<std::tuple<pid_t, int>> sent_sigs;
 
 std::optional<std::stringstream> current_switchlog;
 std::vector<std::string> completed_switchlog;
-
+std::function<void (const char *, char **, char **)> execvpe_func;
 pid_t next_pid=1;
 bool all_forks_fail=false;
 
@@ -111,6 +111,7 @@ bool proc_container_group_data::cgroups_register(pid_t pid)
 		return false;
 	}
 
+	log_message("cgroups_register called");
 	lseek(cgroup_eventsfd, 0, SEEK_SET);
 	write(cgroup_eventsfd, "populated 1\n", 12);
 	close(cgroup_eventsfd);
@@ -176,6 +177,14 @@ std::string read_stdoutcc(const external_filedesc &stdoutcc)
 	}
 
 	return s;
+}
+
+void execvp_after_forking(
+	const char *path,
+	char **argv_ptrs,
+	char **environ_ptrs)
+{
+	execvpe_func(path, argv_ptrs, environ_ptrs);
 }
 
 //! Simulate a populated() cgroup event. We just write it into the faked file
@@ -556,6 +565,10 @@ void test_reset(bool keep_cgroupfs)
 	{
 		throw "unexpected call to reexec.";
 	};
+	execvpe_func=[](const char *path, char **argv_ptrs, char **environ_ptrs)
+	{
+		errno=ENOENT;
+	};
 
 	std::filesystem::remove_all(overrideconfigdir());
 	std::filesystem::create_directory(overrideconfigdir());
@@ -679,7 +692,7 @@ std::vector<unit_dependency_dump> dump_unit_dependencies()
 			std::vector<std::string> v{s.begin(), s.end()};
 			std::sort(v.begin(), v.end());
 
-			std::cout << ",\n\n\t\t// " << name << ": \n\t\t{";
+			std::cout << ",\n\n\t\t// " << name << ":\n\t\t{";
 			const char *pfix="";
 
 			for (auto &s:v)

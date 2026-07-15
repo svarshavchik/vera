@@ -1211,10 +1211,12 @@ static void request_send_fd_failed()
 	exit(1);
 }
 
-template<typename ...Args>
-inline void wrap_request_send_fd(Args &&...args)
+void wrap_request_send_fd(
+	const external_filedesc &efd,
+	const std::vector<external_filedesc> &fds
+)
 {
-	if (!request_send_fd(std::forward<Args>(args)...))
+	if (!request_send_fd(efd, fds))
 		request_send_fd_failed();
 }
 
@@ -1250,19 +1252,13 @@ external_filedesc send_session_start_request(
 	return cmdfd;
 }
 
-void session_start(
-	external_filedesc parent_socket,
-	const std::string &name
+void execvp_after_forking(
+	const char *path,
+	char **argv_ptrs,
+	char **environ_ptrs
 )
 {
-	auto cmdfd=send_session_start_request(parent_socket, name);
-
-	std::string cmd;
-
-	while (!(cmd=cmdfd->readln()).empty())
-	{
-	}
-	exit(0);
+	execvpe(path, argv_ptrs, environ_ptrs);
 }
 
 std::optional<uid_sessionid_t> proc_get_sessionid(
@@ -1271,6 +1267,8 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 	const std::function<void (const std::string &)> &error)
 {
 #ifdef SO_PEERPIDFD
+
+	// Kernel 6.5 required for this
 	int pidfdn = -1;
 	socklen_t pidfd_len = sizeof(pidfdn);
 
@@ -1289,6 +1287,8 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 		return {};
 	}
 #endif
+
+	// Read /proc/<pid>/sessionid
 	char pidbuf[std::numeric_limits<pid_t>::digits10 + 2];
 	auto [last, ec]=std::to_chars(pidbuf, pidbuf + sizeof(pidbuf), cred.pid);
 
@@ -1296,10 +1296,14 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 
 	std::string proc_pid;
 
+	// We'll read /proc/<pid>/session id later.
 	proc_pid.reserve(pidbuf_sv.size() + sizeof("/proc//sessionid"));
 	proc_pid+="/proc/";
 	proc_pid+=pidbuf_sv;
 	proc_pid+="/exe";
+
+	// Compare /proc/<pid>/exe with /proc/self/exe to ensure we're looking
+	// at the same process.
 
 	struct stat peer_stat;
 	struct stat my_stat;
@@ -1336,6 +1340,9 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 		return {};
 	}
 #endif
+
+	// Read /proc/<pid>/auxv to verify secure execution mode.
+
 	proc_pid.clear();
 	proc_pid += "/proc/";
 	proc_pid += pidbuf_sv;
@@ -1369,6 +1376,9 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 		error("session-start not executed from a secure context");
 		return {};
 	}
+
+	// Read /proc/<pid>/sessionid to get the session id, we already know
+	// the UID.
 
 	proc_pid.clear();
 	proc_pid += "/proc/";
@@ -3121,7 +3131,29 @@ void vlad(std::vector<std::string> args)
 
 	if (args.size() >= 1 && args[0] == "session-start")
 	{
+		std::string name;
+
 		auto [s1, s2]=create_vera_socketpair();
+
+		if (args.size() > 1)
+		{
+			name=args[1];
+
+			if (!proc_validpath(name))
+			{
+				std::cerr << _("Invalid session: ") << name
+						 << "\n" << std::flush;
+				exit(1);
+			}
+		}
+
+		auto [cmdfd, cmdfds]=connect_vera_priv();
+
+		if (!request_session_start(cmdfds[0], name))
+			exit(1);
+
+		cmdfds.push_back(std::move(s2));
+		s2={};
 
 		pid_t p=fork();
 
@@ -3130,26 +3162,32 @@ void vlad(std::vector<std::string> args)
 			perror("fork");
 			exit(1);
 		}
+
 		if (p == 0)
 		{
-			s1={};
+			cmdfd={};
+			cmdfds.clear();
+			while (request_and_execute_fork(s1))
+				;
 
-			if (fcntl(s2->fd, F_SETFD, FD_CLOEXEC) < 0)
-			{
-				perror("fcntl");
-				_exit(1);
-			}
-
-			session_start(s2, args.size() > 1 ? args[1]:"");
+			exit(0);
 		}
 
-		s2={};
+		wrap_request_send_fd(cmdfd, cmdfds);
 
-		int errcode=1;
+		s1 = {};
 
-		read(s1->fd, &errcode, sizeof(errcode));
+		auto ret=get_start_status(cmdfd);
+		if (ret != "")
+		{
+			std::cerr << ret << "\n" << std::flush;
+			exit(1);
+		}
 
-		_exit(errcode);
+		if (!get_start_result(cmdfd))
+			exit(1);
+
+		exit(0);
 	}
 
 	std::cerr << "Unknown command" << std::endl;

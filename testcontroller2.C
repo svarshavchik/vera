@@ -79,6 +79,7 @@ void test_capture()
 			"capture: " + STATE_START_PENDING::label.label_str(),
 			"capture: cgroup created",
 			"capture: " + STATE_STARTED::label.label_str(),
+			"capture: cgroups_register called",
 			"capture: foo",
 			"capture: bar",
 		})
@@ -251,7 +252,8 @@ void test_restart()
 		socketb=nullptr;
 
 		if (read_stdoutcc(stdouta) !=
-		    "starting-cmd\n")
+			"cgroups_register called\n"
+			"starting-cmd\n")
 		{
 			throw "Unexpected captured output of a restart";
 		}
@@ -279,7 +281,9 @@ void test_restart()
 	if (WEXITSTATUS(exitcode) != 10 || message != "")
 		throw "Unexpected result of a successful restart";
 
-	if (output != "restarting-cmd\n")
+	if (output !=
+		"cgroups_register called\n"
+		"restarting-cmd\n")
 		throw "Did not capture expected output of successful restart";
 
 	ret=do_test_or_restart(
@@ -345,7 +349,9 @@ void test_restart()
 	if (WEXITSTATUS(exitcode) != 9 || message != "")
 		throw "Unexpected result of a successful reload";
 
-	if (output != "reloading-cmd\n")
+	if (output !=
+		"cgroups_register called\n"
+		"reloading-cmd\n")
 		throw "Did not capture expected output of a successful reload";
 
 	ret=do_test_or_restart(
@@ -375,7 +381,9 @@ void test_restart()
 	if (WEXITSTATUS(exitcode) != 0 || message != "")
 		throw "Unexpected result of a successful stop";
 
-	if (output != "stopping-cmd\n")
+	if (output !=
+			"cgroups_register called\n"
+			"stopping-cmd\n")
 		throw "Did not capture expected output of a successful stop";
 }
 
@@ -672,27 +680,43 @@ static void regular_tests(std::string &test)
 	test_reexec_before();
 }
 
-void test_reexec_do(const std::string &command)
+void test_reexecdo(const std::string &command)
 {
 	int fd=common_reexec_setup();
 
 	auto [socketa, socketb, cmdfd] = create_fake_request();
+	auto [socketc, socketd] = create_vera_socketpair();
 
-	if (!request_session_start(cmdfd[0], "shell"))
+	if (fcntl(socketd->fd, F_SETFD, 0) < 0)
+		throw "could not turn off cloexec";
+
+	cmdfd.push_back(socketc);
+	if (!request_session_start(cmdfd[0], ""))
 		throw "request_session_start failed";
 	proc_do_request(socketb, cmdfd, {});
 
-	if (socketa->readln() != "")
+	std::string err=socketa->readln();
+	if (err != "")
+	{
+		std::cerr << "Unexpected result of session start request: "
+				  << err << std::endl;
 		throw "Unexpected result of session start request";
-
+	}
 	{
 		auto [cmd2socketa, cmd2socketb, cmd2cmdfd] = create_fake_request();
-		if (!request_session_start(cmd2cmdfd[0], "shell"))
+		if (!request_session_start(cmd2cmdfd[0], ""))
 			throw "request_session_start failed";
+
+		cmd2cmdfd.push_back(socketc);
 		proc_do_request(cmd2socketb, cmd2cmdfd, {});
 
-		if (cmd2socketa->readln() != "session already started: 2")
+		err=cmd2socketa->readln();
+		if (err != "session already started: 2")
+		{
+			std::cerr << "Status of second session start request: "
+					  << err << std::endl;
 			throw "Unexpected result of session start request";
+		}
 	}
 	if (fcntl(socketa->fd, F_SETFD, 0) < 0)
 		throw "cloexec failed";
@@ -728,6 +752,7 @@ void test_reexec_do(const std::string &command)
 
 void testreexec_after(const std::string &socket_str)
 {
+	std::cout << "\n\n";
 	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
 
 	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
@@ -828,7 +853,7 @@ int main(int argc, char **argv)
 		{
 			test="testreexec_do";
 			test_reset();
-			test_reexec_do(args[2]);
+			test_reexecdo(args[2]);
 		}
 		else if (args.size() == 3 &&  args[1] == "testreexec_after")
 		{

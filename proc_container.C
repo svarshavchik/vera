@@ -2342,6 +2342,14 @@ void proc_do_request(
 
 	if (ln == "session-start")
 	{
+		if (cmdfd.size() < 2)
+		{
+			if (!socketfd->write_all(
+				_("Bad session-start command\n")))
+				return requester_socket_closed();
+			return;
+		}
+
 		std::optional<uid_sessionid_t> uidsessionid=
 			proc_get_sessionid(
 				efd,
@@ -2359,7 +2367,7 @@ void proc_do_request(
 		}
 
 		get_containers_info(nullptr)->session_start(
-			*uidsessionid, socketfd
+			*uidsessionid, efd->readln(), socketfd, cmdfd[1]
 		);
 		return;
 	}
@@ -5124,7 +5132,9 @@ void current_containers_infoObj::thaw(
 
 void current_containers_infoObj::session_start(
 	const uid_sessionid_t &uidsessionid,
-	const external_filedesc &socketfd
+	std::string start_path,
+	const external_filedesc &socketfd,
+	const external_filedesc &session_managerfd
 )
 {
 	auto sessionid=std::visit(
@@ -5132,7 +5142,7 @@ void current_containers_infoObj::session_start(
 		uidsessionid
 	);
 
-	// Ok, can be actually create a new session. It's possible that it
+	// Ok, actually create a new session? It's possible that it
 	// exists, if so this session manager is attempting to regain ownership
 	// of it. Figure this out.
 
@@ -5157,7 +5167,7 @@ void current_containers_infoObj::session_start(
 	// This is either a new session, or an old one that we just
 	// re-established contact with its session manager.
 
-	iter->second.current_manager.emplace(socketfd, sessionid);
+	iter->second.current_manager.emplace(session_managerfd, sessionid);
 
 	if (inserted &&
 		std::holds_alternative<active_session_t>(uidsessionid)
@@ -5178,6 +5188,17 @@ void current_containers_infoObj::session_start(
 		uidsessionid,
 		inserted ? "session-start" : "session-start (reconnected)"
 	);
+
+	if (!start_path.empty())
+	{
+		uid_sessionid_to_chars to_chars{uidsessionid};
+
+		auto path=to_chars.path() + "/" + start_path;
+
+		start(path, socketfd, {});
+		return;
+	}
+
 	if (!socketfd->write_all(_("\n")))
 		return requester_socket_closed();
 }

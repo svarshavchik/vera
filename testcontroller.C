@@ -17,6 +17,7 @@
 #include "proc_loader.H"
 #include <unistd.h>
 #include <fcntl.h>
+#include <thread>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -4026,8 +4027,6 @@ void test_uidsessionid_t()
 void testsessionstartstop()
 {
 	{
-		auto tmpfile=tmpfile_filedesc();
-
 		std::vector<std::vector<char>> argv;
 
 		std::string_view ls_str{"ls"};
@@ -4039,18 +4038,55 @@ void testsessionstartstop()
 		environconfigvars.emplace("foo", "bar");
 		environconfigvars.emplace("hello", "world");
 
-		if (!request_fork(tmpfile, argv, environconfigvars))
+		auto [sessionpipe0, sessionpipe1]=create_vera_socketpair();
+		auto [pidpipe0, pidpipe1]=create_vera_socketpair();
+		auto [execpipe0, execpipe1]=create_vera_socketpair();
+		auto [outerrpipe0, outerrpipe1]=create_vera_socketpair();
+		if (!request_fork(sessionpipe0, pidpipe1->fd, execpipe0->fd,
+			outerrpipe1->fd, argv, environconfigvars))
 		{
 			throw "unexpected result after request_fork";
 		}
 
-		auto [argv_ret, envp_ret] = receive_fork(tmpfile);
+		auto [argv_ret, envp_ret, pid_pipe_recv, exec_pipe_recv,
+			outerr_pipe_recv] = receive_fork(sessionpipe1);
 
 		if (argv != argv_ret || envp_ret != environconfigvars)
 		{
 			throw "Unexpected fork payload";
 		}
+
+		pid_t sendfakepid=2;
+		if (!pid_pipe_recv->write_all(
+			std::string_view{
+				reinterpret_cast<char *>(&sendfakepid),
+				sizeof(sendfakepid)
+			}
+		))
+		{
+			throw "unexpected result after sending fake pid";
+		}
+
+		if (read(pidpipe0->fd, &sendfakepid, sizeof(sendfakepid)) !=
+			sizeof(sendfakepid))
+		{
+			throw "unexpected result after reading fake pid";
+		}
+
+		if (sendfakepid != 2)
+		{
+			throw "unexpected result after reading fake pid";
+		}
+
+		execpipe1.reset();
+
+		if (read(exec_pipe_recv->fd, &sendfakepid,
+			sizeof(sendfakepid)) != 0)
+		{
+			throw "unexpected result after waiting for eof";
+		}
 	}
+
 	std::filesystem::create_directories(
 		installconfigdir() + "/" + INSTALLED_SESSIONS_PREFIX
 	);
@@ -4061,10 +4097,31 @@ void testsessionstartstop()
 			"/process1"
 		};
 		out << "name: process1\n"
+			"starting:\n"
+			"    type: oneshot\n"
+			"    command: /bin/true\n"
 			"required-by: shell\n"
+			"required-by: x11\n"
 			"version: 1\n";
 		out.close();
 	}
+
+	{
+		std::ofstream out{
+			installconfigdir() + "/" + INSTALLED_SESSIONS_PREFIX +
+			"/x11"
+		};
+		out << "name: x11\n"
+			"stopping:\n"
+			"    type: target\n"
+			"version: 1\n";
+		out.close();
+	}
+
+	execvpe_func=[](const char *path, char **argv_ptrs, char **environ_ptrs)
+	{
+		_exit(0);
+	};
 
 	proc_containers_load(
 		proc_load_all(
@@ -4093,7 +4150,8 @@ void testsessionstartstop()
 
 			// all_required_by:
 			{
-				"system/sessions/installed/shell"
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
 			},
 
 			// all_starting_first:
@@ -4102,11 +4160,33 @@ void testsessionstartstop()
 
 			// all_stopping_first:
 			{
-				"system/sessions/installed/shell"
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
 			}
 		},
 		{
 			"system/sessions/installed/shell",
+
+			// all_requires:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_required_by:
+			{
+			},
+
+			// all_starting_first:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_stopping_first:
+			{
+			}
+		},
+		{
+			"system/sessions/installed/x11",
 
 			// all_requires:
 			{
@@ -4130,22 +4210,50 @@ void testsessionstartstop()
 		throw "unexpected initial set of containers";
 
 	logged_state_changes.clear();
+
+	auto [manager_socketa, manager_socketb]=create_vera_socketpair();
 	auto [socketa, socketb, cmdfd]=create_fake_request();
-	if (!request_session_start(cmdfd[0], "shell"))
-		throw "request_session_start failed";
 
-	proc_do_request(socketb, cmdfd, {1,2});
+	std::thread session_mananger_thread(
+		[manager_socketa]
+		{
+			(void)request_and_execute_fork(manager_socketa);
+		}
+	);
 
-	auto err=socketa->readln();
+	try {
+		cmdfd.push_back(manager_socketb);
+		if (!request_session_start(cmdfd[0], "x11"))
+			throw "request_session_start failed";
+		proc_do_request(socketb, cmdfd, {1,2});
 
-	if (!err.empty())
-	{
-		throw "unexpected error: " + err;
+		auto err=socketa->readln();
+
+		if (!err.empty())
+		{
+			throw "unexpected error: " + err;
+		}
+
+		if (!get_start_result(socketa))
+			throw "unexpected result after session start";
+	} catch(...) {
+		cmdfd.clear();
+		session_mananger_thread.detach();
+		throw;
 	}
+	cmdfd.clear();
+
+	session_mananger_thread.join();
 
 	if (logged_state_changes != std::vector<std::string>{
 		"sessions: system/sessions/active/1/2: successfully created", 
-		"session 1/2: session-start",
+		"session 1/2: session-start", 
+		"system/sessions/active/1/2/x11: " + STATE_START_PENDING_MANUAL::label.label_str(), 
+		"system/sessions/active/1/2/process1: " + STATE_START_PENDING::label.label_str(), 
+		"system/sessions/active/1/2/process1: cgroup created", 
+		"cgroups_register called",
+		"system/sessions/active/1/2/process1: " + STATE_STARTED::label.label_str(), 
+		"system/sessions/active/1/2/x11: " + STATE_STARTED_MANUAL::label.label_str(),
 	})
 		throw "unexpected state changes after session start";
 
@@ -4155,84 +4263,130 @@ void testsessionstartstop()
 		{
 			"system/sessions/active/1/2/process1",
 
-			// all_requires: 
+			// all_requires:
 			{
 			},
 
-			// all_required_by: 
+			// all_required_by:
 			{
-				"system/sessions/active/1/2/shell"
+				"system/sessions/active/1/2/shell",
+				"system/sessions/active/1/2/x11"
 			},
 
-			// all_starting_first: 
+			// all_starting_first:
 			{
 			},
 
-			// all_stopping_first: 
+			// all_stopping_first:
 			{
-				"system/sessions/active/1/2/shell"
+				"system/sessions/active/1/2/shell",
+				"system/sessions/active/1/2/x11"
 			}
 		},
 		{
 			"system/sessions/active/1/2/shell",
 
-			// all_requires: 
+			// all_requires:
 			{
 				"system/sessions/active/1/2/process1"
 			},
 
-			// all_required_by: 
+			// all_required_by:
 			{
 			},
 
-			// all_starting_first: 
+			// all_starting_first:
 			{
 				"system/sessions/active/1/2/process1"
 			},
 
-			// all_stopping_first: 
+			// all_stopping_first:
+			{
+			}
+		},
+		{
+			"system/sessions/active/1/2/x11",
+
+			// all_requires:
+			{
+				"system/sessions/active/1/2/process1"
+			},
+
+			// all_required_by:
+			{
+			},
+
+			// all_starting_first:
+			{
+				"system/sessions/active/1/2/process1"
+			},
+
+			// all_stopping_first:
 			{
 			}
 		},
 		{
 			"system/sessions/installed/process1",
 
-			// all_requires: 
+			// all_requires:
 			{
 			},
 
-			// all_required_by: 
+			// all_required_by:
 			{
-				"system/sessions/installed/shell"
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
 			},
 
-			// all_starting_first: 
+			// all_starting_first:
 			{
 			},
 
-			// all_stopping_first: 
+			// all_stopping_first:
 			{
-				"system/sessions/installed/shell"
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
 			}
 		},
 		{
 			"system/sessions/installed/shell",
 
-			// all_requires: 
+			// all_requires:
 			{
 				"system/sessions/installed/process1"
 			},
 
-			// all_required_by: 
+			// all_required_by:
 			{
 			},
 
-			// all_starting_first: 
+			// all_starting_first:
 			{
 				"system/sessions/installed/process1"
 			},
 
-			// all_stopping_first: 
+			// all_stopping_first:
+			{
+			}
+		},
+		{
+			"system/sessions/installed/x11",
+
+			// all_requires:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_required_by:
+			{
+			},
+
+			// all_starting_first:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_stopping_first:
 			{
 			}
 		}
@@ -4265,8 +4419,11 @@ void testsessionstartstop()
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 	if (logged_state_changes != std::vector<std::string>{
 		"saved session 1/2", 
-		"system/sessions/active/1/2/process1: preserving state: stopped", 
-		"system/sessions/installed/process1: preserving state: stopped"
+		"system/sessions/active/1/2/process1: container prepared to re-exec",
+		"system/sessions/active/1/2/process1: preserving state: started (dependency)",
+		"system/sessions/active/1/2/x11: preserving state: started",
+		"system/sessions/installed/process1: preserving state: stopped",
+		"system/sessions/installed/x11: preserving state: stopped"
 	})
 		throw "unexpected state changes before reexec";
 
@@ -4296,12 +4453,19 @@ void testsessionstartstop()
 	std::sort(logged_state_changes.begin(), logged_state_changes.end());
 
 	if (logged_state_changes != std::vector<std::string>{
-		"re-exec, session: 1/2", 
-		"re-exec: system/sessions/active/1/2/process1", 
-		"re-exec: system/sessions/installed/process1", 
-		"sessions: system/sessions/active/1/2: successfully restored", 
-		"system/sessions/active/1/2/process1: restored preserved state: stopped", 
-		"system/sessions/installed/process1: restored preserved state: stopped" 
+		"re-exec, session: 1/2",
+		"re-exec: system/sessions/active/1/2/process1",
+		"re-exec: system/sessions/active/1/2/x11",
+		"re-exec: system/sessions/installed/process1",
+		"re-exec: system/sessions/installed/x11",
+		"sessions: system/sessions/active/1/2: successfully restored",
+		"system/sessions/active/1/2/process1: container was started as a dependency", "system/sessions/active/1/2/process1: reactivated after re-exec",
+		"system/sessions/active/1/2/process1: restored after re-exec",
+		"system/sessions/active/1/2/process1: restored preserved state: started (dependency)",
+		"system/sessions/active/1/2/x11: container was started",
+		"system/sessions/active/1/2/x11: restored preserved state: started",
+		"system/sessions/installed/process1: restored preserved state: stopped",
+		"system/sessions/installed/x11: restored preserved state: stopped"
 	})
 		throw "unexpected state changes after reexec";
 

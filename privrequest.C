@@ -19,6 +19,7 @@
 #include <string_view>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 
 bool send_start(const external_filedesc &efd, std::string name)
 {
@@ -703,10 +704,14 @@ std::string get_freeze_thaw_status(const external_filedesc &efd)
 
 bool request_fork(
 	const external_filedesc &efd,
+	int pidpipe,
+	int releasepipe,
+	int outerrpipe,
 	const std::vector<std::vector<char>> &argv,
 	const std::unordered_map<std::string, std::string> &environconfigvars
 )
 {
+	auto cmd=tmpfile_filedesc();
 	std::string s;
 
 	for (auto &p:argv)
@@ -742,15 +747,36 @@ bool request_fork(
 		s.append(value);
 	}
 
-	return efd->write_all(s);
+	if (!cmd->write_all(s) ||
+	    lseek(cmd->fd, 0, SEEK_SET) < 0 ||
+	    !request_send_fd(efd, std::vector<int>{
+			cmd->fd,
+			pidpipe,
+			releasepipe,
+			outerrpipe
+		}))
+		return false;
+
+	return true;
 }
 
 std::tuple<std::vector<std::vector<char>>,
-	std::unordered_map<std::string, std::string>> receive_fork(
+	std::unordered_map<std::string, std::string>,
+	external_filedesc,
+	external_filedesc,
+	external_filedesc> receive_fork(
 	const external_filedesc &efd
 )
 {
-	std::string s=efd->read_all();
+	auto [fds, ignore] = receive_fds(efd);
+	if (fds.size() != 4)
+		return {};
+	auto &argvenvironpipe=fds[0];
+	auto &pidpipe=fds[1];
+	auto &releasepipe=fds[2];
+	auto &outerrpipe=fds[3];
+
+	std::string s=argvenvironpipe->read_all();
 
 	std::tuple<std::vector<std::vector<char>>,
 			std::unordered_map<std::string, std::string>> ret;
@@ -819,5 +845,118 @@ std::tuple<std::vector<std::vector<char>>,
 		b += argsize;
 	}
 
-	return ret;
+	return {argv, environconfigvars, pidpipe, releasepipe, outerrpipe};
+}
+
+bool request_and_execute_fork(const external_filedesc &efd)
+{
+	auto [argv, environ_map, pidpipe, releasepipe, outerrpipe] =
+		receive_fork(efd);
+
+	if (!pidpipe || !releasepipe || !outerrpipe)
+		return false;
+
+	std::vector<char *> argv_ptrs;
+	std::vector<std::vector<char>> environ;
+	std::vector<char *> environ_ptrs;
+
+	pid_t p;
+
+	while ((p=fork()) == -1)
+	{
+		std::cerr << "error after fork" << "\n";
+		sleep(5);
+	}
+
+	if (p > 0)
+		// parent - continue with next request.
+		return true;
+
+	// child, fork again and exit, so that the child of the
+	// child is the one that actually does the work.
+
+	while ((p=fork()) == -1)
+	{
+		std::cerr << "error after fork" << "\n";
+		sleep(5);
+	}
+
+	if (p > 0)
+		_exit(0);
+
+	// child of child - the one that actually does the work
+
+	p=getpid();
+
+	// SESSION-START: NEW PID
+
+	if (write(pidpipe->fd, &p, sizeof(p)) != sizeof(p))
+	{
+		std::cerr << "error writing pidpipe\n" << std::flush;
+		exit(1);
+	}
+
+	for (auto &vec : argv)
+		vec.push_back(0);
+
+	argv_ptrs.clear();
+	argv_ptrs.reserve(argv.size() + 1);
+
+	for (auto &vec : argv)
+		argv_ptrs.push_back(vec.data());
+	argv_ptrs.push_back(nullptr);
+
+	environ.clear();
+	environ.reserve(environ_map.size() + 1);
+
+	for (auto &[name, value] : environ_map)
+	{
+		std::vector<char> s(name.size() + 1 + value.size() + 1);
+		s.insert(s.end(), name.begin(), name.end());
+		s.push_back('=');
+		s.insert(s.end(), value.begin(), value.end());
+		s.push_back(0);
+
+		environ.push_back(std::move(s));
+	}
+
+	environ_ptrs.clear();
+	environ_ptrs.reserve(environ.size() + 1);
+
+	for (auto &str : environ)
+		environ_ptrs.push_back(str.data());
+	environ_ptrs.push_back(nullptr);
+
+	releasepipe->read_all();
+	// SESSION-START: NEW PID REGISTERED
+	releasepipe.reset();
+
+	close(0);
+	if (open("/dev/null", O_RDONLY) < 0 ||
+	    dup2(outerrpipe->fd, STDOUT_FILENO) < 0 ||
+	    dup2(outerrpipe->fd, STDERR_FILENO) < 0)
+	{
+		std::cerr << "error after dup2" << "\n" << std::flush;
+		exit(1);
+	}
+
+	setsid();
+	setpgid(0, 0);
+
+	sigset_t ss;
+	sigemptyset(&ss);
+	sigprocmask(SIG_SETMASK, &ss, NULL);
+
+	execvp_after_forking(
+		argv_ptrs[0],
+		argv_ptrs.data(),
+		environ_ptrs.data()
+	);
+
+	fork_status fs;
+	fs.failed_errno=errno;
+	fs.notregistered=false; // Guaranteed to be registered above
+
+	write(pidpipe->fd, &fs, sizeof(fs));
+	_exit(1);
 }

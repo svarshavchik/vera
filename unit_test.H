@@ -14,7 +14,7 @@ extern std::vector<std::string> logged_state_changes;
 extern struct timespec fake_time;
 extern std::vector<std::tuple<pid_t, int>> sent_sigs;
 extern std::vector<std::string> completed_switchlog;
-
+extern std::function<void (const char *, char **, char **)> execvpe_func;
 extern std::vector<std::string> logged_runners;
 extern pid_t next_pid;
 extern bool all_forks_fail;

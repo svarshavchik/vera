@@ -371,21 +371,77 @@ std::string get_freeze_thaw_status(const external_filedesc &efd);
 
 Takes the argv of the command to run and the environment variables and
 creates a request to the session manager to fork accordingly.
+
+pidpipe: when the child has been forked, the pid is written to this pipe.
+
+releasepipe: after the pid is written to this pipe, the child process
+reads this pipe, then proceeds to try to exec the command, and then
+the pidpipe is either closed, or a forkstatus is written to it indicating
+the reason for the failure. vera reads the pid, registers the pid into
+
+outerrpipe is a socket that gets connected to standard output and error of
+the forked process.
+
 */
 
 [[nodiscard]] bool request_fork(
 	const external_filedesc &efd,
+	int pidpipe,
+	int releasepipe,
+	int outerrpipe,
 	const std::vector<std::vector<char>> &argv,
 	const std::unordered_map<std::string, std::string> &environconfigvars
 );
 
 /*! Session manager waits for a fork request, and reads it
 
+Returns the argv vector, the environment config map, the pidpipe and
+releasepipe from the request.
+
 */
 
 std::tuple<std::vector<std::vector<char>>,
-	std::unordered_map<std::string, std::string>> receive_fork(
+	std::unordered_map<std::string, std::string>,
+	external_filedesc, external_filedesc, external_filedesc> receive_fork(
 	const external_filedesc &efd
 );
+
+/*! Receive and execute the fork in the session manager.
+
+Calls receive_fork(). Returns false if the socket is closed. If a fork
+request is received, invokes the execvp_after_forking with the arguments
+for execve() in the child process and the original parent process returns
+true.
+
+*/
+
+bool request_and_execute_fork(const external_filedesc &efd);
+
+/*! Executes execve() in the child process.
+
+ */
+
+void execvp_after_forking(
+	const char *path,
+	char **argv_ptrs,
+	char **environ_ptrs
+);
+
+/*! Eventual outcome of a forked child process.
+
+If the child process fails to exec the command it writes this on a pipe to
+the parent process so that it knows what happened to it. If the child process
+successfully execed, the socket's close-on-exec bit results in nothing to read
+in the parent process, which is how it knows that the child process was
+successfully forked and execed. The notregistered member indicates whether
+the child process was registered in the current_container, or not. If it
+could not be, the child process does not exec the program. Otherwise,
+failed_errno reports the value of errno after execve fails.
+
+*/
+struct fork_status {
+	int failed_errno=0;
+	bool notregistered=true;
+};
 
 #endif

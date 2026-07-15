@@ -93,13 +93,6 @@ void update_runner_containers(const current_containers &new_current_containers)
 	}
 }
 
-namespace {
-	struct fork_status {
-		int failed_errno=0;
-		bool notregistered=true;
-	};
-}
-
 /*!
 	Fork and run a program in a container
 
@@ -171,6 +164,8 @@ static pid_t fork_and_run(
 
 		sigemptyset(&ss);
 		sigprocmask(SIG_SETMASK, &ss, NULL);
+		setsid();
+		setpgid(0, 0);
 
 		execvp(charvec[0], charvec.data());
 	}
@@ -179,6 +174,68 @@ static pid_t fork_and_run(
 
 	write(exec_pipe1->fd, &fs, sizeof(fs));
 	_exit(1);
+}
+
+pid_t current_containers_infoObj::start_in_session(
+	const proc_container &container,
+	std::vector<std::vector<char>> &argv,
+	external_filedesc &exec_pipe0,
+	external_filedesc &exec_pipe1,
+	proc_container_group &group,
+	const active_session_t &session)
+{
+	auto iter=active_sessions.find(session);
+
+	if (iter == active_sessions.end() ||
+		!iter->second.current_manager)
+	{
+		log_container_error(
+			container,
+			_("session manager stopped, needs restarting")
+		);
+		return -1;
+	}
+
+	auto [socketa, socketb]=create_vera_socketpair();
+	if (!socketa || !socketb)
+	{
+		log_container_error(
+			container,
+			_("socketpair() failed")
+		);
+		return -1;
+	}
+
+	if (!request_fork(iter->second.current_manager->fd,
+		exec_pipe1->fd, socketb->fd,
+		group.stdouterrpipe[1],
+		argv, environconfigvars))
+		return -1;
+
+	socketb.reset();
+
+	pid_t p= -1;
+
+	// SESSION-START: NEW PID
+	// Read the forked pid from the session manager
+	if (read(exec_pipe0->fd, &p, sizeof(p)) != sizeof(p))
+	{
+		log_container_error(
+			container,
+			_("failed to read process id from the session manager")
+		);
+
+		return -1;
+	}
+
+	// Register this pid in the container
+	group.cgroups_register(p);
+
+	// The forked pid is waiting for socketa to close, so it is guaranteed
+	// to exist here.
+	//
+	// SESSION-START: NEW PID REGISTERED
+	return p;
 }
 
 proc_container_runner create_runner(
@@ -286,19 +343,42 @@ proc_container_runner create_runner(
 
 	auto &group=*cc->second.group;
 
-	pid_t p=fork_and_run(
-		container,
-		argv,
-		exec_pipe0,
-		exec_pipe1,
-		group,
-		all_containers
+	auto uidsessid=active_session_uidsessid_from_path(
+		cc->first->name
 	);
 
-	if (p == -1)
+	pid_t p;
+	if (uidsessid &&
+	    std::holds_alternative<active_session_t>(*uidsessid))
 	{
-		log_container_error(container, _("fork() failed"));
-		return {};
+		p=all_containers->start_in_session(
+			container,
+			argv,
+			exec_pipe0,
+			exec_pipe1,
+			group,
+			std::get<active_session_t>(*uidsessid)
+		);
+
+		if (p < 0)
+			return {};
+	}
+	else
+	{
+		p=fork_and_run(
+			container,
+			argv,
+			exec_pipe0,
+			exec_pipe1,
+			group,
+			all_containers
+		);
+
+		if (p == -1)
+		{
+			log_container_error(container, _("fork() failed"));
+			return {};
+		}
 	}
 
 	fork_status fs;

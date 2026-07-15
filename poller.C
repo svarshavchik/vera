@@ -138,7 +138,14 @@ void polledfd::destroy()
 		epoll_event ev{};
 		while (epoll_ctl(ep.epollfd, EPOLL_CTL_DEL, fd, &ev) < 0)
 		{
-			if (errno == EBADF)
+			// Unit test failure might result in an exit() that
+			// results in a global destruction phase getting invoked
+			// and file descriptors getting closed before their
+			// poller is destroyed, so things get out of sequence
+			// and we see EBAFD or ENOENTs. Quietly ignore that,
+			// treat all other errors as temporary errors, wait
+			// 5 seconds and hope for the best.
+			if (errno == EBADF || errno == ENOENT)
 				break;
 			log_message(_("EPOLL_CTL_DEL failed, trying again..."));
 			sleep(5);
