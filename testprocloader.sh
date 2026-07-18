@@ -907,6 +907,9 @@ EOF
 diff -U 3 loadtest.txt loadtest.out
 
 $VALGRIND ./testprocloader recreatetest globaldir localdir overridedir \
+   system/sessions/installed/sess1 \
+   system/sessions/installed/sess2 \
+   system/sessions/installed/something \
    system/sessions/active/1001/1/sess1 \
    system/sessions/active/1001/1/sess2 \
    system/sessions/active/1002/2/sess1 \

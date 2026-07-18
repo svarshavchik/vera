@@ -132,7 +132,7 @@ private:
 
 public:
 	friend struct unit_tests;
-
+	friend struct loaded_containers;
 	/*! Read from a session manager connection
 
 	  Called by the poller when there's data to read from a session manager
@@ -171,15 +171,6 @@ public:
 		proc_container_group &group,
 		const active_session_t &session
 	);
-
-	/*! All active sessions
-
-	  When containers are reloaded, scan them in order to enumerate
-	  all active sessions.
-
-	*/
-
-	std::unordered_set<active_session_t> all_active_sessions() const;
 
 	//! A re-exec has been requested
 	bool reexec_requested=false;

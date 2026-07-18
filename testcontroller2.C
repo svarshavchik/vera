@@ -795,6 +795,7 @@ void testreexec_after(const std::string &socket_str)
 			"reexec_a: restored preserved state: started (dependency)",
 			"reexec_a: test",
 			"reexec_b: restored preserved state: stopped",
+			"sessions: system/sessions/active/1/2: successfully restored",
 		})
 		throw "Unexpected state change after reexec";
 	close(socketfd);

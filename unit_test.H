@@ -9,6 +9,7 @@
 #include <time.h>
 #include <string>
 #include "proc_loader.H"
+#include "current_containers_info.H" // IWYU pragma: keep
 
 extern std::vector<std::string> logged_state_changes;
 extern struct timespec fake_time;
@@ -18,6 +19,24 @@ extern std::function<void (const char *, char **, char **)> execvpe_func;
 extern std::vector<std::string> logged_runners;
 extern pid_t next_pid;
 extern bool all_forks_fail;
+
+struct unit_tests {
+
+	static auto &get_containers(const current_containers_info &ci)
+	{
+		return ci->containers;
+	}
+
+	static auto &get_active_sessions(const current_containers_info &ci)
+	{
+		return ci->active_sessions;
+	}
+	static auto &get_dependency_info(const current_containers_info &ci)
+	{
+		return ci->all_dependency_info;
+	}
+};
+
 
 std::string read_stdoutcc(const external_filedesc &stdoutcc);
 

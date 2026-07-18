@@ -1448,23 +1448,6 @@ void propagate_dependencies_t::doit2(
 {
 #endif
 }
-std::unordered_set<active_session_t>
-current_containers_infoObj::all_active_sessions() const
-{
-	std::unordered_set<active_session_t> rv;
-
-	for (auto &pc: containers)
-	{
-		auto &name=pc.first->name;
-
-		auto id=active_session_uidsessid_from_path(name);
-
-		if (id && std::holds_alternative<active_session_t>(*id))
-			rv.insert(std::get<active_session_t>(*id));
-	}
-
-	return rv;
-}
 
 void loaded_containers::recreate_new_sessions_from_installed(
 	const current_containers_info &installed_containers,
@@ -1476,37 +1459,34 @@ void loaded_containers::recreate_new_sessions_from_installed(
 {
 	// We are rebuilding, so clear out any existing active sessions, and
 	// we will recreate them from the installed containers.
+	//
+	// proc_loader took care of populating installed_session_t, for
+	// all active sessions we call create_new_session().
 
 	auto installed_session=all_sessions[installed_session_t{}];
 	all_sessions.clear();
 	all_sessions.emplace(installed_session_t{}, installed_session);
 
-	auto sessions=installed_containers->all_active_sessions();
-
-	for (auto &session: sessions)
+	for (auto &[uid, session_info] : installed_containers->active_sessions)
 	{
-		if (create_new_session(session, callback))
-		{
-			uid_sessionid_to_chars ssid_string{session};
-			callback(ssid_string.path(),
+		if (!std::holds_alternative<active_session_t>(uid))
+			continue;
+
+		auto &session=std::get<active_session_t>(uid);
+
+		if (!create_new_session(session, callback))
+			continue;
+
+		uid_sessionid_to_chars ssid_string{session};
+
+		callback(ssid_string.path(),
+			kind(mode) ==
+				container_install_kind::new_session &&
+				std::get<container_install::new_session>(
+					mode
+				).new_active_session == session ?
+				_("successfully created") :
 				_("successfully restored"));
-		}
-	}
-
-	if (kind(mode) == container_install_kind::new_session)
-	{
-		auto &active_session=
-			std::get<container_install::new_session>(
-				mode
-			).new_active_session;
-
-		if (create_new_session(active_session, callback))
-		{
-			uid_sessionid_to_chars ssid_string{active_session};
-
-			callback(ssid_string.path(),
-				_("successfully created"));
-		}
 	}
 }
 

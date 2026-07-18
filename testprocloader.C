@@ -8,6 +8,8 @@
 #include "proc_loader.H"
 #include "privrequest.H"
 #include "current_containers_info.H"
+#include "proc_loader.H"
+#include "unit_test.H"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -363,7 +365,6 @@ int main(int argc, char **argv)
 					"Failed to create session ")
 					<< session_path << std::endl;
 		}
-
 		proc_load_dump(loaded);
 		std::sort(messages.begin(), messages.end());
 
@@ -391,21 +392,17 @@ int main(int argc, char **argv)
 					messages.push_back("E: " + message);
 				});
 
-		proc_new_container_set pcs;
+		auto ci=get_containers_info(nullptr);
 
 		for (size_t i=5; i<args.size(); ++i)
 		{
-			pcs.insert(std::make_shared<proc_new_containerObj>(
-				args[i]
-			));
+			auto ret=active_session_uidsessid_from_path(args[i]);
+
+			if (ret)
+			{
+				unit_tests::get_active_sessions(ci)[*ret];
+			}
 		}
-
-		proc_containers_load(
-			loaded_containers{pcs},
-			container_install::update{}
-		);
-
-		auto ci=get_containers_info(nullptr);
 
 		loaded.recreate_new_sessions_from_installed(
 			ci,
@@ -423,6 +420,11 @@ int main(int argc, char **argv)
 			});
 
 		proc_load_dump(loaded);
+		messages.insert(
+			messages.end(),
+			logged_state_changes.begin(),
+			logged_state_changes.end()
+		);
 		std::sort(messages.begin(), messages.end());
 
 		for (auto &m:messages)

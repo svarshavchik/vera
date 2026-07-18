@@ -204,27 +204,6 @@ void populated(const proc_container &container, bool isit)
 	close(fd);
 }
 
-struct unit_tests {
-
-	template<typename T>
-	static auto &get_containers(const T &ci)
-	{
-		return ci->containers;
-	}
-
-	template<typename T>
-	static auto &get_active_sessions(const T &ci)
-	{
-		return ci->active_sessions;
-	}
-
-	template<typename T>
-	static auto &get_dependency_info(const T &ci)
-	{
-		return ci->all_dependency_info;
-	}
-};
-
 //
 // proc_container_stopped() is called by unit tests. The cgroups.events
 // handler calls populated() directly.
