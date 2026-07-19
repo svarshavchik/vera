@@ -117,6 +117,7 @@ struct unit_dependency_dump {
 
 std::vector<unit_dependency_dump> dump_unit_dependencies();
 
-std::vector<std::string> dump_active_sessions();
+std::unordered_map<std::string, std::unordered_set<std::string>>
+	dump_active_sessions();
 
 #endif

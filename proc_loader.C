@@ -400,7 +400,21 @@ std::string_view is_in_session_prefix(std::string_view path)
 	return {};
 }
 
-std::optional<uid_sessionid_t> active_session_uidsessid_from_path(
+std::optional<uid_sessionid_t> uid_sessionid_from_path(
+	std::string_view path
+)
+{
+	auto ret=active_session_from_path(path);
+	if (ret)
+		return *ret;
+
+	if (is_in_session(path, INSTALLED_SESSIONS_PREFIX))
+		return installed_session_t{};
+
+	return std::nullopt;
+}
+
+std::optional<active_session_t> active_session_from_path(
 	std::string_view path
 )
 {

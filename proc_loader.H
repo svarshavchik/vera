@@ -371,10 +371,19 @@ string if neither.
 std::string_view is_in_session_prefix(std::string_view path);
 
 /*! If "path" is in ACTIVE_SESSIONS_PREFIX/uid/sessionid, then return
-    the uid and sessionid.
+    the active_session_t with the uid and sessionid.
 
 */
-std::optional<uid_sessionid_t> active_session_uidsessid_from_path(
+std::optional<active_session_t> active_session_from_path(
+	std::string_view path
+);
+
+/*! If "path" is in INSTALLED_SESSIONS_PREFIX/uid/sessionid, then return
+    installed_session_t, otherwise if it's in
+    ACTIVE_SESSIONS_PREFIX/uid/sessionid, then return an active_session_t.
+
+*/
+std::optional<uid_sessionid_t> uid_sessionid_from_path(
 	std::string_view path
 );
 

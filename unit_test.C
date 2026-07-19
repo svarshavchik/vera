@@ -689,9 +689,12 @@ std::vector<unit_dependency_dump> dump_unit_dependencies()
 	return ret;
 }
 
-std::vector<std::string> dump_active_sessions()
+std::unordered_map<std::string, std::unordered_set<std::string>>
+	dump_active_sessions()
 {
-	std::vector<std::string> ret;
+	std::unordered_map<std::string,
+		std::unordered_set<std::string>> ret;
+	std::vector<std::string> ret_keys;
 
 	auto ci=get_containers_info(nullptr);
 
@@ -701,26 +704,39 @@ std::vector<std::string> dump_active_sessions()
 
 		std::string_view sv{to_chars};
 
-		std::string str;
+		std::string s;
 
-		str.append(sv);
+		s.append(sv);
+		s.append(": ");
+		s.append(session.current_manager ?
+			"(manager connected)" : "(manager not connected)");
+		auto &session_list=ret[s];
+		ret_keys.push_back(s);
 
-		str.append(": ");
-
-		str.append(session.current_manager ?
-			"manager connected" : "manager not connected");
-
-		ret.push_back(std::move(str));
+		for (const auto &pc : session.containers)
+			session_list.insert(pc->name);
 	}
 
-	std::sort(ret.begin(), ret.end());
+	std::sort(ret_keys.begin(), ret_keys.end());
 
 	std::cout << "Active Sessions:\n";
 	const char *pfix="";
 
-	for (auto &s : ret)
+	for (auto &s : ret_keys)
 	{
-		std::cout << pfix << "\t{\n\t\t\"" << s << "\"\n\t}";
+		std::cout << pfix << "\t{\n\t\t\"" << s << "\",\n\t\t{\n";
+		auto &ss=ret[s];
+		std::vector<std::string> v{ss.begin(), ss.end()};
+		std::sort(v.begin(), v.end());
+
+		const char *key_pfix="";
+		for (auto &name:v)
+		{
+			std::cout << key_pfix << "\t\t\t\"" << name << "\"";
+			key_pfix=",\n";
+		}
+
+		std::cout << "\n\t\t}\n\t}";
 		pfix=",\n";
 	}
 

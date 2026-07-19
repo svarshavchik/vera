@@ -72,6 +72,11 @@ struct active_session_info {
 	*/
 	std::optional<active_session_connection> current_manager;
 
+	/*! Containers in this session
+
+	*/
+	proc_container_set containers;
+
 	/*!
 	  Default constructor
 

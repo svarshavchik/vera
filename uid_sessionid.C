@@ -51,7 +51,8 @@ uid_sessionid_to_chars::uid_sessionid_to_chars(const uid_sessionid_t &ssid)
 		},
 		ssid
 	))
-		strcpy(buf, "<unknown>");
+	// Only one possibility...
+		strcpy(buf, "<installed_session>");
 }
 
 std::string uid_sessionid_to_chars::path() const noexcept

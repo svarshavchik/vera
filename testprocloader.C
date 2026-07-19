@@ -340,15 +340,13 @@ int main(int argc, char **argv)
 				ACTIVE_SESSIONS_PREFIX "/";
 			session_path += args[i];
 
-			auto as=active_session_uidsessid_from_path(
+			auto as=active_session_from_path(
 				session_path + "/x"
 			);
 
-			std::cout << (as && std::holds_alternative<
-					active_session_t
-				>(*as) &&
+			std::cout << (as &&
 				loaded.create_new_session(
-					std::get<active_session_t>(*as),
+					*as,
 					[&]
 					(const auto &container_name,
 					 const auto &error_message)
@@ -396,7 +394,7 @@ int main(int argc, char **argv)
 
 		for (size_t i=5; i<args.size(); ++i)
 		{
-			auto ret=active_session_uidsessid_from_path(args[i]);
+			auto ret=active_session_from_path(args[i]);
 
 			if (ret)
 			{

@@ -2062,6 +2062,23 @@ void current_containers_infoObj::install(
 		iter->second.all_restored(gci);
 	}
 
+	// Rebuild the containers in the active_sessions. First, wipe out
+	// anything that's there already.
+
+	for (auto &[uid, info] : active_sessions)
+		info.containers.clear();
+
+	// Rebuild them from scratch.
+
+	for (auto &[pc, info]:containers)
+	{
+		auto uid_sid=uid_sessionid_from_path(pc->name);
+
+		if (!uid_sid)
+			continue;
+
+		active_sessions[*uid_sid].containers.insert(pc);
+	}
 	find_start_or_stop_to_do();
 
 	// Race condition. When re-execing, pick up any child processes that

@@ -343,13 +343,12 @@ proc_container_runner create_runner(
 
 	auto &group=*cc->second.group;
 
-	auto uidsessid=active_session_uidsessid_from_path(
+	auto session=active_session_from_path(
 		cc->first->name
 	);
 
 	pid_t p;
-	if (uidsessid &&
-	    std::holds_alternative<active_session_t>(*uidsessid))
+	if (session)
 	{
 		p=all_containers->start_in_session(
 			container,
@@ -357,7 +356,7 @@ proc_container_runner create_runner(
 			exec_pipe0,
 			exec_pipe1,
 			group,
-			std::get<active_session_t>(*uidsessid)
+			*session
 		);
 
 		if (p < 0)

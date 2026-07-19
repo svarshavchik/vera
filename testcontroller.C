@@ -3969,7 +3969,7 @@ void testactivesessionparse()
 {
 	static const struct {
 		const char *pathname;
-		std::optional<uid_sessionid_t> expected_result;
+		std::optional<active_session_t> expected_result;
 	} test_cases[] = {
 		{
 			"not /a valid/pathname",
@@ -3995,7 +3995,7 @@ void testactivesessionparse()
 
 	for (const auto &[pathname, expected_result] : test_cases)
 	{
-		auto result = active_session_uidsessid_from_path(pathname);
+		auto result = active_session_from_path(pathname);
 		if (result != expected_result)
 		{
 			throw "unexpected result parsing active session paths";
@@ -4469,8 +4469,23 @@ void testsessionstartstop()
 	})
 		throw "unexpected state changes after reexec";
 
-	if (dump_active_sessions() != std::vector<std::string>{
-		"1/2: manager connected"
+	if (dump_active_sessions() != std::unordered_map<std::string, std::unordered_set<std::string>>{
+		{
+			"1/2: (manager connected)",
+			{
+				"system/sessions/active/1/2/process1",
+				"system/sessions/active/1/2/shell",
+				"system/sessions/active/1/2/x11"
+			}
+		},
+		{
+			"<installed_session>: (manager not connected)",
+			{
+				"system/sessions/installed/process1",
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
+			}
+		}
 	})
 		throw "unexpected active sessions after reexec";
 }
