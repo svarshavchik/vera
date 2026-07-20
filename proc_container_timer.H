@@ -42,6 +42,10 @@ public:
 	*/
 	void triggered() override;
 
+	/*! Return the timer description, for log messages.
+	*/
+	std::string description() const override;
+
 	/*! Update the container
 
 	This is called when all containers are reloaded. New containers are

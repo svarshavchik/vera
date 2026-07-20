@@ -25,6 +25,10 @@ typedef std::shared_ptr<const proc_timerObj> proc_timer;
 
 int run_timers();
 
+//! Whether there are any pending timers to be run.
+
+std::string has_timers();
+
 //! Install a new timer
 
 void install_timer(const std::shared_ptr<proc_timerObj> &t);

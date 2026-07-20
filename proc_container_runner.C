@@ -227,7 +227,9 @@ pid_t current_containers_infoObj::start_in_session(
 
 		return -1;
 	}
-
+#ifdef UNIT_TEST
+	p=UNIT_TEST();
+#endif
 	// Register this pid in the container
 	group.cgroups_register(p);
 

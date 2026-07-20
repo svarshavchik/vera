@@ -35,9 +35,10 @@ std::vector<std::tuple<pid_t, int>> sent_sigs;
 
 std::optional<std::stringstream> current_switchlog;
 std::vector<std::string> completed_switchlog;
-std::function<void (const char *, char **, char **)> execvpe_func;
+std::function<void (const char *, char **)> execvp_func;
 pid_t next_pid=1;
 bool all_forks_fail=false;
+size_t sessionid=2;
 
 //! /etc/vera/environ for unit tests
 std::string environconfig()
@@ -179,12 +180,9 @@ std::string read_stdoutcc(const external_filedesc &stdoutcc)
 	return s;
 }
 
-void execvp_after_forking(
-	const char *path,
-	char **argv_ptrs,
-	char **environ_ptrs)
+void execvp_after_forking(const char *path, char **argv_ptrs)
 {
-	execvpe_func(path, argv_ptrs, environ_ptrs);
+	execvp_func(path, argv_ptrs);
 }
 
 //! Simulate a populated() cgroup event. We just write it into the faked file
@@ -507,7 +505,7 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 	const ucred &cred,
 	const std::function<void (const std::string &)> &error)
 {
-	return uid_sessionid_t{active_session_t{1,2}};
+	return uid_sessionid_t{active_session_t{1,sessionid}};
 }
 
 void test_reset(bool keep_cgroupfs)
@@ -520,6 +518,7 @@ void test_reset(bool keep_cgroupfs)
 	logged_state_changes.clear();
 	logged_runners.clear();
 	next_pid=1;
+	sessionid=2;
 	all_forks_fail=false;
 	fake_time.tv_sec=1;
 	switchlog_stop();
@@ -544,7 +543,7 @@ void test_reset(bool keep_cgroupfs)
 	{
 		throw "unexpected call to reexec.";
 	};
-	execvpe_func=[](const char *path, char **argv_ptrs, char **environ_ptrs)
+	execvp_func=[](const char *path, char **argv_ptrs)
 	{
 		errno=ENOENT;
 	};

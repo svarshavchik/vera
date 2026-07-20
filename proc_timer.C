@@ -35,6 +35,30 @@ void install_timer(const std::shared_ptr<proc_timerObj> &timer)
 	timer->my_iter=iter;
 }
 
+std::string has_timers()
+{
+	if (current_timers.empty())
+		return std::string{};
+
+	std::string s;
+
+	for (auto &[alarm, wtimer] : current_timers)
+	{
+		auto timer=wtimer.lock();
+
+		if (!timer)
+			continue;
+
+		if (!s.empty())
+		{
+			s.append(", ...");
+			break;
+		}
+		s.append(timer->description());
+	}
+	return s;
+}
+
 int run_timers()
 {
 	bool ran_something=false;

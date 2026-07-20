@@ -1,5 +1,5 @@
 /*
-** Copyright 2022-2024 S. Varshavchik
+** Copyright 2022-2026 S. Varshavchik
 ** See COPYING for distribution information.
 */
 
@@ -275,6 +275,11 @@ struct refresh_timerObj : public proc_timerObj {
 
 	~refresh_timerObj()
 	{
+	}
+
+	std::string description() const override
+	{
+		return _("status refresh");
 	}
 
 	void triggered() override;
@@ -784,6 +789,14 @@ struct debounce_reloadObj : public proc_timerObj {
 	using proc_timerObj::proc_timerObj;
 
 	void triggered() override;
+
+	std::string description() const override
+	{
+		std::string s{_("reload ")};
+
+		s.append(INSTALLCONFIGDIR);
+		return s;
+	}
 };
 
 std::shared_ptr<debounce_reloadObj> debounce_reload;
@@ -1252,13 +1265,9 @@ external_filedesc send_session_start_request(
 	return cmdfd;
 }
 
-void execvp_after_forking(
-	const char *path,
-	char **argv_ptrs,
-	char **environ_ptrs
-)
+void execvp_after_forking(const char *path, char **argv_ptrs)
 {
-	execvpe(path, argv_ptrs, environ_ptrs);
+	execvp(path, argv_ptrs);
 }
 
 std::optional<uid_sessionid_t> proc_get_sessionid(
@@ -1288,7 +1297,7 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 	}
 #endif
 
-	// Read /proc/<pid>/sessionid
+	// Read /proc/<pid>/sessionid and /proc/<pid>/loginuid
 	char pidbuf[std::numeric_limits<pid_t>::digits10 + 2];
 	auto [last, ec]=std::to_chars(pidbuf, pidbuf + sizeof(pidbuf), cred.pid);
 
@@ -1296,7 +1305,7 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 
 	std::string proc_pid;
 
-	// We'll read /proc/<pid>/session id later.
+	// We'll read /proc/<pid>/sessionid and /proc/<pid>/loginuid later.
 	proc_pid.reserve(pidbuf_sv.size() + sizeof("/proc//sessionid"));
 	proc_pid+="/proc/";
 	proc_pid+=pidbuf_sv;
@@ -1341,42 +1350,6 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 	}
 #endif
 
-	// Read /proc/<pid>/auxv to verify secure execution mode.
-
-	proc_pid.clear();
-	proc_pid += "/proc/";
-	proc_pid += pidbuf_sv;
-	proc_pid += "/auxv";
-
-	bool secure_execution=false;
-	std::ifstream auxv{proc_pid};
-
-	// Read the file structure using the platform's native unsigned
-	// long word-size
-	unsigned long entry[2];
-	while (auxv.read(reinterpret_cast<char*>(entry), sizeof(entry)))
-	{
-		unsigned long key=entry[0];
-		unsigned long value=entry[1];
-
-		if (key == AT_SECURE && value == 1)
-		{
-			secure_execution=true;
-			break;
-		}
-
-		if (key == 0 && value == 0)
-		{
-			break;
-		}
-	}
-
-	if (!secure_execution)
-	{
-		error("session-start not executed from a secure context");
-		return {};
-	}
-
 	// Read /proc/<pid>/sessionid to get the session id, we already know
 	// the UID.
 
@@ -1398,6 +1371,31 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 		).ec != std::errc{})
 	{
 		error("failed to read your session id\n");
+		return {};
+	}
+	sessid.close();
+
+	proc_pid="/proc/";
+	proc_pid.append(pidbuf_sv);
+	proc_pid+="/loginuid";
+
+	sessid.open(proc_pid);
+
+	uid_t loginuid_n=-1;
+	if (!sessid || !std::getline(sessid, line) ||
+		std::from_chars(
+			line.c_str(),
+			line.c_str()+line.size(),
+			loginuid_n
+		).ec != std::errc{})
+	{
+		error("failed to read your loginuid\n");
+		return {};
+	}
+
+	if (cred.uid != loginuid_n)
+	{
+		error("uid and loginuid do not match\n");
 		return {};
 	}
 
@@ -3186,6 +3184,30 @@ void vlad(std::vector<std::string> args)
 
 		if (!get_start_result(cmdfd))
 			exit(1);
+
+		exit(0);
+	}
+	if (args.size() == 1 && args[0] == "session-stop")
+	{
+		auto [cmdfd, cmdfds]=connect_vera_priv();
+		auto [stopwaita, stopwaitb]=create_vera_socketpair();
+
+		if (!request_session_stop(cmdfds[0]))
+			exit(1);
+		cmdfds.push_back(std::move(stopwaitb));
+		stopwaitb={};
+		wrap_request_send_fd(cmdfd, cmdfds);
+		cmdfds.clear();
+
+		auto stopresult=cmdfd->readln();
+		if (!stopresult.empty())
+		{
+			std::cerr << _("Failed to stop session: ") << stopresult
+					 << "\n" << std::flush;
+			exit(1);
+		}
+
+		stopwaita->readln();
 
 		exit(0);
 	}

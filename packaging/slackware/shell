@@ -1,0 +1,5 @@
+name: shell
+description: Shell session
+stopping:
+  type: target
+version: 1

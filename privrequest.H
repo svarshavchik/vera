@@ -185,6 +185,10 @@ bool request_status(
 	const std::string &name
 );
 
+/*! Session stop request */
+
+[[nodiscard]] bool request_session_stop(const external_filedesc &efd);
+
 /*! What receive_fd() returns
 
   It returns a list of file descriptors received over the socket, and,
@@ -417,14 +421,13 @@ true.
 
 bool request_and_execute_fork(const external_filedesc &efd);
 
-/*! Executes execve() in the child process.
+/*! Executes execvp() in the child process.
 
  */
 
 void execvp_after_forking(
 	const char *path,
-	char **argv_ptrs,
-	char **environ_ptrs
+	char **argv_ptrs
 );
 
 /*! Eventual outcome of a forked child process.

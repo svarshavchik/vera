@@ -4100,6 +4100,8 @@ void testsessionstartstop()
 			"starting:\n"
 			"    type: oneshot\n"
 			"    command: /bin/true\n"
+			"stopping:\n"
+			"    command: /bin/true\n"
 			"required-by: shell\n"
 			"required-by: x11\n"
 			"version: 1\n";
@@ -4118,7 +4120,7 @@ void testsessionstartstop()
 		out.close();
 	}
 
-	execvpe_func=[](const char *path, char **argv_ptrs, char **environ_ptrs)
+	execvp_func=[](const char *path, char **argv_ptrs)
 	{
 		_exit(0);
 	};
@@ -4214,7 +4216,7 @@ void testsessionstartstop()
 	auto [manager_socketa, manager_socketb]=create_vera_socketpair();
 	auto [socketa, socketb, cmdfd]=create_fake_request();
 
-	std::thread session_mananger_thread(
+	std::thread session_manager_thread(
 		[manager_socketa]
 		{
 			(void)request_and_execute_fork(manager_socketa);
@@ -4238,21 +4240,21 @@ void testsessionstartstop()
 			throw "unexpected result after session start";
 	} catch(...) {
 		cmdfd.clear();
-		session_mananger_thread.detach();
+		session_manager_thread.detach();
 		throw;
 	}
 	cmdfd.clear();
 
-	session_mananger_thread.join();
+	session_manager_thread.join();
 
 	if (logged_state_changes != std::vector<std::string>{
-		"sessions: system/sessions/active/1/2: successfully created", 
-		"session 1/2: session-start", 
-		"system/sessions/active/1/2/x11: " + STATE_START_PENDING_MANUAL::label.label_str(), 
-		"system/sessions/active/1/2/process1: " + STATE_START_PENDING::label.label_str(), 
-		"system/sessions/active/1/2/process1: cgroup created", 
+		"sessions: system/sessions/active/1/2: successfully created",
+		"session 1/2: session-start",
+		"system/sessions/active/1/2/x11: " + STATE_START_PENDING_MANUAL::label.label_str(),
+		"system/sessions/active/1/2/process1: " + STATE_START_PENDING::label.label_str(),
+		"system/sessions/active/1/2/process1: cgroup created",
 		"cgroups_register called",
-		"system/sessions/active/1/2/process1: " + STATE_STARTED::label.label_str(), 
+		"system/sessions/active/1/2/process1: " + STATE_STARTED::label.label_str(),
 		"system/sessions/active/1/2/x11: " + STATE_STARTED_MANUAL::label.label_str(),
 	})
 		throw "unexpected state changes after session start";
@@ -4459,7 +4461,8 @@ void testsessionstartstop()
 		"re-exec: system/sessions/installed/process1",
 		"re-exec: system/sessions/installed/x11",
 		"sessions: system/sessions/active/1/2: successfully restored",
-		"system/sessions/active/1/2/process1: container was started as a dependency", "system/sessions/active/1/2/process1: reactivated after re-exec",
+		"system/sessions/active/1/2/process1: container was started as a dependency",
+		"system/sessions/active/1/2/process1: reactivated after re-exec",
 		"system/sessions/active/1/2/process1: restored after re-exec",
 		"system/sessions/active/1/2/process1: restored preserved state: started (dependency)",
 		"system/sessions/active/1/2/x11: container was started",
@@ -4488,6 +4491,170 @@ void testsessionstartstop()
 		}
 	})
 		throw "unexpected active sessions after reexec";
+
+	logged_state_changes.clear();
+
+	auto [stopwaita, stopwaitb]=create_vera_socketpair();
+	auto [stopa, stopb, stop_cmdfd]=create_fake_request();
+
+	if (!request_session_stop(stop_cmdfd[0]))
+		throw "request_session_stop failed";
+
+	std::thread session_manager_thread2(
+		[manager_socketa]
+		{
+			(void)request_and_execute_fork(manager_socketa);
+		}
+	);
+
+	try {
+		stop_cmdfd.push_back(stopwaitb);
+		proc_do_request(stopa, stop_cmdfd, {});
+
+		stopa={};
+		stopwaitb={};
+		auto stopresult=stopb->readln();
+
+		if (!stopresult.empty())
+			throw "unexpected stop result: " + stopresult;
+
+		std::sort(
+			logged_state_changes.begin(),
+			logged_state_changes.end()
+		);
+		if (logged_state_changes != std::vector<std::string>{
+			"cgroups_register called",
+			"system/sessions/active/1/2/process1: " + STATE_STOP_PENDING::label.label_str(),
+			"system/sessions/active/1/2/process1: " + STATE_STOPPING::label.label_str(),
+			"system/sessions/active/1/2/x11: " + STATE_REMOVING::label.label_str(),
+			"system/sessions/active/1/2/x11: " + STATE_STOP_PENDING::label.label_str(),
+			"system/sessions/active/1/2/x11: " + STATE_STOPPED::label.label_str()
+		})
+			throw "unexpected state changes after session stop";
+	} catch(...) {
+		session_manager_thread2.detach();
+		throw;
+	}
+	session_manager_thread2.detach();
+
+	logged_state_changes.clear();
+
+	auto &containers=unit_tests::get_containers(get_containers_info(nullptr));
+
+	auto process1_iter=containers.find(
+		"system/sessions/active/1/2/process1"
+	);
+	if (process1_iter == containers.end())
+		throw "process1 not found";
+
+	auto process1=process1_iter->first;
+
+	populated(process1, true);
+	do_poll(0);
+	runner_finished(2, 0);
+	if (logged_state_changes != std::vector<std::string>{
+		"system/sessions/active/1/2/process1: " + STATE_REMOVING::label.label_str(),
+		"system/sessions/active/1/2/process1: sending SIGTERM"
+	})
+		throw "Unexpected state changes after stopping process1 (1)";
+
+	logged_state_changes.clear();
+	populated(process1, false);
+	do_poll(0);
+	if (logged_state_changes.size() >= 6)
+		std::sort(logged_state_changes.begin()+3,
+			logged_state_changes.begin()+6);
+	if (logged_state_changes != std::vector<std::string>{
+		"system/sessions/active/1/2/process1: cgroup removed",
+		"system/sessions/active/1/2/process1: " + STATE_STOPPED::label.label_str(),
+		"session 1/2: session is now stopped",
+		"system/sessions/active/1/2/process1: removing",
+		"system/sessions/active/1/2/shell: removing",
+		"system/sessions/active/1/2/x11: removing",
+		"session 1/2: session removed"
+	})
+		throw "Unexpected state changes after stopping process1 (2)";
+
+	if (dump_unit_dependencies() != std::vector<unit_dependency_dump>{
+		{
+			"system/sessions/installed/process1",
+
+			// all_requires:
+			{
+			},
+
+			// all_required_by:
+			{
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
+			},
+
+			// all_starting_first:
+			{
+			},
+
+			// all_stopping_first:
+			{
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
+			}
+		},
+		{
+			"system/sessions/installed/shell",
+
+			// all_requires:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_required_by:
+			{
+			},
+
+			// all_starting_first:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_stopping_first:
+			{
+			}
+		},
+		{
+			"system/sessions/installed/x11",
+
+			// all_requires:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_required_by:
+			{
+			},
+
+			// all_starting_first:
+			{
+				"system/sessions/installed/process1"
+			},
+
+			// all_stopping_first:
+			{
+			}
+		}
+	})
+		throw "unexpected dependencies after session removal";
+
+	if (dump_active_sessions() != std::unordered_map<std::string, std::unordered_set<std::string>>{
+		{
+			"<installed_session>: (manager not connected)",
+			{
+				"system/sessions/installed/process1",
+				"system/sessions/installed/shell",
+				"system/sessions/installed/x11"
+			}
+		}
+	})
+		throw "unexpected active sessions after session removal";
 }
 
 int main(int argc, char **argv)

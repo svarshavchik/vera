@@ -7,6 +7,16 @@
 #include "current_containers_info.H"
 #include "log.H"
 
+std::string proc_container_timerObj::description() const
+{
+	auto c=container.lock();
+
+	std::string description{_("container reload: ")};
+
+	description.append(c ? c->name:"<removed container>");
+
+	return description;
+}
 
 void proc_container_timerObj::triggered()
 {

@@ -148,6 +148,19 @@ private:
 	void destroy();
 };
 
+/*! Reset the inotify poller for testing purposes.
+
+  This should not normally be called. It is only used by the unit
+  test framework to reset the inotify poller to a known state.
+
+  What happened up to now is that various objects that were polling
+  for inotify events were destroyed, queing up pending inotify events. They
+  are still pending. The simplest thing to do would be to close the inotify
+  file descriptor and open a new one.
+
+*/
+void test_inotify_reset();
+
 struct poller_transferblockObj {};
 
 typedef std::shared_ptr<poller_transferblockObj> poller_transferblock;

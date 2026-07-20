@@ -17,6 +17,7 @@
 #include <unordered_set>
 #include <tuple>
 #include <algorithm>
+#include <iostream>
 
 namespace {
 #if 0
@@ -251,17 +252,22 @@ struct global_inotify_base {
 	global_inotify_base(const global_inotify_base &)=delete;
 
 	global_inotify_base &operator=(const global_inotify_base &)=delete;
+
+	void create_fd()
+	{
+		while ((fd=inotify_init1(IN_NONBLOCK | IN_CLOEXEC)) < 0)
+		{
+			log_message(_("inotify_init1() failed, trying again..."));
+			sleep(5);
+		}
+	}
 };
 
 int global_inotify_base::fd{-1};
 
 global_inotify_base::global_inotify_base()
 {
-	while ((fd=inotify_init1(IN_NONBLOCK | IN_CLOEXEC)) < 0)
-	{
-		log_message(_("inotify_init1() failed, trying again..."));
-		sleep(5);
-	}
+	create_fd();
 }
 
 global_inotify_base::~global_inotify_base()
@@ -304,18 +310,46 @@ private:
 
 public:
 
-	global_inotify() : this_is_the_polled_fd{fd,
-		[]
-		(int fd)
-		{
-			get_inotify().do_inotify();
-		}}
+	global_inotify()
 	{
+		install_polled_fd();
+	}
+
+private:
+
+	void install_polled_fd()
+	{
+		this_is_the_polled_fd=polledfd{fd,
+			[]
+			(int fd)
+			{
+				get_inotify().do_inotify();
+			}
+		};
 	}
 
 	void do_inotify();
 
 	void do_addrm();
+
+public:
+	void do_reset()
+	{
+		if (!installed.empty())
+		{
+			std::cerr << _("Internal error: still some watches installed");
+			for (auto const &[fd, value] : installed)
+				std::cerr << " " << fd;
+			std::cerr << std::endl;
+			throw "Still some watches are installed";
+		}
+		this_is_the_polled_fd={};
+		close(fd);
+		create_fd();
+		install_polled_fd();
+		pending_adds.clear();
+		pending_rms.clear();
+	}
 };
 
 global_inotify &get_inotify()
@@ -437,6 +471,11 @@ std::weak_ptr<poller_transferblockObj> current_poller_transferblock;
 #if 0
 {
 #endif
+}
+
+void test_inotify_reset()
+{
+	get_inotify().do_reset();
 }
 
 poller_transferblock get_poller_transferblock()

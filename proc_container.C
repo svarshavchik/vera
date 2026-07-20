@@ -787,6 +787,18 @@ void current_containers_infoObj::check_reexec()
 		s=o.str();
 	}
 
+	// Don't re-exec while timers are waiting to be run.
+
+	auto delayed_timer=has_timers();
+
+	if (!delayed_timer.empty())
+	{
+		log_message(_("reexec delayed by timers waiting to be run: ") +
+			delayed_timer
+		);
+		return;
+	}
+
 	// Create a temporary file, write to it the version tag, "1",
 	// the current runlevel, and then the serialized container states.
 
@@ -1085,6 +1097,7 @@ void proc_containers_reset()
 	// This is used by unit tests
 
 	get_containers_info(&replacement);
+	test_inotify_reset();
 }
 
 void proc_containers_load(loaded_containers lc, container_install_t mode)
@@ -2328,7 +2341,8 @@ void proc_do_request(
 		return;
 
 	auto ln=efd->readln(256);
-	if (cred.uid && (ln != "status" && ln != "session-start"))
+	if (cred.uid && (ln != "status" && ln != "session-start"
+						 && ln != "session-stop"))
 	{
 		log_message("root is required for command: " + ln +
 				    " from uid " + std::to_string(cred.uid));
@@ -2365,6 +2379,38 @@ void proc_do_request(
 
 		get_containers_info(nullptr)->session_start(
 			*uidsessionid, efd->readln(), socketfd, cmdfd[1]
+		);
+		return;
+	}
+
+	if (ln == "session-stop")
+	{
+		if (cmdfd.size() < 2)
+		{
+			if (!socketfd->write_all(
+				_("Bad session-stop command\n")))
+				return requester_socket_closed();
+			return;
+		}
+
+		std::optional<uid_sessionid_t> uidsessionid=
+			proc_get_sessionid(
+				efd,
+				cred,
+				[&](const std::string &s){
+					if (!socketfd->write_all(s + "\n"))
+						return requester_socket_closed();
+					log_message("session-stop: " + s);
+				}
+			);
+
+		if (!uidsessionid)
+		{
+			return;
+		}
+
+		get_containers_info(nullptr)->session_stop(
+			*uidsessionid, socketfd, cmdfd[1]
 		);
 		return;
 	}
@@ -4775,7 +4821,12 @@ void current_containers_infoObj::stopped(const std::string &s)
 
 		containers.erase(cc);
 	}
-
+	else
+	{
+		auto ret=active_session_from_path(pc->name);
+		if (ret)
+			check_stopped_session(*ret);
+	}
 	find_start_or_stop_to_do(); // We might find something to do.
 }
 
@@ -5198,4 +5249,92 @@ void current_containers_infoObj::session_start(
 
 	if (!socketfd->write_all(_("\n")))
 		return requester_socket_closed();
+}
+
+void current_containers_infoObj::session_stop(
+	const uid_sessionid_t &uidsessionid,
+	const external_filedesc &requester,
+	const external_filedesc &waitfd
+)
+{
+	auto iter=active_sessions.find(uidsessionid);
+	if (iter == active_sessions.end())
+	{
+		if (!requester->write_all(_("session not found\n")))
+			return requester_socket_closed();
+		return;
+	}
+
+	for (auto &pc:iter->second.containers)
+	{
+		auto iter=containers.find(pc);
+
+		if (iter == containers.end() ||
+		    iter->first->meta->type != proc_container_type::loaded)
+		{
+			continue;
+		}
+
+		stop_with_all_requirements(
+			iter, waitfd,
+			{}
+		);
+	}
+
+	find_start_or_stop_to_do();
+	iter->second.stopping=true;
+	check_stopped_session(uidsessionid);
+}
+
+void current_containers_infoObj::check_stopped_session(
+	const uid_sessionid_t &uidsessionid
+)
+{
+	auto iter=active_sessions.find(uidsessionid);
+	if (iter == active_sessions.end())
+		return;
+	if (!iter->second.is_now_stopped(*this))
+		return;
+	log_session(uidsessionid, "session is now stopped");
+
+	for (auto &pc:iter->second.containers)
+	{
+		auto iter=containers.find(pc);
+		if (iter != containers.end())
+		{
+			log_container_message(
+				iter->first, "removing"
+			);
+			containers.erase(iter);
+		}
+
+		auto iter2=all_dependency_info.find(pc);
+		if (iter2 != all_dependency_info.end())
+			all_dependency_info.erase(iter2);
+	}
+
+	log_session(uidsessionid, "session removed");
+	active_sessions.erase(iter);
+}
+
+bool active_session_info::is_now_stopped(
+	const current_containers_infoObj &cci
+) const
+{
+	if (!stopping)
+		return false;
+
+	for (auto &pc:containers)
+	{
+		auto iter=cci.containers.find(pc);
+
+		if (iter == cci.containers.end() ||
+		    iter->first->meta->type != proc_container_type::loaded)
+			continue;
+
+		if (!std::holds_alternative<state_stopped>(iter->second.state))
+			return false;
+	}
+
+	return true;
 }

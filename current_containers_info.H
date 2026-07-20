@@ -77,6 +77,18 @@ struct active_session_info {
 	*/
 	proc_container_set containers;
 
+	/*! Whether this session is in the process of stopping
+
+	*/
+
+	bool stopping{false};
+
+	/*! Check if this session is now stopped
+
+	*/
+
+	bool is_now_stopped(const current_containers_infoObj &cci) const;
+
 	/*!
 	  Default constructor
 
@@ -138,6 +150,8 @@ private:
 public:
 	friend struct unit_tests;
 	friend struct loaded_containers;
+	friend struct active_session_info;
+
 	/*! Read from a session manager connection
 
 	  Called by the poller when there's data to read from a session manager
@@ -626,6 +640,27 @@ public:
 		const external_filedesc &socketfd,
 		const external_filedesc &session_managerfd
 	);
+
+	/* Stop a session
+
+	uidsessionid - the session id
+	socketfd - the socket connection that sent the session-stop command
+	waitfd - this socket is closed when all session containers have been
+	stopped
+	*/
+	void session_stop(
+		const uid_sessionid_t &uidsessionid,
+		const external_filedesc &socketfd,
+		const external_filedesc &waitfd
+	);
+
+	/* A container has stopped.
+
+	Check to see if this is a session container, if so whether
+	the session was stopping, and is now fully stopped.
+	*/
+
+	void check_stopped_session(const uid_sessionid_t &uidsessionid);
 
 	//! Report when the container is empty
 

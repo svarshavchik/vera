@@ -30,6 +30,7 @@ EXTRA_DIST= 							\
 	cgroup.controllers					\
 	packaging/slackware/doinst.sh				\
 	packaging/slackware/uninst.sh				\
+	packaging/slackware/shell				\
 	packaging/slackware/networkmanager-wait-online		\
 	slack-desc						\
 	testinittab.sh						\
@@ -140,6 +141,7 @@ CLEANFILES += vlad
 testcontroller_SOURCES=testcontroller.C unit_test.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
 testcontroller_LDADD=libvera.a @YAMLLIBS@
+testcontroller_LDFLAGS=-lpthread
 
 testcontroller2_SOURCES=testcontroller2.C unit_test.C \
 	$(UNIT_TEST_LOG)
@@ -202,6 +204,7 @@ install-exec-hook:
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system
+	$(MKDIR_P) $(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed
 	$(INSTALL_DATA) update-logrotate \
 		$(DESTDIR)$(INSTALLCONFIGDIR)/system/update-logrotate
 	$(INSTALL_DATA) v2-controllers \
@@ -213,6 +216,9 @@ install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(LOCALCONFIGDIR)
 	$(MKDIR_P) $(DESTDIR)$(OVERRIDECONFIGDIR)
 	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)
+	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)/system
+	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions
+	chmod 755 $(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed
 	chmod 755 $(DESTDIR)$(CONFIGDIR)
 	$(INSTALL_DATA) $(srcdir)/cgroup.controllers $(DESTDIR)$(CONFIGDIR)/cgroup.controllers
 	chmod 644 $(DESTDIR)$(CONFIGDIR)/cgroup.controllers
@@ -224,6 +230,10 @@ install-data-local:
 		$(DESTDIR)$(ENVIRONCONFIG) && \
 		$(INSTALL_DATA) $(srcdir)/packaging/slackware/networkmanager-wait-online \
 			$(DESTDIR)$(INSTALLCONFIGDIR)/system && \
+		$(INSTALL_DATA) $(srcdir)/packaging/slackware/shell \
+			$(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed && \
+		chmod 644 $(DESTDIR)$(INSTALLCONFIGDIR)/system/networkmanager-wait-online \
+			$(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed/shell && \
 		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
 			-p $(DESTDIR)${pkgdatadir} \

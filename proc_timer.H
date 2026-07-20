@@ -52,6 +52,9 @@ public:
 	//! Trigger the timer
 	virtual void triggered()=0;
 
+	//! Return the timer description, for log messages.
+	virtual std::string description() const=0;
+
 	//! Update the timer containers
 	virtual void update_timer_containers(const current_containers &);
 };

@@ -697,6 +697,11 @@ bool request_session_start(
 	return efd->write_all(std::string{"session-start\n"} + name + "\n");
 }
 
+bool request_session_stop(const external_filedesc &efd)
+{
+	return efd->write_all("session-stop\n");
+}
+
 std::string get_freeze_thaw_status(const external_filedesc &efd)
 {
 	return efd->readln();
@@ -857,8 +862,6 @@ bool request_and_execute_fork(const external_filedesc &efd)
 		return false;
 
 	std::vector<char *> argv_ptrs;
-	std::vector<std::vector<char>> environ;
-	std::vector<char *> environ_ptrs;
 
 	pid_t p;
 
@@ -906,28 +909,9 @@ bool request_and_execute_fork(const external_filedesc &efd)
 		argv_ptrs.push_back(vec.data());
 	argv_ptrs.push_back(nullptr);
 
-	environ.clear();
-	environ.reserve(environ_map.size() + 1);
-
 	for (auto &[name, value] : environ_map)
-	{
-		std::vector<char> s(name.size() + 1 + value.size() + 1);
-		s.insert(s.end(), name.begin(), name.end());
-		s.push_back('=');
-		s.insert(s.end(), value.begin(), value.end());
-		s.push_back(0);
+		setenv(name.c_str(), value.c_str(), 1);
 
-		environ.push_back(std::move(s));
-	}
-
-	environ_ptrs.clear();
-	environ_ptrs.reserve(environ.size() + 1);
-
-	for (auto &str : environ)
-		environ_ptrs.push_back(str.data());
-	environ_ptrs.push_back(nullptr);
-
-	releasepipe->read_all();
 	// SESSION-START: NEW PID REGISTERED
 	releasepipe.reset();
 
@@ -949,8 +933,7 @@ bool request_and_execute_fork(const external_filedesc &efd)
 
 	execvp_after_forking(
 		argv_ptrs[0],
-		argv_ptrs.data(),
-		environ_ptrs.data()
+		argv_ptrs.data()
 	);
 
 	fork_status fs;
