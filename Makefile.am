@@ -110,6 +110,12 @@ libvera_a_SOURCES=						\
 	yaml_writer.C						\
 	yaml_writer.H
 
+pamdir=$(libdir)/security
+pam_LTLIBRARIES=pam_vera.la
+pam_vera_la_SOURCES=pam_vera.C
+pam_vera_la_LDFLAGS=-module -avoid-version -shared -lpam
+pam_vera_la_LIBADD=libvera.a
+
 UNIT_TEST_LOG=unit_test_log.C
 UNIT_TEST_LOG_AND_RUNNER=$(UNIT_TEST_LOG) \
 	unit_test_proc_container_runner.C
@@ -234,11 +240,12 @@ install-data-local:
 			$(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed && \
 		chmod 644 $(DESTDIR)$(INSTALLCONFIGDIR)/system/networkmanager-wait-online \
 			$(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed/shell && \
-		./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
+		{ [ ! -f /etc/inittab ] || \
+		    ./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \
 			-p $(DESTDIR)${pkgdatadir} \
 			-o $(DESTDIR)$(OVERRIDECONFIGDIR) \
-			-r $(DESTDIR)$(RUNLEVELCONFIG) >/dev/null
+			-r $(DESTDIR)$(RUNLEVELCONFIG) >/dev/null; }
 	test "$(TESTDIR)" = "" || exit 0; $(DESTDIR)$(sbindir)/vlad rehook || true
 
 uninstall-hook:
@@ -380,7 +387,9 @@ slackpkg: dist
 	tar xf $(PACKAGE)-$(VERSION).tar.xz
 	cd $(PACKAGE)-$(VERSION) && \
 		./configure --prefix=/usr --sysconfdir=/etc --sbindir=/sbin \
-			--libdir=/lib --localstatedir=/run \
+			--libdir="/`test -d /lib64 && echo lib64 || echo lib`" \
+			--with-installconfdir=/lib/vera \
+			--localstatedir=/run \
 			--with-switchlogdir=/var/log/vera \
 			--localedir=/usr/share/locale && \
 		make -j `grep '^processor' /proc/cpuinfo | wc -l` && \
@@ -391,9 +400,10 @@ slackpkg: dist
 
 slackpkg-sudo:
 	cd $(PACKAGE)-$(VERSION) && \
-		$(MAKE) install DESTDIR=inst && \
+		$(MAKE) install DESTDIR=`pwd`/inst && \
 		cd inst && \
-                   find lib/vera/system/inittab \
+		   rm -f lib/security/*.la && \
+		   find lib/vera/system/inittab \
                         lib/vera/system/rc \
 			lib/vera/system/rc.M* -type f -print | xargs rm -f && \
                    mkdir install && \

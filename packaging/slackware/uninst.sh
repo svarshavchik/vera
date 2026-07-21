@@ -27,3 +27,22 @@ then
 else
     rm -rf /lib/vera /etc/vera /var/log/vera
 fi
+
+pamdir=/etc/pam.d
+
+for file in `ls $pamdir 2>/dev/null`
+do
+    case "$file" in
+	*~)
+	    continue
+	    ;;
+	*.*)
+	    continue
+	    ;;
+	*)
+	    if egrep -q '\bpam_vera\.so\b' "$pamdir/$file"
+	    then
+		echo "pam_vera.so still referenced in $pamdir/$file, this is harmless."
+	    fi
+    esac
+done

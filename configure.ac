@@ -7,9 +7,10 @@ AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign dist-xz -Wno-portability])
 AM_GNU_GETTEXT([external])
 
+LT_INIT([disable-static])
+
 # Checks for programs.
 AC_PROG_CXX
-AC_PROG_RANLIB
 
 AC_PATH_PROGS(VALGRIND, valgrind)
 
@@ -44,6 +45,10 @@ else
 fi
 AC_SUBST(HTML2TXT)
 
+AC_CHECK_HEADERS([security/pam_modules.h], [], [
+  AC_MSG_ERROR([PAM development headers not found.])
+])
+
 # Checks for libraries.
 
 save_CPPFLAGS="$CPPFLAGS"
@@ -68,7 +73,6 @@ CPPFLAGS="$save_CPPFLAGS"
 AC_SUBST(YAMLCPPFLAGS)
 AC_SUBST(YAMLLIBS)
 
-
 # Checks for header files.
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -80,7 +84,7 @@ AC_SUBST(YAMLLIBS)
 AC_ARG_WITH([installconfdir],
 	[AS_HELP_STRING([--with-installconfdir=dir],
 		[specify non-default local configuration directory])],
-	[INSTALLCONFIGDIR="$withval"],[INSTALLCONFIGDIR="$libdir/vera"])
+	[INSTALLCONFIGDIR="$withval"],[INSTALLCONFIGDIR='${exec_prefix}/lib/vera'])
 
 AC_SUBST(INSTALLCONFIGDIR)
 

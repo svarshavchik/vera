@@ -2,6 +2,7 @@
 *.8.in
 *.a
 *.inc.H
+*.la
 *.sig
 *.stamp
 *.tar.gz
@@ -26,6 +27,8 @@ config.sub
 /depcomp
 INSTALL
 install-sh
+/libtool
+/ltmain.sh
 missing
 /rc.controllers
 /rc.local.vera
