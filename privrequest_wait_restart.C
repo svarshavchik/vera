@@ -1,0 +1,31 @@
+/*
+** Copyright 2026 S. Varshavchik
+** See COPYING for distribution information.
+*/
+#include "config.h"
+#include "privrequest.H"
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <sstream>
+#include <fcntl.h>
+#include <locale>
+
+int wait_restart(const external_filedesc &efd)
+{
+	auto s=efd->readln();
+
+	if (s.empty())
+		return -1;
+
+	std::istringstream i{s};
+
+	i.imbue(std::locale{"C"});
+
+	int n;
+
+	if (!(i >> n))
+		return -1;
+
+	return n;
+}

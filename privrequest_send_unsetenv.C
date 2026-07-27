@@ -1,0 +1,24 @@
+/*
+** Copyright 2026 S. Varshavchik
+** See COPYING for distribution information.
+*/
+#include "config.h"
+#include "privrequest.H"
+#include "messages.H"
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+
+bool send_unsetenv(const external_filedesc &fd,
+		    std::string name)
+{
+	if (name.find('\n') != name.npos)
+	{
+		throw std::runtime_error{
+			_("Variable name cannot contain a newline")
+				};
+	}
+
+	return fd->write_all("unsetenv\n" + name + "\n");
+}
