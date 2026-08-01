@@ -698,8 +698,10 @@ Required-By:
 version: 1
 EOF
 
-$VALGRIND ../testprocloader validatetest \
-	  built-in system/built-in . ../localdir ../configdir
+cd ..
+$VALGRIND ./testprocloader validatetest \
+	  globaldir/built-in system/built-in globaldir localdir configdir
+cd globaldir
 ../testprocloader validatetest \
 	  built-in system/built-in . ../localdir ../configdir \
 	  >/dev/null 2>../loadtest.out
@@ -720,9 +722,10 @@ Alternative-Group: alternative
 version: 1
 EOF
 
-$VALGRIND ../testprocloader validatetest \
-	  built-in built-in . ../localdir ../configdir
-
+cd ..
+$VALGRIND ./testprocloader validatetest \
+	  globaldir/built-in built-in globaldir localdir configdir
+cd globaldir
 ../testprocloader validatetest \
 	  built-in built-in . ../localdir ../configdir \
 	  >/dev/null 2>../loadtest.out

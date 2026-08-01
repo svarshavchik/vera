@@ -7,7 +7,7 @@ AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign dist-xz -Wno-portability])
 AM_GNU_GETTEXT([external])
 
-LT_INIT([disable-static])
+LT_INIT
 
 # Checks for programs.
 AC_PROG_CXX

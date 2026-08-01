@@ -1,33 +1,405 @@
 /*
 ** Copyright 2024 S. Varshavchik
-a** See COPYING for distribution information.
+** See COPYING for distribution information.
 */
 #include "config.h"
 #include "proc_loader.H"
 #include "messages.H"
 #include "yaml_writer.H"
 #include "parsed_yaml.H"
-#include "privrequest.H"
 #include <algorithm>
 #include <filesystem>
 #include <vector>
-#include <array>
 #include <string>
 #include <unistd.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
-#include <optional>
 #include <system_error>
 #include <memory>
-#include <unordered_set>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <fcntl.h>
 
 std::unordered_map<std::string, std::string> environconfigvars;
+
+namespace {
+	struct autoremove {
+
+		std::string &filename;
+
+		~autoremove()
+		{
+			unlink(filename.c_str());
+		}
+	};
+};
+
+void proc_edit(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::string &name,
+	const std::function<int (const std::string &)> &do_edit,
+	const std::function<std::string ()> &do_prompt
+)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+
+	auto filename=std::filesystem::path{config_global} / name;
+
+	std::error_code ec;
+	if (!std::filesystem::exists(filename, ec))
+		throw std::runtime_error{
+			name + _(": does not exist")
+			+ (ec ? std::string{": "} + ec.message():"")
+		};
+
+	auto localfilename=std::filesystem::path{config_local} / name;
+
+	std::string tmpdir=std::filesystem::temp_directory_path() /
+		"vera.XXXXXXXX";
+
+	int fd=mkstemp(tmpdir.data());
+
+	if (fd < 0)
+		throw std::runtime_error{
+			_("Cannot create a temporary file")
+		};
+
+	autoremove do_autoremove{tmpdir};
+	close(fd);
+
+	if (!std::filesystem::copy_file(
+		    std::filesystem::exists(localfilename, ec)
+		    ? localfilename:filename,
+		    tmpdir,
+		    std::filesystem::copy_options::overwrite_existing,
+		    ec))
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(localfilename)
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+
+	while (1)
+	{
+		if (do_edit(tmpdir) != 0)
+			return;
+
+		std::vector<std::string> msgs;
+
+		if (proc_validate_and_dump(
+			    tmpdir, name, config_global,
+			    config_local,
+			    config_override,
+			    [&]
+			    (auto &msg)
+			    {
+				    msgs.push_back(msg);
+			    },
+			    []
+			    (const auto &)
+			    {
+			    }
+		    ))
+		{
+			break;
+		}
+		for (auto &m:msgs)
+		{
+			std::cout << m << std::endl;
+		}
+
+		std::string l;
+
+		while (1)
+		{
+			l=do_prompt();
+
+			switch (*l.c_str()) {
+			case 'a':
+			case 'A':
+			case 'r':
+			case 'R':
+			case 'i':
+			case 'I':
+				break;
+			default:
+				continue;
+			}
+			break;
+		}
+
+		switch (*l.c_str()) {
+		case 'a':
+		case 'A':
+			return;
+		case 'R':
+		case 'r':
+			continue;
+		}
+		break;
+	}
+
+	auto localfilenamedir=localfilename.parent_path();
+
+	ec={};
+	std::filesystem::create_directories(localfilenamedir, ec);
+
+	if (ec)
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(localfilenamedir)
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+
+	std::string tmplocalfilename=localfilename;
+
+	tmplocalfilename += "~";
+
+	if (!std::filesystem::copy_file(
+		    tmpdir,
+		    tmplocalfilename,
+		    std::filesystem::copy_options::overwrite_existing,
+		    ec))
+	{
+		throw std::runtime_error{
+			tmplocalfilename
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+
+	ec={};
+	std::filesystem::rename(tmplocalfilename, localfilename, ec);
+	if (ec)
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(localfilename)
+			+ _(": cannot create: ")
+			+ ec.message()
+		};
+	}
+}
+
+void proc_revert(
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::string &name
+)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+
+	auto filename=std::filesystem::path{config_local} / name;
+
+	std::error_code ec;
+	if (!std::filesystem::exists(filename, ec))
+		throw std::runtime_error{
+			name + _(": does not exist")
+			+ (ec ? std::string{": "} + ec.message():"")
+		};
+
+	if (!std::filesystem::remove(filename, ec))
+	{
+		throw std::runtime_error{
+			static_cast<std::string>(filename) + ": "
+			+ ec.message()
+		};
+	}
+}
+
+proc_override proc_get_override(const std::string &config_global,
+				const std::string &config_override,
+				const std::string &name)
+{
+	if (!proc_validpath(name))
+	{
+		throw std::runtime_error(name + _(": invalid name"));
+	}
+
+	std::error_code ec;
+
+	if (!std::filesystem::exists(
+		    std::filesystem::path{config_global} / name, ec))
+		throw std::runtime_error{
+			name + _(": does not exist")
+			+ (ec ? std::string{": "} + ec.message():"")
+		};
+
+	return proc_get_validated_override(config_override, name);
+}
+
+static void parse_override_file(
+	proc_override &o,
+	std::string &state_str,
+	parsed_yaml &parsed,
+	const std::string &filename,
+	std::function<void (const std::string &)> error)
+{
+	bool found_version_tag=false;
+
+	proc_override::resources_t resources;
+
+	(void)parsed.parse_map(
+		yaml_document_get_root_node(&parsed.doc),
+		true,
+		filename,
+		[&]
+		(const std::string &key,
+		 yaml_node_t *n,
+		 const auto &error)
+		{
+			if (key == "state")
+			{
+				auto value=parsed.parse_scalar(
+					n,
+					filename,
+					error
+				);
+
+				if (value)
+					state_str=*value;
+			}
+
+			if (key == "resources")
+			{
+				return parsed.parse_map(
+					n,
+					true,
+					filename,
+					[&]
+					(const std::string &key,
+					 yaml_node_t *n,
+					 const auto &error)
+					{
+						auto value=parsed.parse_scalar(
+							n,
+							filename,
+							error
+						);
+
+						if (!value)
+							return false;
+
+						resources.emplace_back(key,
+								       *value);
+						return true;
+					},
+					error);
+
+
+			}
+			if (key == "version")
+				return parsed.parse_version_1(
+					n, key, error,
+					found_version_tag
+				);
+			return true;
+		},
+		error
+	);
+
+	o.install_resources(std::move(resources));
+
+	if (!found_version_tag)
+	{
+		error(_("did not see a \"version: 1\" tag"));
+	}
+}
+
+proc_override proc_get_validated_override(const std::string &config_override,
+					  const std::string &name)
+{
+	auto filename=std::filesystem::path{config_override} / name;
+
+	std::ifstream i{filename};
+
+	if (!i)
+		return {};
+
+	bool ignore;
+
+	return read_override(filename, i, ignore,
+			     [&]
+			     (const std::string &error)
+			     {
+				     throw std::runtime_error{
+					     name + ": " + error
+				     };
+			     });
+}
+
+proc_override read_override(
+	const std::string &filename,
+	std::ifstream &i, bool &legacy,
+	const std::function<void (const std::string &)> &error)
+{
+	proc_override o;
+	legacy=false;
+
+	std::string s;
+
+	std::getline(i, s);
+
+	if (s.find(':') != s.npos)
+	{
+		s.clear();
+		i.seekg(0);
+		// Before 1.2 this was a single, plain line with the override
+		// state. It is now a YAML document.
+
+		yaml_parser_info parser_info{i};
+
+		if (!parser_info.initialized)
+		{
+			std::cerr << filename
+				  << _(": YAML parser initialization failure")
+				  << std::endl;
+		}
+		else
+		{
+			std::function<void (const std::string &)> ferror=[&]
+				(const std::string &msg)
+				{
+					error(filename
+					      + ": "
+					      + msg);
+				};
+
+			parsed_yaml parsed{parser_info,
+				filename,
+				error
+			};
+
+			parse_override_file(o, s, parsed, filename, error);
+		}
+	}
+	else
+	{
+		legacy=true;
+	}
+	if (s == "masked")
+		o.set_state(proc_override::state_t::masked);
+
+	if (s == "enabled")
+		o.set_state(proc_override::state_t::enabled);
+
+	return o;
+}
 
 void proc_set_override(
 	const std::string &config_override,
@@ -164,174 +536,23 @@ void proc_set_override(
 
 	auto temppath = fullpath / (path + "~");
 
-	std::ofstream o{ temppath };
+	std::ofstream orewrite{ temppath };
 
-	if (!o)
+	if (!orewrite)
 	{
 		error(static_cast<std::string>(temppath) + ": " +
 		      strerror(errno));
 		return;
 	}
 
-	o << contents;
-	o.close();
+	orewrite << contents;
+	orewrite.close();
 
-	if (o.fail() ||
+	if (orewrite.fail() ||
 	    rename(temppath.c_str(), (fullpath / path).c_str()))
 	{
 		error(static_cast<std::string>(temppath) + ": " +
 		      strerror(errno));
 		return;
-	}
-}
-
-bool proc_set_runlevel_default(
-	const std::string &configfile,
-	const std::string &new_runlevel,
-	const std::function<void (const std::string &)> &error)
-{
-	// First, read the current default
-
-	auto current_runlevels=proc_get_runlevel_config(configfile, error);
-
-	auto original_runlevels=current_runlevels;
-
-	// Go through, and:
-	//
-	// If we find a "default" or "override" entry, remove it.
-	//
-	// When we find the new default runlevel, add a "default" alias for it.
-
-	bool found=false;
-
-	for (auto &[runlevel_name, runlevel] : current_runlevels)
-	{
-		bool found_new_default=
-			!found && (runlevel_name == new_runlevel ||
-				   runlevel.aliases.find(new_runlevel)
-				   != runlevel.aliases.end());
-
-		runlevel.aliases.erase("default");
-		runlevel.aliases.erase("override");
-
-		if (found_new_default)
-		{
-			found=true;
-			runlevel.aliases.insert("default");
-		}
-	}
-
-	if (!found)
-	{
-		error(configfile + ": " + new_runlevel + _(": not found"));
-		return false;
-	}
-
-	// A default of "default" gets specified in order to remove any
-	// override, this is handled by the finely-tuned logic above.
-	//
-	// Avoid rewriting the runlevel config file if nothing's changed.
-
-	if (current_runlevels == original_runlevels)
-		return true;
-
-	return proc_set_runlevel_config(configfile, current_runlevels);
-}
-
-bool proc_set_runlevel_default_override(
-	const std::string &configfile,
-	const std::string &override_runlevel,
-	const std::function<void (const std::string &)> &error)
-{
-	// First, read the current default
-
-	auto current_runlevels=proc_get_runlevel_config(configfile, error);
-
-	// Go through, and:
-	//
-	// If we find an "override" entry, remove it.
-	//
-	// When we find the new default override, add "override" to it,
-
-	bool found=false;
-
-	for (auto &[runlevel_name, runlevel] : current_runlevels)
-	{
-		bool found_new_default=
-			!found && (runlevel_name == override_runlevel ||
-				   runlevel.aliases.find(override_runlevel)
-				   != runlevel.aliases.end());
-
-		runlevel.aliases.erase("override");
-
-		if (found_new_default)
-		{
-			found=true;
-			runlevel.aliases.insert("override");
-		}
-	}
-
-	if (!found)
-	{
-		error(configfile + ": " + override_runlevel + _(": not found"));
-		return false;
-	}
-
-	return proc_set_runlevel_config(configfile, current_runlevels);
-}
-
-bool proc_apply_runlevel_override(runlevels &rl)
-{
-	bool overridden=false;
-
-	// If there's an "override" alias, it overrides the "default" one.
-
-	for (auto &[name, runlevel] : rl)
-	{
-		auto iter=runlevel.aliases.find("override");
-
-		if (iter == runlevel.aliases.end())
-			continue;
-
-		// We remove the existing "default" alias and put it where
-		// "override" is. This way, the rest of the startup code
-		// just looks for a "default".
-		runlevel.aliases.erase(iter);
-
-		for (auto &[name, runlevel] : rl)
-			runlevel.aliases.erase("default");
-
-		runlevel.aliases.insert("default");
-		overridden=true;
-		break;
-	}
-	return overridden;
-}
-
-void proc_remove_runlevel_override(const std::string &configfile)
-{
-	bool invalid=false;
-
-	auto rl=proc_get_runlevel_config(
-		configfile,
-		[&]
-		(const std::string &error)
-		{
-			// We already reported the error,
-			// probably, in load_runlevelconfig()
-			invalid=true;
-		});
-
-	for (auto &[name, runlevel] : rl)
-	{
-		auto iter=runlevel.aliases.find("override");
-
-		if (iter != runlevel.aliases.end() && !invalid)
-		{
-			runlevel.aliases.erase(iter);
-
-			proc_set_runlevel_config(configfile, rl);
-			break;
-		}
 	}
 }

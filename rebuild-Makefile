@@ -1,0 +1,190 @@
+#! /usr/bin/perl
+#
+# Copyright 2026 S. Varshavchik
+# See COPYING for distribution information.
+#
+# Read linkmaps from statically-linked "all" binaries. Determine whether
+# to place each source file into COMMON_LIB_SOURCES or OTHER_LIB_SOURCES
+# and update Makefile.am, if needed.
+
+use IO::File;
+use strict;
+use warnings;
+
+my $srcdir = shift // ".";
+
+# Read Makefile.am, all source files currently defined in COMMON_LIB_SOURCES
+# and OTHER_LIB_SOURCES. Store mapping of object filename to source filename.
+
+my %sourcemap;
+
+my $fh = IO::File->new("$srcdir/Makefile.am", "r")
+    or die "Cannot read Makefile.am\n";
+
+my $reading_libsrc = 0;
+
+while (defined(my $l=<$fh>))
+{
+	chomp $l;
+	$reading_libsrc = 0 if $l eq "";
+
+	if ($reading_libsrc)
+	{
+		$l =~ s/\\$//;
+		$l =~ s/[ \t]//g;
+		my $o = $l;
+		die "Cannot parse source file: $l\n"
+			unless $o =~ s/\.[cC]$/.o/;
+		$sourcemap{$o} = $l;
+	}
+
+	$reading_libsrc = 1 if $l =~ /^(COMMON|OTHER)_LIB_SOURCES\s*=/;
+}
+
+$fh->close();
+
+# Read a linkmap file and return a hash keyed by source module.
+
+sub read_linkmap {
+	my ($file) = @_;
+
+	my $fh = IO::File->new($file, "r")
+	or die "$file: $!\n";
+
+	my %module;
+
+	while (defined(my $l=<$fh>))
+	{
+		next unless $l =~ /^\.\/\.libs\/[^\(]+\(([^\)]+)/;
+
+		die "Could not find $1\n" unless exists $sourcemap{$1};
+		$module{$sourcemap{$1}} = 1;
+	}
+
+	return \%module;
+}
+
+my $vera=read_linkmap("vera-all.linkmap");
+my $vlad=read_linkmap("vlad-all.linkmap");
+my $pam_vera=read_linkmap("pamvera-all.linkmap");
+
+# Determine which source files should be in COMMON_LIB_SOURCES vs
+# OTHER_LIB_SOURCES.
+#
+# If a source file is used by just vera, vlad, or pam_vera, it goes into
+# OTHER_LIB_SOURCES, otherwise it goes into COMMON_LIB_SOURCES;
+
+my %combined;
+
+$combined{$_}++ for keys %$vera;
+$combined{$_}++ for keys %$vlad;
+$combined{$_}++ for keys %$pam_vera;
+
+# Sanity check: make sure all source modules were linked into at least one
+# of the binaries.
+
+foreach my $srcmodule (values %sourcemap)
+{
+	die "$srcmodule is not linked into any of vera, vlad, or pam_vera\n"
+		unless exists $combined{$srcmodule};
+}
+
+# Print out the updated Makefile.am. First, copy everything up until
+# ##BEGINGEN, then skip until ##ENDGEN.
+
+$fh = IO::File->new("$srcdir/Makefile.am", "r")
+    or die "Cannot read Makefile.am\n";
+
+while (defined(my $l=<$fh>))
+{
+	print $l;
+	last if $l =~ /^\#\#BEGINGEN/;
+}
+
+while (defined(my $l=<$fh>))
+{
+	last if $l =~ /^\#\#ENDGEN/;
+}
+
+# Helper function to print a list of source files, formatted to fit
+# in a Makefile.am file.
+
+sub print_sourcelist {
+
+	my $continue = "";
+	my $lastmodule_nopad="";
+	my $lastmodule_pad="";
+
+	# We print source file at a time. Every source file except the
+	# last one is padded, and a backslash is added, to continue to the
+	# next line.
+	#
+	# So the first order of business, while iterating over the source files
+	# is to print the padding+backslash from the previous iteration.
+
+	foreach my $module (sort @_)
+	{
+		print $lastmodule_pad;
+
+		# If this is going to be the last source file we'll save it,
+		# as is, and not add padding+backslash. Otherwise, we'll save
+		# it with padding and add a backslash so that the next iteration
+		# will print that padding+backslash as its padding.
+
+		$lastmodule_nopad=$module;
+
+		$module = sprintf("%-56s", $module);
+
+		# Convert trailing spaces to tabs, as needed, to keep the lines
+		# from getting too long.
+
+		my $tab = "";
+		while ($module =~ s/        $//)
+		{
+			$tab .= "\t";
+		}
+
+		if ($module =~ s/ +$//)
+		{
+			$tab .= "\t";
+		}
+
+		print "$continue\t";
+
+		$lastmodule_pad = "$module$tab";
+		$continue = "\\\n";
+	}
+	print $lastmodule_nopad;
+	print "\n";
+}
+
+print "\nCOMMON_LIB_SOURCES=\\\n";
+
+my @commonsources;
+my @othersources;
+
+foreach my $module (sort keys %combined)
+{
+	if ($combined{$module} == 1)
+	{
+		push @othersources, $module;
+	}
+	else
+	{
+		push @commonsources, $module;
+	}
+}
+
+print_sourcelist(@commonsources);
+
+print "\nOTHER_LIB_SOURCES=\\\n";
+
+print_sourcelist(@othersources);
+
+print "\n##ENDGEN\n";
+
+# Copy the remainder of the Makefile.am
+while (defined(my $l=<$fh>))
+{
+	print $l;
+}

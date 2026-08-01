@@ -15,6 +15,7 @@
 #include "proc_container_group.H"
 #include "privrequest.H"
 #include "log.H"
+#include "switchlog.H"
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
@@ -25,7 +26,6 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
-#include <locale>
 #include <algorithm>
 
 std::vector<std::string> logged_state_changes;
@@ -33,12 +33,19 @@ struct timespec fake_time;
 std::vector<std::string> logged_runners;
 std::vector<std::tuple<pid_t, int>> sent_sigs;
 
-std::optional<std::stringstream> current_switchlog;
-std::vector<std::string> completed_switchlog;
 std::function<void (const char *, char **)> execvp_func;
 pid_t next_pid=1;
 bool all_forks_fail=false;
 size_t sessionid=2;
+
+void (*log_to_syslog)(int level,
+			const char *program,
+			const char *message)
+			=[](int level,
+			const char *program,
+			const char *message){
+				log_message(message);
+			};
 
 //! /etc/vera/environ for unit tests
 std::string environconfig()
@@ -458,46 +465,6 @@ void create_fake_proc(
 	}
 }
 
-/*! Init the switchlog for unit tests
-*/
-
-void switchlog_start()
-{
-	current_switchlog.emplace();
-	current_switchlog->imbue(std::locale{"C"});
-}
-
-//! Stop the switchlog for unit tests
-
-void switchlog_stop()
-{
-	if (current_switchlog)
-	{
-		current_switchlog->seekg(0);
-
-		completed_switchlog.clear();
-
-		std::string l;
-
-		while (!std::getline(*current_switchlog, l).eof())
-			completed_switchlog.push_back(std::move(l));
-
-		std::sort(completed_switchlog.begin(),
-			  completed_switchlog.end());
-		current_switchlog.reset();
-	}
-}
-
-//! Return the current switchlog, for testing purposes
-
-std::ostream *get_current_switchlog()
-{
-	if (current_switchlog)
-		return &*current_switchlog;
-
-	return nullptr;
-}
-
 //! Get the sessionid for testing purposes
 
 std::optional<uid_sessionid_t> proc_get_sessionid(
@@ -522,7 +489,7 @@ void test_reset(bool keep_cgroupfs)
 	all_forks_fail=false;
 	fake_time.tv_sec=1;
 	switchlog_stop();
-	completed_switchlog.clear();
+	switchlog_reset();
 
 	if (!keep_cgroupfs)
 	{

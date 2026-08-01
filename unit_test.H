@@ -15,6 +15,8 @@ extern std::vector<std::string> logged_state_changes;
 extern struct timespec fake_time;
 extern std::vector<std::tuple<pid_t, int>> sent_sigs;
 extern std::vector<std::string> completed_switchlog;
+extern void switchlog_reset();
+
 extern std::function<void (const char *, char **)> execvp_func;
 extern std::vector<std::string> logged_runners;
 extern pid_t next_pid;

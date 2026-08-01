@@ -31,7 +31,7 @@ std::vector<std::string> hooklog;
 	} while(0)
 
 #define HOOK_DEBUG2() do { hooklog.push_back(h.filename); } while(0)
-
+bool sim_unhook_socket_connection=false;
 #include "hook.C"
 
 #define FAKEHOOKFILE "testhook.etcrc/hook"
@@ -236,12 +236,7 @@ void testhook()
 
 	testlogrotatehook(11, 10);
 
-	int fd=try_create_vera_socket("testhook.etcrc/socket.tmp",
-				      "testhook.etcrc/socket");
-
-	if (fd < 0)
-		throw std::runtime_error{"Cannot create fake socket"};
-
+	sim_unhook_socket_connection=true;
 	bool caught=false;
 
 	try {
@@ -260,7 +255,7 @@ void testhook()
 	    WEXITSTATUS(system("testhook.sbin/init")) != 4)
 		throw std::runtime_error{
 			"Unexpected unhook with active socket"};
-	close(fd);
+	sim_unhook_socket_connection=false;
 
 	unhook("testhook.etcrc",
 	       "testhook.sbin",

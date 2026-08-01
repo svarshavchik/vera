@@ -189,6 +189,10 @@ bool request_status(
 
 [[nodiscard]] bool request_session_stop(const external_filedesc &efd);
 
+/*! The session-stop command implementation */
+
+[[nodiscard]] bool process_session_stop();
+
 /*! What receive_fd() returns
 
   It returns a list of file descriptors received over the socket, and,
@@ -234,6 +238,13 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd);
 [[nodiscard]] bool request_send_fd(
 	const external_filedesc &efd,
 	const std::vector<int> &fds
+);
+
+//! Call request_send_fd, if it fails, exit(1)
+
+void wrap_request_send_fd(
+	const external_filedesc &efd,
+	const std::vector<external_filedesc> &fds
 );
 
 // Create a socket pair for vera requests

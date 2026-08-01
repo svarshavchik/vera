@@ -11,6 +11,7 @@
 #include <string_view>
 #include <map>
 #include <getopt.h>
+#include "verac_parseinittab.c"
 
 const char *inittabfile    = "/etc/inittab";
 const char *rcdir          = "/etc/rc.d";

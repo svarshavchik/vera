@@ -10,7 +10,6 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
-#include <algorithm>
 #include <syslog.h>
 
 void log_state_change(const proc_container &pc,
@@ -132,37 +131,6 @@ const struct timespec &log_current_timespec()
 }
 
 #endif
-
-std::string log_elapsed(time_t n)
-{
-	time_t m=n/60;
-	time_t s=n%60;
-
-	std::string_view minutes{_("m:minutes")};
-	std::string_view seconds{_("s:seconds")};
-
-	std::ostringstream o;
-
-	o.imbue(std::locale{""});
-
-	if (m)
-	{
-		o << m;
-		o.write(minutes.data(),
-			std::find(minutes.begin(), minutes.end(), ':')-
-			minutes.begin());
-	}
-
-	if (s || m == 0)
-	{
-		o << s;
-
-		o.write(seconds.data(),
-			std::find(seconds.begin(), seconds.end(), ':')-
-			seconds.begin());
-	}
-	return o.str();
-}
 
 std::string get_state_and_elapsed_for(
 	const proc_container_state &state,

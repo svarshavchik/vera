@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <vector>
 #include <functional>
-#include "log.H"
 #include "proc_container_statefwd.H"
 
 //! Start logging a runlevel switch

@@ -401,8 +401,14 @@ void unhook(std::string etc_sysinit_dir,
 
 	std::filesystem::remove(hookfile, ec);
 
-	auto [cmdfd, cmdfds]=try_connect_vera_priv(pubcmdsocket);
+#ifdef HOOK_DEBUG
+	// In testhook.C, simulate a successful or an unsuccessful
+	// connection to vera, in order to test the following logic.
 
+	bool cmdfd=sim_unhook_socket_connection;
+#else
+	auto [cmdfd, cmdfds]=try_connect_vera_priv(pubcmdsocket);
+#endif
 	if (cmdfd)
 	{
 		throw std::runtime_error{

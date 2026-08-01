@@ -262,9 +262,35 @@ proc_override proc_get_override(const std::string &config_global,
 				const std::string &config_override,
 				const std::string &name);
 
-//! Return a specific override, the passed in name is verified to be valid.
+/*! Return a specific override, the passed in name is verified to be valid.
+
+Opens the override file, if it exists, and calls read_override().
+
+*/
+
 proc_override proc_get_validated_override(const std::string &config_override,
 					  const std::string &name);
+
+/*! Read a private override definition from an opened override file.
+
+Parameters:
+
+- filename: the name of the file being read
+
+- i: the input file stream
+
+- legacy: true if the override file is in the legacy format (plain text line)
+
+- error: a callback that gets invoked to report errors
+
+Returns: the override definition
+
+*/
+proc_override read_override(
+	const std::string &filename,
+	std::ifstream &i, bool &legacy,
+	const std::function<void (const std::string &)> &error
+);
 
 //! Dump the loaded process containers to std::cout
 
@@ -329,12 +355,10 @@ bool proc_apply_runlevel_override(runlevels &rl);
 
 void proc_remove_runlevel_override(const std::string &configfile);
 
-/*! Validate the unit file
+/*! Validate the unit file, print to standard output.
 
-Takes the unit file, and the pathnames to the install, local, and override
-directories, attempts to validate the unit file.
-
- */
+Calls proc_validate_and_dump, passing in proc_load_dump for the dump parameter.
+*/
 
 bool proc_validate(const std::string &unitfile,
 		   const std::string &relativepath_override,
@@ -342,6 +366,26 @@ bool proc_validate(const std::string &unitfile,
 		   const std::string &localconfigdir,
 		   const std::string &overridecofigdir,
 		   const std::function<void (const std::string &)> &error);
+
+/*! Validate the unit file and dump the resulting loaded containers.
+
+Takes the unit file, and the pathnames to the install, local, and override
+directories, attempts to validate the unit file.
+
+If successful, dump() gets called with the loaded containers.
+
+*/
+
+
+bool proc_validate_and_dump(
+	const std::string &unitfile,
+	const std::string &relativepath_override,
+	const std::string &config_global,
+	const std::string &config_local,
+	const std::string &config_override,
+	const std::function<void (const std::string &)> &log_message,
+	const std::function<void (const loaded_containers &)> &dump
+);
 
 #define SYSTEM_PREFIX "system/"
 

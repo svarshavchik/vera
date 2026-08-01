@@ -14,6 +14,14 @@ void switchlog_start()
 {
 }
 
+void switchlog_stop()
+{
+}
+
+void switchlog_reset()
+{
+}
+
 struct timespec ts;
 
 void update_current_time()

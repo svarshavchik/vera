@@ -2,6 +2,10 @@
 
 test ! -f /sbin/vera || exit 0      # Upgrading
 
+# Remove dangling .so symlinks that doinst.sh installed
+
+/sbin/ldconfig
+
 oops=0
 
 for f in /etc/rc.d/rc.sysvinit /etc/rc.d/rc.local /etc/rc.d/rc.local_shutdown \

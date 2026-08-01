@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdio.h>
@@ -33,8 +34,14 @@ bool request_and_execute_fork(const external_filedesc &efd)
 	}
 
 	if (p > 0)
+	{
+		pid_t c;
+
+		while ((c=wait(nullptr)) != -1 && c != p)
+			;
 		// parent - continue with next request.
 		return true;
+	}
 
 	// child, fork again and exit, so that the child of the
 	// child is the one that actually does the work.

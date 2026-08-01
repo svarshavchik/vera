@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <fstream>
 
 struct group_create_info;
 
@@ -110,7 +111,13 @@ An active system process container group
 
 class proc_container_group : public proc_container_group_data {
 
-	struct cgroup_procs_file;
+	struct cgroup_procs_file {
+
+		std::ifstream i;
+
+		cgroup_procs_file(const std::string &container_name);
+		~cgroup_procs_file();
+	};
 public:
 	proc_container_group()=default;
 

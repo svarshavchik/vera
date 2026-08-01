@@ -8,6 +8,7 @@
 *.tar.gz
 *.tar.xz
 *.txz
+*.linkmap
 /m4
 Makefile
 Makefile.in
@@ -30,6 +31,7 @@ install-sh
 /libtool
 /ltmain.sh
 missing
+/pamvera-all
 /rc.controllers
 /rc.local.vera
 /rc.local_shutdown.vera
@@ -50,6 +52,8 @@ stamp-h1
 /update-logrotate
 /v2-controllers
 /vera
+/vera-all
 /vera-init
 /vera-logrotate
 /vlad
+/vlad-all
