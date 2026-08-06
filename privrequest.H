@@ -458,4 +458,35 @@ struct fork_status {
 	bool notregistered=true;
 };
 
+/* Prepare the argv vector for execve(), and initialize the environment.
+
+   argv_vec: A vector of vectors of chars, where each vector of chars is one
+   argument for execve(). A \0 byte is appended to each char vector, this
+   parameter is modified thusly.
+
+   argv_ptrs: A vector of chars pointers. This array is initialize to point to
+   the first character of each char vector in argv_vec, followed by a null ptr.
+   The caller passes this directly to execvep.
+
+   environ_map: A map of environment variables. This map is used to call
+   setenv() to initialize the environment variables.
+
+   Afterwards, privrequest_execve_prep_pg() gets called, before returning.
+*/
+
+void privrequest_execve_prep_args(
+	std::vector<std::vector<char>> &argv_vec,
+	std::vector<char *> &argv_ptrs,
+	const std::unordered_map<std::string, std::string> &environ_map
+);
+
+/* Prepare the process group in the child process.
+
+   This function should be called in the child process after forking, and
+   before execve(). It will create a new process group and set the
+   process group leader.
+*/
+
+void privrequest_execve_prep_pg();
+
 #endif

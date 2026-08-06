@@ -9,10 +9,6 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <stdio.h>
-#include <string.h>
-#include <signal.h>
 #include <iostream>
 
 bool request_and_execute_fork(const external_filedesc &efd)
@@ -67,19 +63,6 @@ bool request_and_execute_fork(const external_filedesc &efd)
 		exit(1);
 	}
 
-	for (auto &vec : argv)
-		vec.push_back(0);
-
-	argv_ptrs.clear();
-	argv_ptrs.reserve(argv.size() + 1);
-
-	for (auto &vec : argv)
-		argv_ptrs.push_back(vec.data());
-	argv_ptrs.push_back(nullptr);
-
-	for (auto &[name, value] : environ_map)
-		setenv(name.c_str(), value.c_str(), 1);
-
 	// SESSION-START: NEW PID REGISTERED
 	releasepipe.reset();
 
@@ -92,12 +75,7 @@ bool request_and_execute_fork(const external_filedesc &efd)
 		exit(1);
 	}
 
-	setsid();
-	setpgid(0, 0);
-
-	sigset_t ss;
-	sigemptyset(&ss);
-	sigprocmask(SIG_SETMASK, &ss, NULL);
+	privrequest_execve_prep_args(argv, argv_ptrs, environ_map);
 
 	execvp_after_forking(
 		argv_ptrs[0],

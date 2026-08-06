@@ -1501,6 +1501,9 @@ static void vlad(std::vector<std::string> args)
 		{
 			cmdfd={};
 			cmdfds.clear();
+
+			privrequest_execve_prep_pg(); // For our own benefit.
+
 			while (request_and_execute_fork(s1))
 				;
 

@@ -98,6 +98,7 @@ COMMON_LIB_SOURCES=\
 	log2.C							\
 	parsed_yaml.C						\
 	privrequest_create_vera_socketpair.C			\
+	privrequest_execve_prep.C				\
 	privrequest_get_pid_status.C				\
 	privrequest_process_session_stop.C			\
 	privrequest_receive_fds.C				\

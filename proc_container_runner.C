@@ -143,12 +143,7 @@ static pid_t fork_and_run(
 
 		std::vector<char *> charvec;
 
-		charvec.reserve(argv.size()+1);
-
-		for (auto &v:argv)
-			charvec.push_back(v.data());
-
-		charvec.push_back(nullptr);
+		privrequest_execve_prep_args(argv, charvec, environconfigvars);
 
 		auto [prev, cur]=
 			all_containers->prev_current_runlevel();
@@ -159,13 +154,6 @@ static pid_t fork_and_run(
 		setenv("PREVRUNLEVEL", prev.c_str(), 1);
 
 		setenv("RUNLEVEL", cur.c_str(), 1);
-
-		sigset_t ss;
-
-		sigemptyset(&ss);
-		sigprocmask(SIG_SETMASK, &ss, NULL);
-		setsid();
-		setpgid(0, 0);
 
 		execvp(charvec[0], charvec.data());
 	}
