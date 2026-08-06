@@ -91,22 +91,24 @@ EXTRA_DIST += \
 
 ##BEGINGEN
 
-COMMON_LIB_SOURCES=\
+PAM_VERA_LIB_SOURCES=\
 	connect_vera_priv.C					\
 	external_filedesc.C					\
+	privrequest_create_vera_socketpair.C			\
+	privrequest_process_session_stop.C			\
+	privrequest_send_fd.C					\
+	privrequest_send_fd_wrap.C				\
+	privrequest_session_stop.C
+
+COMMON_LIB_SOURCES=\
 	hook.C							\
 	log2.C							\
 	parsed_yaml.C						\
-	privrequest_create_vera_socketpair.C			\
 	privrequest_execve_prep.C				\
 	privrequest_get_pid_status.C				\
-	privrequest_process_session_stop.C			\
 	privrequest_receive_fds.C				\
 	privrequest_runlevel.C					\
-	privrequest_send_fd.C					\
-	privrequest_send_fd_wrap.C				\
 	privrequest_session_start.C				\
-	privrequest_session_stop.C				\
 	privrequest_sort_pids.C					\
 	proc_container2.C					\
 	proc_container_group2.C					\
@@ -172,17 +174,33 @@ OTHER_LIB_SOURCES=\
 
 ##ENDGEN
 
-ALL_LIB_SOURCES=${COMMON_LIB_SOURCES} ${OTHER_LIB_SOURCES}
+ALL_LIB_SOURCES=\
+	${PAM_VERA_LIB_SOURCES} \
+	${COMMON_LIB_SOURCES} \
+	${OTHER_LIB_SOURCES}
 
-# .so library contains functions common to vera and vlad binaries (also used by
-# pam_vera.so)
-#
-# The .so version is coupled with the package version.
+# SOVERSION is derived from the package version. It is used to version
+# the libpam_vera.so and libvera.so shared libraries, their soversion matches
+# the package version.
 
-lib_LTLIBRARIES=libvera.la
+SOVERSION=$(shell perl -e 'my @w=split(/\./, "$(VERSION)"); \
+	print sprintf("%d%02d%02d", $$w[0], $$w[1], $$w[2] || 0)')
+
+lib_LTLIBRARIES=libpam_vera.la libvera.la
+
+# Modules used by pam_vera.so and no other dependencies are placed into
+# libpam_vera.so. The vlad and vera binaries link with it, to avoid code
+# duplication.
+
+libpam_vera_la_SOURCES=${PAM_VERA_LIB_SOURCES}
+libpam_vera_la_LDFLAGS=-version-info $(SOVERSION)
+
+# Modules used by both vera and vlad binaries are linked into libvera.so,
+# both vlad and vera binaries link with it, to avoid code duplication.
+
 libvera_la_SOURCES=${COMMON_LIB_SOURCES}
-libvera_la_LDFLAGS=-version-info `perl -e 'my @w=split(/\./, "$(VERSION)"); \
-	print sprintf("%d%02d%02d", $$w[0], $$w[1], $$w[2] || 0)'`
+libvera_la_LIBADD=libpam_vera.la
+libvera_la_LDFLAGS=-version-info $(SOVERSION)
 
 noinst_LTLIBRARIES=libvera-private.la libvera-all.la
 
@@ -211,8 +229,8 @@ VVCONFIG=\
 pamdir=$(libdir)/security
 pam_LTLIBRARIES=pam_vera.la
 pam_vera_la_SOURCES=pam_vera.C
-pam_vera_la_LDFLAGS=-module -avoid-version -shared -lpam
-pam_vera_la_LIBADD=libvera-private.la libvera.la
+pam_vera_la_LDFLAGS=-module -avoid-version -shared -lpam -Wl,-z,defs
+pam_vera_la_LIBADD=libpam_vera.la
 EXTRA_pam_vera_la_DEPENDENCIES=all.linkmap
 
 # Altered versions of source files that are used by tests. Each of these
@@ -243,11 +261,11 @@ configdirs.h: config.status Makefile
 # The vera and vlad binaries.
 
 vera_SOURCES=vera.C $(VVCONFIG)
-vera_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+vera_LDADD=libvera-private.la libvera.la libpam_vera.la @YAMLLIBS@
 EXTRA_vera_DEPENDENCIES=all.linkmap
 
 vlad_SOURCES=vlad.C $(VVCONFIG)
-vlad_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+vlad_LDADD=libvera-private.la libvera.la libpam_vera.la @YAMLLIBS@
 EXTRA_vlad_DEPENDENCIES=all.linkmap
 
 # Pseudo target that reads linkmaps from statically-linekd vera and vlad
@@ -287,6 +305,8 @@ vera_init_SOURCES=vera-init.c \
 	verac_connect_sun_socket.c
 vera_init_LDADD=libvera-private.la
 
+TESTS_LDADD=libvera-private.la libvera.la libpam_vera.la @YAMLLIBS@
+
 # Tests. They generally link to both vera and vlad libraries, but override
 # a few functions with test-specific implementations (e.g.
 # logging, pid file manipulation, etc.).
@@ -294,44 +314,44 @@ vera_init_LDADD=libvera-private.la
 testcontroller_SOURCES=testcontroller.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
-testcontroller_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testcontroller_LDADD=$(TESTS_LDADD)
 testcontroller_LDFLAGS=-lpthread
 
 testcontroller2_SOURCES=testcontroller2.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG)
-testcontroller2_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testcontroller2_LDADD=$(TESTS_LDADD)
 
 testcontroller2fdleak_SOURCES=testcontroller2fdleak.C
 
 testcontroller3_SOURCES=testcontroller3.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
-testcontroller3_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testcontroller3_LDADD=$(TESTS_LDADD)
 
 testcontroller4_SOURCES=testcontroller4.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
-testcontroller4_LDADD=libvera-private.la libvera.la @YAMLLIBS@ -lpthread
+testcontroller4_LDADD=$(TESTS_LDADD) -lpthread
 
 testdepcomputations_SOURCES=testdepcomputations.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
-testdepcomputations_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testdepcomputations_LDADD=$(TESTS_LDADD)
 
 testprocloader_SOURCES=testprocloader.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
-testprocloader_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testprocloader_LDADD=$(TESTS_LDADD)
 
 testpoller_SOURCES=testpoller.C unit_test.C \
 	unit_test_switchlog.C \
 	$(UNIT_TEST_LOG_AND_RUNNER)
-testpoller_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testpoller_LDADD=$(TESTS_LDADD)
 
 testinittab_SOURCES=testinittab.C unit_test.C \
 	unit_test_switchlog.C
-testinittab_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testinittab_LDADD=$(TESTS_LDADD)
 
 testhook_SOURCES=testhook.C \
 	verac_runsysinit.c
@@ -339,7 +359,7 @@ testhook_SOURCES=testhook.C \
 testhook_LDADD=libvera-private.la @YAMLLIBS@
 
 testswitchlog_SOURCES=testswitchlog.C unit_test.C
-testswitchlog_LDADD=libvera-private.la libvera.la @YAMLLIBS@
+testswitchlog_LDADD=$(TESTS_LDADD)
 
 # Supporting scripts that get installed. We manually substitute
 # INSTALLCONFIGDIR into them.

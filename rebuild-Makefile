@@ -38,7 +38,7 @@ while (defined(my $l=<$fh>))
 		$sourcemap{$o} = $l;
 	}
 
-	$reading_libsrc = 1 if $l =~ /^(COMMON|OTHER)_LIB_SOURCES\s*=/;
+	$reading_libsrc = 1 if $l =~ /^(COMMON|OTHER|PAM_VERA)_LIB_SOURCES\s*=/;
 }
 
 $fh->close();
@@ -88,6 +88,8 @@ foreach my $srcmodule (values %sourcemap)
 	die "$srcmodule is not linked into any of vera, vlad, or pam_vera\n"
 		unless exists $combined{$srcmodule};
 }
+
+delete $combined{$_} for keys %$pam_vera;
 
 # Print out the updated Makefile.am. First, copy everything up until
 # ##BEGINGEN, then skip until ##ENDGEN.
@@ -158,10 +160,15 @@ sub print_sourcelist {
 	print "\n";
 }
 
-print "\nCOMMON_LIB_SOURCES=\\\n";
-
+my @pamverasources;
 my @commonsources;
 my @othersources;
+
+foreach my $module (sort keys %$pam_vera)
+{
+	push @pamverasources, $module;
+	delete $combined{$module};
+}
 
 foreach my $module (sort keys %combined)
 {
@@ -175,10 +182,13 @@ foreach my $module (sort keys %combined)
 	}
 }
 
+print "\nPAM_VERA_LIB_SOURCES=\\\n";
+print_sourcelist(@pamverasources);
+
+print "\nCOMMON_LIB_SOURCES=\\\n";
 print_sourcelist(@commonsources);
 
 print "\nOTHER_LIB_SOURCES=\\\n";
-
 print_sourcelist(@othersources);
 
 print "\n##ENDGEN\n";

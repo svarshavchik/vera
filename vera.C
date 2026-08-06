@@ -1334,13 +1334,7 @@ std::optional<uid_sessionid_t> proc_get_sessionid(
 		return {};
 	}
 
-	if (cred.uid != loginuid_n)
-	{
-		error("uid and loginuid do not match\n");
-		return {};
-	}
-
-	return uid_sessionid_t{active_session_t{cred.uid, sessid_n}};
+	return uid_sessionid_t{active_session_t{loginuid_n, sessid_n}};
 }
 
 void sigusr2()
