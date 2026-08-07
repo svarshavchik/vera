@@ -4505,6 +4505,32 @@ proc_container_timer current_containers_infoObj::create_sigkill_timer(
 		});
 }
 
+void current_containers_infoObj::schedule_remove_timeout(
+	const current_container &cc,
+	bool send_sigkill
+)
+{
+	auto &[pc, run_info] = *cc;
+
+	// Formally switch into a stopping state, and set up a timer
+	// to send a sigterm or a sigkill, after a timeout.
+
+	initiate_stopping(
+		cc,
+		[&]
+		(proc_container_state &state) -> state_stopping &
+		{
+			emplace_state_stopping sss;
+
+			return sss.set(
+				state,
+				std::in_place_type_t<stop_removing>{},
+				create_sigkill_timer(pc),
+				send_sigkill
+			);
+		});
+}
+
 ///////////////////////////////////////////////////////////////////////////
 //
 // Start removing the container by sending sigterm to it, and setting a
@@ -4525,25 +4551,12 @@ proc_container_timer current_containers_infoObj::create_sigkill_timer(
 void current_containers_infoObj::do_remove(const current_container &cc,
 					   bool send_sigkill)
 {
-	auto &[pc, run_info] = *cc;
-
 	// Formally switch into a stopping state, and set up a timer
 	// to send a sigkill, after a timeout.
 
-	initiate_stopping(
-		cc,
-		[&]
-		(proc_container_state &state) -> state_stopping &
-		{
-			emplace_state_stopping sss;
+	schedule_remove_timeout(cc, send_sigkill);
 
-			return sss.set(
-				state,
-				std::in_place_type_t<stop_removing>{},
-				create_sigkill_timer(pc),
-				send_sigkill
-			);
-		});
+	auto &[pc, run_info] = *cc;
 
 	// However if the container group does not exist already, we're
 	// fully stopped.
@@ -4747,6 +4760,13 @@ void current_containers_infoObj::stopped(const std::string &s)
 				pc, std::string{_("cannot delete cgroup: ")}
 				+ strerror(errno)
 			);
+
+			// Cannot remove the container. Send SIGKILL to
+			// everything running at it, then schedule a timer to
+			// call do_remove again.
+
+			run_info.group->cgroups_sendsig_all(SIGKILL);
+			schedule_remove_timeout(cc, true);
 			return;
 		}
 	}

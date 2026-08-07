@@ -2278,25 +2278,24 @@ void testfailcgroupdelete()
 
 	populated(a->new_container, false);
 
-	std::string p{proc_container_group_data::get_cgroupfs_base_path()};
-
-	rename((p + "/:a").c_str(), (p + "/:b").c_str());
-	close(open((p + "/:a").c_str(), O_RDWR|O_CREAT|O_TRUNC, 0644));
+	fail_cgroup_delete=true;
 	do_poll(0);
 	if (logged_state_changes != std::vector<std::string>{
-			"a: cannot delete cgroup: Not a directory"
+			"a: cannot delete cgroup: Permission denied",
+			"a: force-removing"
 		})
 	{
 		throw "Unexpected state change after stopping.";
 	}
 	logged_state_changes.clear();
-	unlink((p+"/:a").c_str());
-	rename((p + "/:b").c_str(), (p + "/:a").c_str());
-	populated(a->new_container, true);
-	do_poll(0);
-	populated(a->new_container, false);
-	do_poll(0);
+
+	test_advance(SIGTERM_TIMEOUT-1);
+	if (!logged_state_changes.empty())
+		throw "Unexpected state changes while waiting for timeout";
+
+	test_advance(1);
 	if (logged_state_changes != std::vector<std::string>{
+			"a: force-removing",
 			"a: cgroup removed",
 			"a: " + STATE_STOPPED::label.label_str(),
 		})

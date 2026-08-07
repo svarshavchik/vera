@@ -1,3 +1,9 @@
+2026-08-06  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Try to recursively remove a cgroup directory, if we can't, for
+	some reason, send a SIGKILL then set a SIGTERM_TIMEOUT to try
+	again.
+
 2026-07-14  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Delay container reload on inotify events in order to debounce

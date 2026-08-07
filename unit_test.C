@@ -37,6 +37,7 @@ std::function<void (const char *, char **)> execvp_func;
 pid_t next_pid=1;
 bool all_forks_fail=false;
 size_t sessionid=2;
+bool fail_cgroup_delete=false;
 
 void (*log_to_syslog)(int level,
 			const char *program,
@@ -133,16 +134,24 @@ bool proc_container_group::cgroups_try_rmdir(
 	const external_filedesc &requester_stdout)
 {
 	log_output(pc, requester_stdout);
+	if (fail_cgroup_delete)
+	{
+		errno=EACCES;
+		fail_cgroup_delete=false;
+		return false;
+	}
+
 	auto dir=cgroups_dir();
 
-	unlink((dir + "/cgroup.procs").c_str());
-	unlink((dir + "/cgroup.kill").c_str());
-	unlink(cgroup_events().c_str());
+	std::error_code ec;
 
-	if (rmdir(dir.c_str()) < 0)
+	std::filesystem::remove_all(dir, ec);
+
+	if (ec)
 	{
-		if (errno != ENOENT)
-			return false;
+		throw std::runtime_error{
+			"failed to remove " + dir + ": " + ec.message()
+		};
 	}
 
 	log_container_message(
@@ -487,6 +496,7 @@ void test_reset(bool keep_cgroupfs)
 	next_pid=1;
 	sessionid=2;
 	all_forks_fail=false;
+	fail_cgroup_delete=false;
 	fake_time.tv_sec=1;
 	switchlog_stop();
 	switchlog_reset();

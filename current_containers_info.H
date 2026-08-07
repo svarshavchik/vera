@@ -534,6 +534,17 @@ private:
 	void do_stop_runner(const current_container &);
 	void do_remove(const current_container &, bool send_sigkill);
 
+	/*! Schedule a timeout for removing the container.
+
+	do_remove() checks if the container is already empty, if so it proceeds
+	to remove it, otherwise it calls schedule_remove_timeout().
+
+	*/
+
+	void schedule_remove_timeout(
+		const current_container &cc,
+		bool send_sigkill
+	);
 
 	void prepare_respawn(
 		const current_container &cc,

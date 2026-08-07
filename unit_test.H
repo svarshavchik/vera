@@ -22,6 +22,7 @@ extern std::vector<std::string> logged_runners;
 extern pid_t next_pid;
 extern size_t sessionid;
 extern bool all_forks_fail;
+extern bool fail_cgroup_delete;
 
 struct unit_tests {
 

@@ -149,6 +149,36 @@ bool proc_container_group_data::cgroups_dir_create()
 	return true;
 }
 
+// In the event the cgroup has descendant cgroups, try to nuke them first.
+
+static bool remove_cgroup_tree(const std::string &dir)
+{
+	std::error_code ec;
+	std::vector<std::filesystem::path> dirs;
+
+	// Collect all descendant directories.
+	for (std::filesystem::recursive_directory_iterator it(dir, ec), end;
+		 !ec && it != end;
+		 it.increment(ec))
+	{
+		if (it->is_directory(ec))
+			dirs.push_back(it->path());
+	}
+
+	if (ec)
+		return false;
+
+	// Remove deepest directories first.
+	for (auto it = dirs.rbegin(); it != dirs.rend(); ++it)
+	{
+		if (::rmdir(it->c_str()) != 0 && errno != ENOENT)
+			return false;
+	}
+
+	// Finally remove the root cgroup.
+	return ::rmdir(dir.c_str()) == 0;
+}
+
 // Try to remove the cgroup
 
 bool proc_container_group::cgroups_try_rmdir(
@@ -159,10 +189,10 @@ bool proc_container_group::cgroups_try_rmdir(
 
 	auto dir=cgroups_dir();
 
-	if (rmdir(dir.c_str()) < 0)
+	if (! remove_cgroup_tree(dir) && errno != ENOENT)
 	{
-		if (errno != ENOENT)
-			return false;
+		log_message(_("could not remove cgroup tree for ") + pc->name);
+		return false;
 	}
 
 	return true;
