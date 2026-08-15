@@ -102,18 +102,19 @@ void reexec()
 
 // Put this forked process into the cgroup
 
-bool proc_container_group_data::cgroups_register(pid_t pid)
+bool proc_container_group_data::cgroups_register(
+	std::string dir,
+	pid_t pid
+)
 {
-	auto path=cgroups_dir() + "/cgroup.procs";
+	dir +="/cgroup.procs";
 
-	int fd=open(path.c_str(), O_RDWR);
+	int fd=open(dir.c_str(), O_RDWR);
 
 	if (fd >= 0)
 	{
 		char buf[std::numeric_limits<pid_t>::digits10 + 3];
 		auto [end, ec]=std::to_chars(buf, buf+std::size(buf)-3, pid);
-
-		*end++='\n';
 
 		if (ec != std::errc{})
 		{
@@ -121,6 +122,8 @@ bool proc_container_group_data::cgroups_register(pid_t pid)
 			close(fd);
 			return false;
 		}
+
+		*end++='\n';
 
 		if (write(fd, buf, end-buf) != (end-buf))
 		{

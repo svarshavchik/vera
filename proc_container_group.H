@@ -73,6 +73,8 @@ struct proc_container_group_data {
 
 	bool cgroups_register(pid_t pid);
 
+	static bool cgroups_register(std::string cgroups_dir, pid_t pid);
+
 	//! Install the poller and the event handler.
 
 	//! Called from create().

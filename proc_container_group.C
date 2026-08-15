@@ -269,6 +269,11 @@ bool proc_container_group::forked(pid_t pid)
 	return cgroups_register(pid);
 }
 
+bool proc_container_group_data::cgroups_register(pid_t pid)
+{
+	return cgroups_register(cgroups_dir(), pid);
+}
+
 void proc_container_group::save_transfer_info(std::ostream &o)
 {
 	o << stdouterrpipe[0] << " " << stdouterrpipe[1] << " "
