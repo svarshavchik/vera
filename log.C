@@ -62,6 +62,15 @@ void log_container_failed_process(const proc_container &pc, int wstatus)
 	log_container_error(pc, o.str());
 }
 
+void log_error(const std::string &name, const std::string &msg)
+{
+#ifdef UNIT_TEST
+	log_message(name + ": " + msg);
+#else
+	(*log_to_syslog)(LOG_ERR, name.c_str(), msg.c_str());
+#endif
+}
+
 void log_container_error(const proc_container &pc, const std::string &msg)
 {
 #ifdef UNIT_TEST

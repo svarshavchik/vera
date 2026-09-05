@@ -28,6 +28,9 @@ void log_state_change_to_switchlog(const std::string &name,
 //! Container's starting process failed
 void log_container_failed_process(const proc_container &, int);
 
+//! Log a generic error from a source name.
+void log_error(const std::string &name, const std::string &msg);
+
 //! Record a system error related to a container
 void log_container_error(const proc_container &, const std::string &);
 

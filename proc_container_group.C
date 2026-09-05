@@ -134,8 +134,22 @@ bool proc_container_group::create(const group_create_info &create_info,
 		return false;
 	}
 
-	std::filesystem::path p{cgroups_dir()};
+	install_resources(resources);
+	return install(cgroup_events(), create_info);
+}
 
+void proc_container_group::install_resources(
+	const proc_override::resources_t &resources
+)
+{
+	install_resources(container->name, cgroups_dir(), resources);
+}
+
+void proc_container_group::install_resources(
+	const std::string &container_name,
+	std::filesystem::path p,
+	const proc_override::resources_t &resources)
+{
 	for (const auto &[key, val] : resources)
 	{
 		std::ofstream o{p / key};
@@ -148,12 +162,11 @@ bool proc_container_group::create(const group_create_info &create_info,
 				continue;
 		}
 
-		log_container_error(container,
+		log_error(container_name,
 				    key + ": " +
 				    _("cannot set to value: ") + ": "
 				    + val);
 	}
-	return install(cgroup_events(), create_info);
 }
 
 bool proc_container_group_data::install(

@@ -139,6 +139,17 @@ public:
 	bool create(const group_create_info &,
 		    const proc_override::resources_t &);
 
+	/*! Install resource controls in the new group's cgroup directory.
+	*/
+
+	void install_resources(const proc_override::resources_t &);
+
+	static void install_resources(
+		const std::string &container_name,
+		std::filesystem::path path,
+		const proc_override::resources_t &resources
+	);
+
 	/*! This is a new child process
 
 	  Move it into the container group, and redirect its standard output
