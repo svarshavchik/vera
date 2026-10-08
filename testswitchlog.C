@@ -4,11 +4,11 @@
 */
 #include "config.h"
 #include "switchlog.H"
-#include <unistd.h>
 #include <exception>
 #include <filesystem>
 #include <set>
 #include <sys/stat.h>
+#include <unistd.h>
 
 void switchlog_start()
 {
@@ -29,11 +29,15 @@ void update_current_time()
 	++ts.tv_sec;
 }
 
-const struct timespec &log_current_timespec()
+struct timespec log_current_time_spec()
 {
 	return ts;
 }
 
+time_t log_current_time_sec()
+{
+	return log_current_time_spec().tv_sec;
+}
 std::ofstream current_switchlog;
 
 std::ostream *get_current_switchlog()

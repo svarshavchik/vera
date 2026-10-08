@@ -4,23 +4,29 @@
 */
 #include "config.h"
 #include "privrequest.H"
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
+#include <algorithm>
 #include <fcntl.h>
 #include <stdio.h>
-#include <algorithm>
 #include <stdio.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 
 receive_fds_ret_t receive_fds(const external_filedesc &efd)
 {
+	return receive_fds(efd->fd);
+}
+
+receive_fds_ret_t receive_fds(int fd)
+{
 	receive_fds_ret_t ret;
 
+	ret.emplace();
 	struct msghdr msg{};
 	struct iovec iov;
 
-	auto &[retfdvec, buf] = ret;
+	auto &[retfdvec, buf] = *ret;
 
 	iov.iov_base = buf.data();
 	iov.iov_len = buf.size()-1;
@@ -37,11 +43,17 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 	msg.msg_control = control_buf;
 	msg.msg_controllen = sizeof(control_buf);
 
-	auto n=recvmsg(efd->fd, &msg, 0);
-	if (n < 0)
-		return ret;
+	auto n=recvmsg(fd, &msg, MSG_CMSG_CLOEXEC);
 
-	std::fill(buf.data()+n, buf.data()+buf.size(), 0);
+	// In all cases make sure buf is zeroed out after the message
+	// is received (or not received).
+	std::fill(buf.data()+(n < 0 ? 0 : n), buf.data()+buf.size(), 0);
+
+	if (n < 0)
+	{
+		ret.reset();
+		return ret;
+	}
 
 	for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
 	     cmsg = CMSG_NXTHDR(&msg, cmsg))
@@ -61,8 +73,6 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 				reinterpret_cast<int*>(CMSG_DATA(cmsg));
 			for (size_t i=0; i<total_fds_in_msg; ++i)
 			{
-				fcntl(raw_fd_ptr[i], F_SETFD, FD_CLOEXEC);
-
 				retfdvec.push_back(
 					std::make_shared<external_filedescObj>(
 						raw_fd_ptr[i]
@@ -73,6 +83,9 @@ receive_fds_ret_t receive_fds(const external_filedesc &efd)
 	}
 
 	if (msg.msg_flags & MSG_CTRUNC)
-		ret={};
+		ret.reset();
+	else if (retfdvec.empty() && n == 0)
+		ret.reset();
+
 	return ret;
 }

@@ -5,12 +5,9 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <string.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
-
-const char reexec_envar[]="VERA_REEXEC_FD";
 
 static int hooked(const char *hookfile, const char *init_path)
 {
@@ -50,9 +47,7 @@ const char *check_hookfile(const char *hookfile,
 			   const char *init_path,
 			   const char *vera_path)
 {
-	int flag;
-
-	flag=getenv(reexec_envar) ? 1:hooked(hookfile, init_path);
+	int flag=hooked(hookfile, init_path);
 
 	if (!flag)
 	{
@@ -61,9 +56,7 @@ const char *check_hookfile(const char *hookfile,
 		return init_path;
 	}
 
-	// vera is getting re-execed
-	if (!getenv(reexec_envar))
-		(*run_sysinit_cb)("/etc/inittab");
+	(*run_sysinit_cb)("/etc/inittab");
 
 	// Now that root is remounted read-write we can remove a one-time
 	// only hook.

@@ -7,10 +7,15 @@
 #include "messages.H"
 #include "proc_container.H" // IWYU pragma: keep
 #include "proc_container_timer.H"
+#include "vvconfigdirs.H"
 #include <functional>
 #include <iostream>
 #include <sstream>
 #include <syslog.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <fstream>
+#include <vector>
 
 void log_state_change(const proc_container &pc,
 		      const proc_container_state &pcs)
@@ -118,13 +123,56 @@ void log_session(const uid_sessionid_t &ssid, const std::string &msg)
 	log_message(formatted_msg);
 }
 
+#ifndef UNIT_TEST
+
+static std::string default_session_name()
+{
+	// PID 1 logs as "vera"
+	if (is_pid_1())
+		return "vera";
+
+	// Otherwise, log as "vera(username/sessionid)"
+	struct passwd pw_entry;
+	struct passwd *pw = nullptr;
+	int pwerr;
+
+	size_t buf_len;
+	if (sysconf(_SC_GETPW_R_SIZE_MAX) < 1)
+		buf_len = 256;
+	else
+		buf_len = sysconf(_SC_GETPW_R_SIZE_MAX);
+
+	std::vector<char> buf;
+	buf.resize(buf_len);
+
+	pwerr = getpwuid_r(getuid(), &pw_entry, buf.data(), buf.size(), &pw);
+
+	const char *pw_name = "unknown";
+	if (pw && !pwerr)
+		pw_name = pw->pw_name;
+
+	std::string base = std::string("vera(") + pw_name + "/";
+
+	std::ifstream s("/proc/self/sessionid");
+	std::string session_id;
+
+	if (s.is_open() && s >> session_id && !session_id.empty())
+		return base + session_id + ")";
+
+	return base + "?)";
+}
+
+#endif
+
 void log_message(const std::string &msg)
 {
 #ifdef UNIT_TEST
-	std::cout << msg << "\n";
-	logged_state_changes.push_back(msg);
+	std::cout << msg << "\n" << std::flush;
+	add_logged_state_change(msg);
 #else
-	(*log_to_syslog)(LOG_INFO, "vera", msg.c_str());
+	static std::string name=default_session_name();
+
+	(*log_to_syslog)(LOG_INFO, name.c_str(), msg.c_str());
 #endif
 }
 
@@ -134,9 +182,14 @@ void update_current_time()
 {
 }
 
-const struct timespec &log_current_timespec()
+struct timespec log_current_time_spec()
 {
-	return fake_time;
+	return get_fake_time();
+}
+
+time_t log_current_time_sec()
+{
+	return log_current_time_spec().tv_sec;
 }
 
 #endif

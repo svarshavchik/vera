@@ -5,13 +5,13 @@
 #include "config.h"
 #include "privrequest.H"
 #include "proc_container_group.H"
+#include <fcntl.h>
+#include <fstream>
+#include <locale>
+#include <sstream>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <sstream>
-#include <fstream>
-#include <fcntl.h>
-#include <locale>
 
 void get_pid_status(const std::string &container_name,
 		    std::unordered_map<pid_t, pid_info> &processes)

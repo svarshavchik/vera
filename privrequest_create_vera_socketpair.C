@@ -4,18 +4,20 @@
 */
 #include "config.h"
 #include "privrequest.H"
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
 
-std::tuple<external_filedesc, external_filedesc> create_vera_socketpair()
+std::optional<
+	std::tuple<external_filedesc, external_filedesc>
+> create_vera_socketpair()
 {
 	int sockets[2];
 
 	if (socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, sockets) < 0)
-		throw "socketpair() failed";
+		return std::nullopt;
 
-	return {std::make_shared<external_filedescObj>(sockets[0]),
+	return std::tuple{std::make_shared<external_filedescObj>(sockets[0]),
 		std::make_shared<external_filedescObj>(sockets[1])};
 }

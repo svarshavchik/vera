@@ -4,10 +4,15 @@
 */
 
 #include "config.h"
+#include "connect_vera_priv.H"
+#include "privrequest.H"
 #include "proc_container.H"
+#include "proc_container_statefwd.H"
 #include "proc_loader.H"
 #include "unit_test.H"
-#define UNIT_TEST() (next_pid=fork())
+
+pid_t set_next_pid(pid_t, proc_container_group &);
+#define UNIT_TEST() (set_next_pid(fork(), group))
 #include "proc_container_runner.C"
 #include "privrequest.H"
 #include <sys/wait.h>
@@ -22,6 +27,16 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 
+pid_t set_next_pid(pid_t p, proc_container_group &group)
+{
+	if (p > 0)
+	{
+		group.cgroups_register(group.cgroups_dir(), p);
+		set_next_pid(p);
+	}
+	return p;
+}
+
 void test_failedexec()
 {
 	auto b=std::make_shared<proc_new_containerObj>("failedexec");
@@ -34,12 +49,13 @@ void test_failedexec()
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
 
-	if (logged_state_changes != std::vector<std::string>{
+	if (get_logged_state_changes() != std::vector<std::string>{
 
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"failedexec: " + STATE_START_PENDING::label.label_str(),
 			"failedexec: cgroup created",
+			"cgroups_register called",
 			"failedexec: /no/such/path/failedexec: No such file or directory",
 			"failedexec: " + STATE_REMOVING::label.label_str(),
 			"failedexec: sending SIGTERM",
@@ -62,333 +78,367 @@ void test_capture()
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting graphical runlevel";
 
-	if (next_pid == 1)
+	if (get_next_pid() == 1)
 	{
 		throw "Did not start a process";
 	}
 
-	while (kill(next_pid, 0) == 0)
+	while (kill(get_next_pid(), 0) == 0)
 	{
 		do_poll(500);
 	}
 	do_poll(0);
 
+	auto logged_state_changes=get_logged_state_changes();
 	if (logged_state_changes != std::vector<std::string>{
 // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
 			"Starting " RUNLEVEL_PREFIX "graphical",
 			"capture: " + STATE_START_PENDING::label.label_str(),
 			"capture: cgroup created",
+			"cgroups_register called",
 			"capture: " + STATE_STARTED::label.label_str(),
 			"capture: cgroups_register called",
 			"capture: foo",
 			"capture: bar",
 		})
+	{
+		std::cout << "---\n";
+		for (const auto &state : logged_state_changes)
+		{
+			std::cout << state << "\n";
+		}
+		std::cout << std::flush;
 		throw "Did not see expected state changes";
+	}
 
-	logged_state_changes.clear();
+	clear_logged_state_changes();
 	populated(b->new_container, false);
 	do_poll(0);
 
+	logged_state_changes=get_logged_state_changes();
 	if (logged_state_changes != std::vector<std::string>{
 			"capture: cgroup removed",
 			"capture: " + STATE_STOP_PENDING::label.label_str(),
 			"capture: " + STATE_REMOVING::label.label_str(),
 			"capture: " + STATE_STOPPED::label.label_str()
 		})
-		throw "Did not see expected state changes";
-}
-
-std::tuple<int, std::string> restart_or_reload(
-	const std::function<int (int)> &cb
-)
-{
-	int fd=open("testrestart.log", O_RDWR|O_CREAT|O_TRUNC, 0644);
-
-	int ret=cb(fd);
-
-	close(fd);
-
-	std::ifstream o{"testrestart.log"};
-
-	std::string s{std::istreambuf_iterator{o.rdbuf()},
-		std::istreambuf_iterator<char>{}};
-
-	o.close();
-	unlink("testrestart.log");
-
-	return std::tuple{ret, std::move(s)};
-}
-
-//
-// Execute a request, read its result.
-//
-// Invokes a callback to do the request.
-//
-// The callback receives, as a paramenter, an external_filedesc ref, that the
-// callback may pass as the stdoutcc parameter to the proc_do_request
-// overload that takes a read command, a connection file descriptor, and the
-// stdout cc file descriptor as a parameter.
-//
-// The callback gets invoked and it returns a tuple:
-//
-// - the first socket returned by create_fake_request. The callback
-//   writes a command to the first socket, passes the second socket to
-//   proc_do_request() to do the command.
-//
-// - one of the functions in privrequest that returns the result of the
-//   command written to the socket pipe, by proc_do_request. It is expected
-//   to return an empty string.
-//
-// - a second callback, that gets called using the passed in file descriptor,
-//   it gets called after the result function returns and after the passed
-//   in file descriptor is readable.
-//
-// Returns the result of the second callback, and an empty string, normally.
-// If the status function returns a non-empty string, then 256 and the string
-// gets returned.
-
-typedef std::tuple<external_filedesc,
-		   std::string (*)(const external_filedesc &),
-		   std::function<int (const external_filedesc &)>
-		   > do_test_or_restart_t;
-
-std::tuple<int, std::string, std::string> do_test_or_restart(
-	const std::function<do_test_or_restart_t(external_filedesc &)>
-	&callback)
-{
-	auto [stdouta, stdoutb, cmdfd] = create_fake_request();
-
-	auto [filedesc, statusfunc, waitfunc]=callback(stdoutb);
-
-	auto error=statusfunc(filedesc);
-
-	if (!error.empty())
-		return {1 << 8, std::move(error), ""};
-
-	stdoutb=nullptr;
-
-	std::string stdoutstr=read_stdoutcc(stdouta);
-
-	while (!filedesc->ready())
 	{
-		do_poll(1000);
+		std::cout << "---\n";
+		for (const auto &state : logged_state_changes)
+		{
+			std::cout << state << "\n";
+		}
+		std::cout << std::flush;
+		throw "Did not see expected state changes";
+	}
+}
+
+/*! Capture stdout.
+
+Constructor resets fd 1 to point to a temporary file.
+Destructor resets fd 1 to point to the original file descriptor.
+
+operator std::string() returns the captured text.
+*/
+
+struct redirect_stdout_helper {
+
+	int saved_stdout=dup(1);
+	external_filedesc captured_stdout=tmpfile_filedesc();
+
+	redirect_stdout_helper()
+	{
+		if (saved_stdout < 0 || captured_stdout->fd < 0 ||
+			dup2(captured_stdout->fd, 1) != 1)
+			throw "Could not capture stdout.";
 	}
 
-	auto exitcode_received=waitfunc(filedesc);
+	~redirect_stdout_helper()
+	{
+		if (saved_stdout > 0)
+		{
+			dup2(saved_stdout, 1);
+			close(saved_stdout);
+		}
+	}
 
-	return {exitcode_received, "", std::move(stdoutstr)};
+	operator std::string() const
+	{
+		lseek(captured_stdout->fd, 0L, SEEK_CUR);
+		return captured_stdout->read_all();
+	}
+};
+
+/*! Call the supplied function, capturing its stdout.
+
+*/
+std::string capture_stdout(std::function<void ()> func)
+{
+	redirect_stdout_helper helper;
+
+	func();
+
+	return helper;
 }
 
 void test_restart()
 {
+	sim_proc_do_request_pid1 daemon{{}};
+
 	auto b=std::make_shared<proc_new_containerObj>("restart");
 
 	b->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
 
-	b->new_container->meta->starting_command="echo starting-cmd; exit 0";
-	b->new_container->meta->stopping_command="echo stopping-cmd; exit 0";
-	b->new_container->meta->restarting_command="echo restarting-cmd; exit 10";
-	b->new_container->meta->reloading_command="echo reloading-cmd; exit 9";
+	b->new_container->meta->starting_command=
+		"echo doing starting-cmd; exit 0";
+	b->new_container->meta->stopping_command=
+		"echo doing stopping-cmd; exit 0";
+	b->new_container->meta->restarting_command=
+		"echo doing restarting-cmd; exit 10";
+	b->new_container->meta->reloading_command=
+		"echo doing reloading-cmd; exit 9";
 
 	call_install(container_install::update{}, b);
 
-	auto ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
+	std::string errmsg;
+
+	std::string captured_stdout=capture_stdout(
+		[&]
 		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
+			errmsg=do_restart(false, "nonexistent", false);
+		}
+	);
 
-			if (!send_restart(cmdfd[0], "nonexistent"))
-				throw "send_restart failed";
-			proc_do_request(socketb, cmdfd, {});
+	if (errmsg != std::string{"nonexistent"} + _(": unknown unit") ||
+		captured_stdout != "")
+		throw "Unexpected error restarting nonexistent container";
 
-			return do_test_or_restart_t{
-				socketa, get_restart_status, wait_restart};
-		});
-
-	auto &[exitcode, message, output]=ret;
-
-	if (WEXITSTATUS(exitcode) != 1 ||
-	    message != "nonexistent: unknown unit")
-		throw "Unexpected result of nonexistent start";
-
-	if (output != "")
-		throw "Unexpected output of nonexistent start";
-
-	ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
+	captured_stdout=capture_stdout(
+		[&]
 		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
+			errmsg=do_restart(false, "restart", false);
+		}
+	);
 
-			if (!send_restart(cmdfd[0], "restart"))
-				throw "send_restart failed";
-			proc_do_request(socketb, cmdfd, {});
+	if (errmsg != std::string{"restart"} + _(": is not currently started") ||
+		captured_stdout != "")
+		throw "Unexpected error handling restart failure";
 
-			return do_test_or_restart_t{
-				socketa, get_restart_status, wait_restart};
-		});
+	captured_stdout=capture_stdout(
+		[&]
+		{
+			errmsg=do_start(false, "restart", false);
+		}
+	);
 
-	if (WEXITSTATUS(exitcode) != 1 ||
-	    message != "restart: is not currently started")
-		throw "Unexpected result of non-started restart";
+	if (errmsg != "")
+		throw "Unexpected failure of container start";
 
 	{
-		auto [socketa, socketb, cmdfd] = create_fake_request();
+		std::istringstream i{captured_stdout};
+		bool found=false;
 
-		if (!send_start(cmdfd[0], "restart"))
-			throw "send_start failed";
-		auto [stdouta, stdoutb, stdignore] = create_fake_request();
-
-		cmdfd.push_back(stdoutb);
-
-		proc_do_request(socketb, cmdfd, {});
-
-		stdoutb=nullptr;
-		cmdfd.clear();
-		if (get_start_status(socketa) != "")
-			throw "Unexpected failure of start restarta";
-
-		socketb=nullptr;
-
-		if (read_stdoutcc(stdouta) !=
-			"cgroups_register called\n"
-			"starting-cmd\n")
+		std::string line;
+		while (getline(i, line))
 		{
-			throw "Unexpected captured output of a restart";
+			if (line == "doing starting-cmd")
+				found=true;
 		}
-		while (!socketa->ready())
-			do_poll(1000);
 
+		if (!found)
+			throw "Did not find 'doing starting-cmd' in output";
 	}
 
-	ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
-		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
-
-			if (!send_restart(cmdfd[0], "restart"))
-				throw "send_restart failed";
-			cmdfd.push_back(stdoutcc);
-
-			proc_do_request(socketb, cmdfd, {});
-
-			return do_test_or_restart_t{
-				socketa, get_restart_status, wait_restart};
-		});
-
-	if (WEXITSTATUS(exitcode) != 10 || message != "")
-		throw "Unexpected result of a successful restart";
-
-	if (output !=
-		"cgroups_register called\n"
-		"restarting-cmd\n")
-		throw "Did not capture expected output of successful restart";
-
-	ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
-		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
-
-			if (!send_reload(cmdfd[0], "restart"))
-				throw "send_reload failed";
-			proc_do_request(socketb, cmdfd, {});
-
-			auto ret2=do_test_or_restart(
-				[]
-				(external_filedesc &stdoutcc)
-				{
-					auto [socketa, socketb, cmdfd] =
-						create_fake_request();
-
-					if (!send_restart(cmdfd[0], "restart"))
-						throw "send_restart failed";
-					proc_do_request(socketb, cmdfd, {});
-
-					return do_test_or_restart_t{
-						socketa, get_restart_status,
-						wait_restart};
-				});
-
-			auto &[exitcode, message, output] = ret2;
-
-			if (WEXITSTATUS(exitcode) != 1 ||
-			    message != "restart: is already in the middle of "
-			    "another reload or restart")
-			{
-				throw "Unexpected result of an in-progress"
-					" error";
-			}
-
-			return do_test_or_restart_t{
-				socketa, get_reload_status,
-				wait_reload};
-		});
-
-	if (WEXITSTATUS(exitcode) != 9 || message != "")
-		throw "Unexpected result of a successful reload";
-
-	ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
-		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
-
-			if (!send_reload(cmdfd[0], "restart"))
-				throw "send_reload failed";
-			cmdfd.push_back(stdoutcc);
-
-			proc_do_request(socketb, cmdfd, {});
-
-			return do_test_or_restart_t{
-				socketa, get_reload_status, wait_reload};
-		});
-
-	if (WEXITSTATUS(exitcode) != 9 || message != "")
-		throw "Unexpected result of a successful reload";
-
-	if (output !=
-		"cgroups_register called\n"
-		"reloading-cmd\n")
-		throw "Did not capture expected output of a successful reload";
-
-	ret=do_test_or_restart(
+	captured_stdout=capture_stdout(
 		[&]
-		(external_filedesc &stdoutcc)
 		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
+			errmsg=do_restart(false, "restart", false);
+		}
+	);
 
-			if (!send_stop(cmdfd[0], "restart"))
-				throw "send_stop failed";
+	{
+		std::istringstream i{captured_stdout};
+		bool found=false;
 
-			cmdfd.push_back(stdoutcc);
+		std::string line;
+		while (getline(i, line))
+		{
+			if (line == "doing restarting-cmd")
+				found=true;
+		}
 
-			proc_do_request(socketb, cmdfd, {});
+		if (!found)
+			throw "Did not find 'doing restarting-cmd' in output";
+	}
 
-			populated(b->new_container, false);
-			return do_test_or_restart_t{
-				socketa, get_restart_status,
-				[]
-				(const external_filedesc &efd)
+	if (errmsg != std::string{"restart restart"}
+		+ _(": operation failed, check the log files"
+			  " for more information"))
+		throw "Unexpected error handling an errored restart";
+
+	captured_stdout=capture_stdout(
+		[&]
+		{
+			errmsg=do_reload(false, "restart", false);
+		}
+	);
+
+	{
+		std::istringstream i{captured_stdout};
+		bool found=false;
+
+		std::string line;
+		while (getline(i, line))
+		{
+			if (line == "doing reloading-cmd")
+				found=true;
+		}
+
+		if (!found)
+			throw "Did not find 'doing reloading-cmd' in output";
+	}
+
+	if (errmsg != std::string{"reload restart"}
+		+ _(": operation failed, check the log files"
+			  " for more information"))
+		throw "Unexpected error handling an errored reload";
+
+	// Test the a reload while the container is busy executing something,
+	// this should fail.
+	//
+	// So what we do is create a socket pair. The reload command, first,
+	// echoes a character to one socket, then reads from the socket until
+	// it gets an end of file, and finishes.
+	//
+	// The main process reads from the other end of the socket. It reads
+	// the character, so it knows that the reload command has started.
+	// The reload command will not finish until the main process closes
+	// its end of the socket.
+	//
+	// The main process first tries to execute another reload command,
+	// which will fail. Once that has failed, the main process closes the
+	// socket, so that the first reload command can finish, and everything
+	// gets cleaned up.
+
+	auto opt_sp = create_vera_socketpair();
+	if (!opt_sp)
+		throw "create_vera_socketpair() failed";
+	auto &[pipe0, pipe1] = *opt_sp;
+
+	// The socket pair is created with close-on-exec bit set. The reload
+	// command will be a new process and it will inherit this file
+	// descriptor.
+
+	fcntl(pipe1->fd, F_SETFD, 0); // Turn off CLOEXEC
+
+	// And here's the funky reload command that, carefully, executes the
+	// right sequence of commands.
+	b->new_container->meta->reloading_command=""
+		"echo x >&" + std::to_string(pipe1->fd) + "; "
+		"cat <&" + std::to_string(pipe1->fd) + " >/dev/null";
+
+	call_install(container_install::update{}, b);
+
+	// We start a thread for the first reload command, so we won't block.
+	std::string first_reload_errmsg;
+
+	std::thread reload_thread{
+		[&]
+		{
+			first_reload_errmsg=do_reload(false, "restart", false);
+		}
+	};
+
+	// Read the character, then try to execute the 2nd reload command, this
+	// will fail.
+	pipe0->readln();
+	captured_stdout=capture_stdout(
+		[&]
+		{
+			errmsg=do_reload(false, "restart", false);
+		}
+	);
+
+	// We can close the pipe now, so that the first reload command finishes.
+	pipe0={};
+
+	reload_thread.join();
+	pipe1={};
+
+	if (errmsg != std::string{"restart"} + _(": is already in the middle of "
+					      "another reload or restart"))
+		throw "Unexpected error handling conflicting reload";
+
+	std::cout << std::flush;
+
+	// Similar approach, this time testing a successful stop.
+	auto opt_sp2 = create_vera_socketpair();
+	if (!opt_sp2)
+		throw "create_vera_socketpair() failed";
+	std::tie(pipe0, pipe1) = *opt_sp2;
+	fcntl(pipe1->fd, F_SETFD, 0); // Turn off CLOEXEC
+
+	b->new_container->meta->stopping_command=
+		"echo doing stopping-cmd; "
+		"echo x >&" + std::to_string(pipe1->fd);
+
+	call_install(container_install::update{}, b);
+
+	std::thread stop_thread{
+		[&]
+		{
+			captured_stdout=capture_stdout(
+				[&]
 				{
-					wait_stop(efd);
-					return 0;
-				}};
-		});
+					errmsg=do_stop(false, "restart", false);
+				}
+			);
+		}
+	};
 
-	if (WEXITSTATUS(exitcode) != 0 || message != "")
-		throw "Unexpected result of a successful stop";
+	// Wait for the stopping command to stop.
+	pipe0->readln();
 
-	if (output !=
-			"cgroups_register called\n"
-			"stopping-cmd\n")
-		throw "Did not capture expected output of a successful stop";
+	// Simulated a container unpopulation, this causes the deletion of
+	// the container. It's possible that the contanier gets deleted before
+	// the stop command has finished. A successful stop is tested elsewhere,
+	// the focus of this step is capturing output from a stopping
+	// command. Depending on the race condition additional messages may or
+	// may not get logged, we'll just check the message from the shell
+	// script.
+
+	auto &containers = unit_tests::get_containers(get_containers_info(nullptr));
+	auto it = containers.find("restart");
+	if(it == containers.end())
+		throw "restart container not found";
+	populated(it->first, false);
+	pipe0={};
+	pipe1={};
+	stop_thread.join();
+
+	{
+		std::istringstream i{captured_stdout};
+		bool found=false;
+
+		std::string line;
+		while (getline(i, line))
+		{
+			if (line == "doing stopping-cmd")
+				found=true;
+		}
+
+		if (!found)
+			throw "Did not find 'doing stopping-cmd' in output";
+	}
+
+	if (errmsg != "")
+		throw "Unexpected error handling stop";
 }
 
 void test_envvars()
 {
+	sim_proc_do_request_pid1 daemon{{}};
+
 	auto first=std::make_shared<proc_new_containerObj>("first");
 
 	first->new_container->meta->stop_type=stop_type_t::target;
@@ -418,54 +468,30 @@ void test_envvars()
 
 	unlink("log");
 
-	auto ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
-		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
-
-			if (!request_runlevel(cmdfd[0], "networking"))
-				throw "request_runlevel failed";
-			proc_do_request(socketb, cmdfd, {});
-
-			return do_test_or_restart_t{
-				socketa, get_runlevel_status, wait_runlevel
-			};
-		});
-
-	auto &[exitcode, message, output]=ret;
-
-	if (WEXITSTATUS(exitcode) != 0 || message != "")
+	auto ret=privrequest_switch_runlevel("networking", true);
+	if (ret != "")
+	{
+		std::cerr << ret << "\n";
 		throw "Unexpected result of switch to networking";
-
+	}
 	std::string log{std::istreambuf_iterator{std::ifstream{"log"}.rdbuf()},
 		std::istreambuf_iterator<char>{}};
 
 	if (log != "first|start||2\n"
 	    "second|start||2\n")
 	{
+		std::cout << "===\n" << log << std::endl;
 		throw "Unexpected log when switching to networking";
 	}
 
 	unlink("log");
 
-	ret=do_test_or_restart(
-		[]
-		(external_filedesc &stdoutcc)
-		{
-			auto [socketa, socketb, cmdfd] = create_fake_request();
-
-			if (!request_runlevel(cmdfd[0], "boot"))
-				throw "request_runlevel failed";
-			proc_do_request(socketb, cmdfd, {});
-
-			return do_test_or_restart_t{
-				socketa, get_runlevel_status, wait_runlevel
-			};
-		});
-
-	if (WEXITSTATUS(exitcode) != 0 || message != "")
+	ret=privrequest_switch_runlevel("boot", true);
+	if (ret != "")
+	{
+		std::cerr << ret << "\n";
 		throw "Unexpected result of switch to boot";
+	}
 
 	log=std::string{std::istreambuf_iterator{std::ifstream{"log"}.rdbuf()},
 		std::istreambuf_iterator<char>{}};
@@ -479,159 +505,92 @@ void test_envvars()
 	unlink("log");
 }
 
-void proc_request_reexec()
+void test_stopall(std::string first, std::string second, std::string third)
 {
-	auto [socketa, socketb, cmdfd] = create_fake_request();
+	auto a=std::make_shared<proc_new_containerObj>(
+		INSTALLED_SESSIONS_PREFIX "/" + first);
+	a->new_container->meta->stopping_command=
+		populated_sh(a->new_container, false);
+	a->dep_requires.insert(INSTALLED_SESSIONS_PREFIX "/" + second);
+	auto b=std::make_shared<proc_new_containerObj>(
+		INSTALLED_SESSIONS_PREFIX "/" + second);
+	b->new_container->meta->stopping_command=
+		populated_sh(b->new_container, false);
+	b->dep_requires.insert(INSTALLED_SESSIONS_PREFIX "/" + third);
+	auto c=std::make_shared<proc_new_containerObj>(
+		INSTALLED_SESSIONS_PREFIX "/" + third);
+	c->new_container->meta->stopping_command=
+		populated_sh(c->new_container, false);
 
-	if (!request_reexec(cmdfd[0]))
-		throw "request_reexec failed";
-	proc_do_request(socketb, cmdfd, {});
-}
+	call_install(container_install::update{}, a, b, c);
 
-void test_reexec_nofork()
-{
-	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
+	sim_proc_do_request_session daemon{{1, 2}};
 
-	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
+	auto ret=do_start(false, INSTALLED_SESSIONS_PREFIX "/" + first, false);
 
-	call_install(container_install::update{},
-		a,
-		std::make_shared<proc_new_containerObj>("reexec_b"));
+	if (!ret.empty())
+		throw "Unexpected error when starting container: " + ret;
 
-	while (!poller_is_transferrable())
-		do_poll(0);
+	clear_logged_state_changes();
+	std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
-	if (!proc_container_runlevel("networking").empty())
-		throw "unexpected error starting runlevel";
+	if (!send_stop_all(cmdfds[0], ""))
+		throw "request_stop_all() failed";
 
-	proc_request_reexec();
+	auto cmdfd=connect_vera_priv();
 
-	bool caught=false;
+	if (!request_send_fd(cmdfd, cmdfds))
+		throw "request_send_fd() failed";
 
-	try {
-		reexec_handler=[]
-		{
-			throw 0;
-		};
-		proc_check_reexec();
-	} catch (int)
-	{
-		caught=true;
-	}
+	ret=get_stop_all_status(cmdfd);
+	if (!ret.empty())
+		throw "Unexpected error when waiting for stop-all: " + ret;
 
-	if (!caught)
-		throw "failed to attempt to reexec";
-}
+	if (wait_stop_all(cmdfd) != 0)
+		throw "Unexpected error from wait_stop_all()";
 
-static int common_reexec_setup()
-{
-	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
+	sim_proc_do_request::wait_until_all_stopped();
 
-	int sockets[2];
+	auto state_changes=get_logged_state_changes();
 
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0)
-		throw "socketpair() failed";
-
-	if (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) < 0)
-		throw "cloexec failed";
-
-	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
-
-	{
-		std::ostringstream cmd;
-
-		cmd.imbue(std::locale{"C"});
-
-		cmd << "./testcontroller2 server " << sockets[1];
-
-		a->new_container->meta->starting_command=cmd.str();
-	}
-
-	call_install(container_install::update{},
-		a,
-		std::make_shared<proc_new_containerObj>("reexec_b"));
-
-	while (!poller_is_transferrable())
-		do_poll(0);
-
-	if (!proc_container_runlevel("networking").empty())
-		throw "unexpected error starting runlevel";
-
-	if (next_pid == 1)
-		throw "did not start a process.";
-
-	proc_request_reexec();
-	proc_check_reexec();
-
-	close(sockets[1]);
-
-	// server waits until it reads a byte before forking and exiting.
-
-	char c=0;
-
-	if (write(sockets[0], &c, 1) != 1)
-		throw "could not write to socket";
-
-	// Confirmation of a fork+exec
-
-	if (read(sockets[0], &c, 1) != 1 || c != '1')
-		throw "server did not start";
-
-	while (kill(next_pid, 0) == 0)
-	{
-		do_poll(0);
-	}
-
-	{
-		inotify_watch_handler iw{
-			".",
-			inotify_watch_handler::mask_dir,
-			[&]
-			(const char *filename, uint32_t mask)
-			{
+	state_changes.erase(
+		std::remove_if(
+			state_changes.begin(),
+			state_changes.end(),
+			[](const std::string_view &s) {
+				return s.substr(0, 14) == "action delayed";
 			}
-		};
-	}
+		),
+		state_changes.end()
+	);
+	std::sort(state_changes.begin(), state_changes.end());
 
-	proc_check_reexec();
-	do_poll(500);
-
-	if (fcntl(sockets[0], F_SETFD, 0) < 0)
-		throw "cloexec failed";
-
-	return sockets[0];
-}
-
-void test_reexec_before()
-{
-	int fd=common_reexec_setup();
-
-	bool caught=false;
-
-	logged_state_changes.clear();
-	try {
-		reexec_handler=[]
+	check_logged_state_changes(
+		state_changes,
 		{
-			throw 0;
-		};
-		proc_check_reexec();
-	} catch (int)
-	{
-		caught=true;
-	}
-
-	if (!caught)
-		throw "failed to attempt to reexec";
-
-	std::sort(logged_state_changes.begin(), logged_state_changes.end());
-
-	if (logged_state_changes != std::vector<std::string>{
-			"reexec_a: container prepared to re-exec",
-			"reexec_a: preserving state: started (dependency)",
-			"reexec_b: preserving state: stopped"
-		})
-		throw "Unexpected messages when attempting to reexec";
-	close(fd);
+			_("Stopping the session manager"),
+			// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
+			INSTALLED_SESSIONS_PREFIX "/a: cgroup created",
+			INSTALLED_SESSIONS_PREFIX "/a: cgroup removed",
+			INSTALLED_SESSIONS_PREFIX "/a: removing",
+			INSTALLED_SESSIONS_PREFIX "/a: stop pending",
+			INSTALLED_SESSIONS_PREFIX "/a: stopped",
+			INSTALLED_SESSIONS_PREFIX "/a: stopping",
+			INSTALLED_SESSIONS_PREFIX "/b: cgroup created",
+			INSTALLED_SESSIONS_PREFIX "/b: cgroup removed",
+			INSTALLED_SESSIONS_PREFIX "/b: removing",
+			INSTALLED_SESSIONS_PREFIX "/b: stop pending",
+			INSTALLED_SESSIONS_PREFIX "/b: stopped",
+			INSTALLED_SESSIONS_PREFIX "/b: stopping",
+			INSTALLED_SESSIONS_PREFIX "/c: cgroup created",
+			INSTALLED_SESSIONS_PREFIX "/c: cgroup removed",
+			INSTALLED_SESSIONS_PREFIX "/c: removing",
+			INSTALLED_SESSIONS_PREFIX "/c: stop pending",
+			INSTALLED_SESSIONS_PREFIX "/c: stopped",
+			INSTALLED_SESSIONS_PREFIX "/c: stopping"
+		},
+		"Unexpected output from stop-all"
+	);
 }
 
 static void regular_tests(std::string &test)
@@ -658,6 +617,9 @@ static void regular_tests(std::string &test)
 	for (auto fd:opened_fds)
 		close(fd);
 
+	// Installs signalfd
+	proc_containers_load({}, container_install::update{});
+
 	test_reset();
 	test="testfailedexec";
 	test_failedexec();
@@ -671,201 +633,41 @@ static void regular_tests(std::string &test)
 	test_restart();
 
 	test_reset();
-
 	test="testenvvars";
 	test_envvars();
 
 	test_reset();
-	test="testreexec_before";
-	test_reexec_before();
-}
+	test="teststopall (a->b->c)";
+	test_stopall("a", "b", "c");
 
-void test_reexecdo(const std::string &command)
-{
-	int fd=common_reexec_setup();
+	test_reset();
+	test="teststopall (a->c->b)";
+	test_stopall("a", "c", "b");
 
-	auto [socketa, socketb, cmdfd] = create_fake_request();
-	auto [socketc, socketd] = create_vera_socketpair();
+	test_reset();
+	test="teststopall (b->a->c)";
+	test_stopall("b", "a", "c");
 
-	if (fcntl(socketd->fd, F_SETFD, 0) < 0)
-		throw "could not turn off cloexec";
+	test_reset();
+	test="teststopall (b->c->a)";
+	test_stopall("b", "c", "a");
 
-	cmdfd.push_back(socketc);
-	if (!request_session_start(cmdfd[0], ""))
-		throw "request_session_start failed";
-	proc_do_request(socketb, cmdfd, {});
+	test_reset();
+	test="teststopall (c->a->b)";
+	test_stopall("c", "a", "b");
 
-	std::string err=socketa->readln();
-	if (err != "")
-	{
-		std::cerr << "Unexpected result of session start request: "
-				  << err << std::endl;
-		throw "Unexpected result of session start request";
-	}
-	{
-		auto [cmd2socketa, cmd2socketb, cmd2cmdfd] = create_fake_request();
-		if (!request_session_start(cmd2cmdfd[0], ""))
-			throw "request_session_start failed";
-
-		cmd2cmdfd.push_back(socketc);
-		proc_do_request(cmd2socketb, cmd2cmdfd, {});
-
-		err=cmd2socketa->readln();
-		if (err != "session already started: 2")
-		{
-			std::cerr << "Status of second session start request: "
-					  << err << std::endl;
-			throw "Unexpected result of session start request";
-		}
-	}
-	if (fcntl(socketa->fd, F_SETFD, 0) < 0)
-		throw "cloexec failed";
-
-	if (fcntl(socketb->fd, F_SETFD, 0) < 0)
-		throw "cloexec failed";
-
-	std::ostringstream formatted_command;
-
-	formatted_command.imbue(std::locale{"C"});
-
-	formatted_command << "set -e; " << command << " testreexec_after \""
-			  << fd << " " << socketa->fd << " "
-			  << socketb->fd << "\"";
-
-	reexec_handler=[command=formatted_command.str()]
-	{
-		char binsh[]="/bin/sh";
-		char c[]="-c";
-
-		std::vector<char> commandbuf;
-
-		commandbuf.insert(commandbuf.end(), command.begin(),
-				  command.end());
-		commandbuf.push_back(0);
-
-		execl(binsh, binsh, c, commandbuf.data(), nullptr);
-		throw "exec failed.";
-	};
-	proc_check_reexec();
-	throw "Unexpected return from proc_check_reexec";
-}
-
-void testreexec_after(const std::string &socket_str)
-{
-	std::cout << "\n\n";
-	auto a=std::make_shared<proc_new_containerObj>("reexec_a");
-
-	a->dep_required_by.insert(RUNLEVEL_PREFIX "networking");
-	a->new_container->meta->starting_command="exit 0";
-
-	call_install(container_install::initial{}, a,
-		std::make_shared<proc_new_containerObj>("reexec_b"));
-
-	std::istringstream i{socket_str};
-	int socketfd;
-	int socketafd;
-	int socketbfd;
-
-	i.imbue(std::locale{"C"});
-
-	if (!(i >> socketfd >> socketafd >> socketbfd))
-		throw "cannot parse socket file descriptor parameters";
-
-	write(socketfd, "2", 1);
-
-	while (logged_state_changes.empty() || logged_state_changes.back()
-	       != "reexec_a: test")
-		do_poll(1000);
-
-	// the reexec file comes from an unordered container. Intelligently
-	// parse the restoral messages.
-
-	std::sort(logged_state_changes.begin(),
-		  logged_state_changes.end());
-
-	if (logged_state_changes != std::vector<std::string>{
-			"re-exec, session: 1/2",
-			"re-exec: reexec_a",
-			"re-exec: reexec_b",
-// NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
-			"reexec: " RUNLEVEL_PREFIX "networking",
-			"reexec_a: container was started as a dependency",
-			"reexec_a: reactivated after re-exec",
-			"reexec_a: restored after re-exec",
-			"reexec_a: restored preserved state: started (dependency)",
-			"reexec_a: test",
-			"reexec_b: restored preserved state: stopped",
-			"sessions: system/sessions/active/1/2: successfully restored",
-		})
-		throw "Unexpected state change after reexec";
-	close(socketfd);
-}
-
-void server(const std::string &filedesc)
-{
-	std::istringstream i{filedesc};
-
-	i.imbue(std::locale{"C"});
-
-	int fd;
-
-	if (!(i >> fd))
-		return;
-
-	char c;
-
-	read(fd, &c, 1);
-
-	if (fork() != 0)
-		return;
-
-	c='1';
-	write(fd, &c, 1);
-
-	while (read(fd, &c, 1) > 0)
-	{
-		if (c == '2')
-			write(1, "test\n", 5);
-	}
-
-	close(fd);
+	test_reset();
+	test="teststopall (c->b->a)";
+	test_stopall("c", "b", "a");
 }
 
 int main(int argc, char **argv)
 {
 	std::string test;
 
-	std::vector<std::string> args{argv, argv+argc};
-
 	alarm(60);
 	try {
-		if (args.size() == 2 && args[1] == "testreexec_nofork")
-		{
-			test="testreexec_nofork";
-			test_reset();
-			test_reexec_nofork();
-		}
-		else if (args.size() == 3 && args[1] == "server")
-		{
-			server(args[2]);
-			return 0;
-		}
-		else if (args.size() == 3 && args[1] == "testreexec_do")
-		{
-			test="testreexec_do";
-			test_reset();
-			test_reexecdo(args[2]);
-		}
-		else if (args.size() == 3 &&  args[1] == "testreexec_after")
-		{
-			test="testreexec_after";
-			test_reset(true);
-			testreexec_after(args[2]);
-		}
-		else
-		{
-			regular_tests(test);
-		}
+		regular_tests(test);
 
 		test_finished();
 	} catch (const char *e)

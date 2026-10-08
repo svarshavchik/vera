@@ -4,18 +4,18 @@
 */
 
 #include "config.h"
-#include "unit_test.H"
-#include "proc_loader.H"
-#include "privrequest.H"
 #include "current_containers_info.H"
+#include "privrequest.H"
+#include "proc_loader.H"
 #include "proc_loader.H"
 #include "unit_test.H"
-#include <iostream>
-#include <vector>
-#include <string>
+#include "unit_test.H"
 #include <fstream>
 #include <ios>
+#include <iostream>
+#include <string>
 #include <string.h>
+#include <vector>
 
 void loadtest(const std::string &name, bool enabled)
 {
@@ -341,7 +341,7 @@ int main(int argc, char **argv)
 			session_path += args[i];
 
 			auto as=active_session_from_path(
-				session_path + "/x"
+				session_path
 			);
 
 			std::cout << (as &&
@@ -390,7 +390,7 @@ int main(int argc, char **argv)
 					messages.push_back("E: " + message);
 				});
 
-		auto ci=get_containers_info(nullptr);
+		auto &ci=get_containers_info(nullptr);
 
 		for (size_t i=5; i<args.size(); ++i)
 		{
@@ -420,8 +420,8 @@ int main(int argc, char **argv)
 		proc_load_dump(loaded);
 		messages.insert(
 			messages.end(),
-			logged_state_changes.begin(),
-			logged_state_changes.end()
+			get_logged_state_changes().begin(),
+			get_logged_state_changes().end()
 		);
 		std::sort(messages.begin(), messages.end());
 

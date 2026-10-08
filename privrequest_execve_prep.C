@@ -5,11 +5,11 @@
 
 #include "config.h"
 #include "privrequest.H"
-#include <vector>
-#include <string>
-#include <unordered_map>
 #include <csignal>
+#include <string>
 #include <unistd.h>
+#include <unordered_map>
+#include <vector>
 
 void privrequest_execve_prep_args(
 	std::vector<std::vector<char>> &argv_vec,

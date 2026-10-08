@@ -3,15 +3,15 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_container.H"
-#include "proc_container_runner.H"
 #include "current_containers_info.H"
-#include "proc_loader.H"
 #include "log.H"
 #include "messages.H"
+#include "proc_container.H"
+#include "proc_container_runner.H"
+#include "proc_loader.H"
 #include <algorithm>
-#include <string.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/signal.h>
 
 extern void update_verbose_progress_immediately();
@@ -160,72 +160,46 @@ static pid_t fork_and_run(
 
 	fs.failed_errno=errno;
 
-	write(exec_pipe1->fd, &fs, sizeof(fs));
+	if (write(exec_pipe1->fd, &fs, sizeof(fs)))
+		; // IGNORE
 	_exit(1);
 }
 
-pid_t current_containers_infoObj::start_in_session(
-	const proc_container &container,
-	std::vector<std::vector<char>> &argv,
-	external_filedesc &exec_pipe0,
-	external_filedesc &exec_pipe1,
-	proc_container_group &group,
-	const active_session_t &session)
+proc_container_group *create_or_get_runner_group(
+	const current_containers_info &all_containers,
+	const std::string &resources_from,
+	const current_container &cc)
 {
-	auto iter=active_sessions.find(session);
+	// Create the container group if it does not exist already.
 
-	if (iter == active_sessions.end() ||
-		!iter->second.current_manager)
+	if (!cc->second.group)
 	{
-		log_container_error(
-			container,
-			_("session manager stopped, needs restarting")
-		);
-		return -1;
-	}
+		auto &new_group=cc->second.group.emplace();
 
-	auto [socketa, socketb]=create_vera_socketpair();
-	if (!socketa || !socketb)
-	{
-		log_container_error(
-			container,
-			_("socketpair() failed")
-		);
-		return -1;
-	}
-
-	if (!request_fork(iter->second.current_manager->fd,
-		exec_pipe1->fd, socketb->fd,
-		group.stdouterrpipe[1],
-		argv, environconfigvars))
-		return -1;
-
-	socketb.reset();
-
-	pid_t p= -1;
-
-	// SESSION-START: NEW PID
-	// Read the forked pid from the session manager
-	if (read(exec_pipe0->fd, &p, sizeof(p)) != sizeof(p))
-	{
-		log_container_error(
-			container,
-			_("failed to read process id from the session manager")
+		auto o=proc_get_validated_override(
+			overrideconfigdir(),
+			resources_from
 		);
 
-		return -1;
+		if (!new_group.create({all_containers, cc}, o.get_resources()))
+		{
+			cc->second.group.reset();
+			return nullptr;
+		}
 	}
-#ifdef UNIT_TEST
-	p=UNIT_TEST();
-#endif
-	// Register this pid in the container
-	group.cgroups_register(p);
 
-	// The forked pid is waiting for socketa to close, so it is guaranteed
-	// to exist here.
-	//
-	// SESSION-START: NEW PID REGISTERED
-	return p;
+	return &*cc->second.group;
+}
+
+/*! Call create_or_get_runner_group() with cc->first->name as the
+    resources_from parameter.
+*/
+
+proc_container_group *create_or_get_runner_group(
+	const current_containers_info &all_containers,
+	const current_container &cc)
+{
+	return create_or_get_runner_group(all_containers, cc->first->name, cc);
 }
 
 proc_container_runner create_runner(
@@ -305,70 +279,36 @@ proc_container_runner create_runner(
 
 	log_container_message(container, command.substr(0, newline) + suffix);
 #endif
-	auto [exec_pipe0, exec_pipe1] = create_vera_socketpair();
-
-	if (!exec_pipe0 || !exec_pipe1)
+	auto opt_sp = create_vera_socketpair();
+	if (!opt_sp)
 	{
 		log_container_error(container, _("socketpair() failed"));
 		return {};
 	}
+	auto &[exec_pipe0, exec_pipe1] = *opt_sp;
 
 	// Create the container group if it does not exist already.
 
-	if (!cc->second.group)
-	{
-		auto &new_group=cc->second.group.emplace();
+	auto group_ptr=create_or_get_runner_group(all_containers, cc);
+	if (!group_ptr)
+		return {};
+	auto &group=*group_ptr;
 
-		auto o=proc_get_validated_override(
-			overrideconfigdir(),
-			container->name
-		);
-
-		if (!new_group.create({all_containers, cc}, o.get_resources()))
-		{
-			cc->second.group.reset();
-			return {};
-		}
-	}
-
-	auto &group=*cc->second.group;
-
-	auto session=active_session_from_path(
-		cc->first->name
+	pid_t p=fork_and_run(
+		container,
+		argv,
+		exec_pipe0,
+		exec_pipe1,
+		group,
+		all_containers
 	);
 
-	pid_t p;
-	if (session)
+	if (p == -1)
 	{
-		p=all_containers->start_in_session(
-			container,
-			argv,
-			exec_pipe0,
-			exec_pipe1,
-			group,
-			*session
-		);
-
-		if (p < 0)
-			return {};
+		log_container_error(container, _("fork() failed"));
+		return {};
 	}
-	else
-	{
-		p=fork_and_run(
-			container,
-			argv,
-			exec_pipe0,
-			exec_pipe1,
-			group,
-			all_containers
-		);
 
-		if (p == -1)
-		{
-			log_container_error(container, _("fork() failed"));
-			return {};
-		}
-	}
 
 	fork_status fs;
 	exec_pipe1.reset();

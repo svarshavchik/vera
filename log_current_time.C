@@ -4,7 +4,6 @@
 */
 #include "config.h"
 #include "log.H"
-#include <errno.h>
 #include <unistd.h>
 
 static struct timespec ts;
@@ -18,7 +17,12 @@ void update_current_time()
 	}
 }
 
-const struct timespec &log_current_timespec()
+struct timespec log_current_time_spec()
 {
 	return ts;
+}
+
+time_t log_current_time_sec()
+{
+	return ts.tv_sec;
 }

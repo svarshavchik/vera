@@ -3,28 +3,31 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
+#include "configdirs.h"
+#include "connect_vera_priv.H"
 #include "hook.H"
 #include "messages.H"
-#include "configdirs.h"
 #include "verac.h"
-#include "connect_vera_priv.H"
-#include <unistd.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <filesystem>
-#include <iostream>
-#include <fstream>
 #include <array>
+#include <fcntl.h>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdio.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/un.h>
+#include <unistd.h>
 
-int try_create_vera_socket(const char *tmpname, const char *finalname)
+int try_create_vera_socket(
+	const std::string &tmpname,
+	const std::string &finalname
+)
 {
 	int fd;
 
-	unlink(tmpname);
+	unlink(tmpname.c_str());
 
 	fd=socket(PF_UNIX, SOCK_STREAM, 0);
 
@@ -34,18 +37,17 @@ int try_create_vera_socket(const char *tmpname, const char *finalname)
 	struct sockaddr_un sun{};
 
 	sun.sun_family=AF_UNIX;
-	strcpy(sun.sun_path, tmpname);
+	strcpy(sun.sun_path, tmpname.c_str());
 
 	// Make sure it's nonblocking and has close-on-exec
 	// set. We don't need to worry about closing the listening socket
 	// after forking and executing a command.
 
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 &&
-	    fcntl(fd, F_SETFL, O_NONBLOCK) == 0 &&
 	    bind(fd, reinterpret_cast<sockaddr *>(&sun),
 		 sizeof(sun)) == 0 &&
 	    listen(fd, 10) == 0 &&
-	    rename(tmpname, finalname) == 0)
+	    rename(tmpname.c_str(), finalname.c_str()) == 0)
 		return fd;
 
 	close(fd);
@@ -100,7 +102,7 @@ struct hooked_file {
 	std::string filenametmp;
 	std::string backup;
 	std::string replacement;
-	bool hardlink;
+	bool init_hardlink;
 };
 
 typedef std::array<hooked_file, 5> hooks_t;
@@ -170,7 +172,8 @@ bool hook(std::string etc_sysinit_dir,
 	  std::string vera_init,
 	  std::string pkgdatadir,
 	  std::string hookfile,
-	  hook_op op)
+	  hook_op op,
+	  bool vera_up)
 {
 	std::error_code ec;
 
@@ -224,14 +227,22 @@ bool hook(std::string etc_sysinit_dir,
 			continue;
 		}
 
-		if (std::filesystem::exists(p->backup))
+		if (std::filesystem::exists(p->backup, ec))
 		{
+			if (p->init_hardlink)
+			{
+				// We explicitly require unhooking before
+				// updating initscripts. This must be the
+				// backed up sysvinit. Under no circumstances
+				// we will clobber it.
+				continue;
+			}
+
 			// This must be a hook_op::rehook, otherwise the loop
 			// above would've bailed out on us
 			//
-			// If the link, hard or soft, still exists then
-			// this hook is intact. Otherwise the hooked binary
-			// must've been updated.
+			// filename should be the same as the replacement,
+			// otherwise the old binary has been updated.
 
 			if (std::filesystem::equivalent(
 				    p->filename,
@@ -279,13 +290,21 @@ bool hook(std::string etc_sysinit_dir,
 		if (h.filename.empty())
 			continue;
 
+		// Do not relink /sbin/init if vera is pid1, do not install
+		// an updated binary now. This is deferred until
+		// rehook_sbin_init. Do this in case of an initial install.
+		if (h.init_hardlink && vera_up)
+		{
+			h.filename.clear();
+			continue;
+		}
 #ifdef HOOK_DEBUG2
 		HOOK_DEBUG2();
 #endif
 
 		std::filesystem::remove(h.filenametmp, ec);
 
-		if (h.hardlink)
+		if (h.init_hardlink)
 		{
 			std::filesystem::create_hard_link(h.replacement,
 							  h.filenametmp, ec);
@@ -328,7 +347,7 @@ bool hook(std::string etc_sysinit_dir,
 		if (ec)
 		{
 			std::cerr << "Cannot overwrite " << h.filename
-				  << ": " << ec.message();
+				  << ": " << ec.message() << "\n";
 
 			if (op != hook_op::rehook)
 				for (auto &h:hooks)
@@ -371,7 +390,7 @@ bool rehook_sbin_init(std::string sbindir, std::string vera_init)
 
 	std::error_code ec;
 
-	if (std::filesystem::equivalent(ih.filename, ih.replacement) || ec)
+	if (std::filesystem::equivalent(ih.filename, ih.replacement, ec) || ec)
 		return true;
 
 	std::filesystem::remove(ih.filenametmp, ec);
@@ -407,7 +426,7 @@ void unhook(std::string etc_sysinit_dir,
 
 	bool cmdfd=sim_unhook_socket_connection;
 #else
-	auto [cmdfd, cmdfds]=try_connect_vera_priv(pubcmdsocket);
+	external_filedesc cmdfd=try_connect_vera_priv(pubcmdsocket);
 #endif
 	if (cmdfd)
 	{
@@ -428,6 +447,9 @@ void unhook(std::string etc_sysinit_dir,
 		{
 			continue;
 		}
+
+		// The backup and the real file should not be hard links, but
+		// do the right thing if they are.
 
 		if (std::filesystem::equivalent(
 			    h.backup,

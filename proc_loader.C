@@ -3,28 +3,28 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_loader.H"
-#include "session_container_factory.H"
 #include "messages.H"
-#include "uid_sessionid.H"
 #include "parsed_yaml.H"
+#include "proc_loader.H"
+#include "uid_sessionid.H"
+#include "vvconfigdirs.H"
 #include <algorithm>
-#include <filesystem>
-#include <vector>
+#include <algorithm>
 #include <array>
-#include <string>
-#include <unistd.h>
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <optional>
-#include <memory>
-#include <unordered_set>
-#include <set>
-#include <errno.h>
 #include <dirent.h>
+#include <errno.h>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <optional>
 #include <ranges>
+#include <set>
+#include <string>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <unordered_set>
+#include <vector>
 
 proc_find::proc_find(
 	std::filesystem::path config_global,
@@ -42,6 +42,11 @@ void proc_find::started(const std::filesystem::path &subdir)
 
 void proc_find::finished(const std::filesystem::path &subdir)
 {
+}
+
+void proc_find::find()
+{
+	scan(is_pid_1() ? "." : INSTALLED_SESSIONS_PREFIX);
 }
 
 void proc_find::scan(const std::filesystem::path &subdir)
@@ -518,7 +523,7 @@ proc_new_container_set proc_load(
 		std::string_view session_type =
 			is_in_session_prefix(unit_path.native());
 
-		if (is_in_session(unit_path.native(), ACTIVE_SESSIONS_PREFIX))
+		if (session_type == ACTIVE_SESSIONS_PREFIX)
 		{
 			error(name + _(": active session containers "
 				"cannot be loaded."));
@@ -1057,63 +1062,31 @@ bool loaded_containers::create_new_session(
 		const std::string_view &error_message
 	)> &error)
 {
-	session_container_factory scf{active_session, error};
+	uid_sessionid_to_chars to_chars{active_session};
 
-	// Sanity check: can't create a session that already exists.
+	auto [iter, inserted]=all_sessions.emplace(
+		active_session,
+		proc_container_set{}
+	);
 
-	if (all_sessions.find(active_session) != all_sessions.end())
+	if (!inserted)
 	{
-		error(scf.ssid_string.path(),
+		error(to_chars.path(),
 		      _("session already exists"));
 
 		return false;
 	}
 
-	for (auto &pc: all_sessions[installed_session_t{}])
-	{
-		auto nc=containers.find(pc);
+	auto session_container =
+		std::make_shared<proc_new_containerObj>(
+			to_chars.path()
+		);
 
-		if (nc == containers.end())
-		{
-			error(
-				pc->name,
-				"container not found in the containers set"
-			);
-			return false;
-		}
-
-		if (!(scf << *nc))
-			return false;
-	}
-
-	for (auto &new_container : scf.new_session)
-	{
-		// Sanity check: this container doesn't alredy exist!
-
-		if (containers.find(new_container) != containers.end())
-		{
-			error(
-				new_container->new_container->name,
-				"container already exists"
-			);
-			return false;
-		}
-	}
-
-	// All the error checking is done. Time to get down to business.
-	// We have two things to do:
-	//
-	// * Add the active session path to the all_sessions map and populate
-	//   the set of containers that are part of this session.
-	//
-	// * Add the containers to the containers set.
-
-	auto &new_session_containers = all_sessions[active_session];
-
-	for (auto &nc : scf.new_session)
-		new_session_containers.insert(nc->new_container);
-
-	containers.merge(std::move(scf.new_session));
+	// Best fit for its semantics:
+	session_container->new_container->meta->start_type=
+		start_type_t::oneshot;
+	session_container->new_container->meta->stop_type=stop_type_t::manual;
+	containers.insert(session_container);
 
 	return true;
 }

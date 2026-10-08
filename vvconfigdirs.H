@@ -9,6 +9,10 @@
 #include <string>
 #include <tuple>
 
+/*! Return true if this is PID 1.
+*/
+extern bool is_pid_1();
+
 /*! Return the global install config directory.
 
 This is where the process container unit files are installed.

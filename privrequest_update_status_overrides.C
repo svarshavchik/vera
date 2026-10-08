@@ -5,10 +5,10 @@
 #include "config.h"
 #include "privrequest.H"
 #include "proc_loader.H"
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
 
 void update_status_overrides(
 	std::unordered_map<std::string, container_state_info> &status,

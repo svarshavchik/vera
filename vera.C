@@ -5,63 +5,56 @@
 
 #include "config.h"
 #include "configdirs.h"
-#include "poller.H"
-#include "proc_container_group.H"
-#include "proc_timerfwd.H"
-#include "proc_timer.H"
-#include "proc_loader.H"
-#include "parsed_yaml.H"
-#include "messages.H"
-#include "log.H"
+#include "create_default_vera_socket.H"
 #include "current_containers_info.H"
 #include "external_filedesc.H"
-#include "connect_vera_priv.H"
-#include "external_filedesc_privcmdsocket.H"
+#include "log.H"
+#include "messages.H"
+#include "parsed_yaml.H"
+#include "poller.H"
 #include "privrequest.H"
-#include "hook.H"
+#include "proc_container_group.H"
+#include "proc_loader.H"
+#include "proc_timer.H"
+#include "proc_timerfwd.H"
 #include "switchlog.H"
+#include "vera_socket_poller_and_connections.H"
 #include "vvconfigdirs.H"
-#include "verac.h"
-
-#include <unistd.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/reboot.h>
-#include <sys/kd.h>
-#include <sys/ioctl.h>
-#include <sys/mount.h>
-#include <sys/wait.h>
-#include <sys/mman.h>
-#include <stdlib.h>
-#include <syslog.h>
-#include <iostream>
-#include <signal.h>
-#include <string.h>
-#include <getopt.h>
-#include <time.h>
-#include <termios.h>
-#include <fstream>
-#include <locale>
-#include <string>
-#include <vector>
-#include <set>
 #include <algorithm>
 #include <charconv>
+#include <fcntl.h>
+#include <fstream>
+#include <getopt.h>
+#include <iostream>
 #include <iterator>
 #include <limits>
-#include <sys/prctl.h>
+#include <locale>
+#include <set>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <string.h>
+#include <syslog.h>
 #include <sys/auxv.h>
-
-#ifndef MAX_NONROOT_CONNECTIONS
-#define MAX_NONROOT_CONNECTIONS 5
-#endif
-
-extern int optind;
+#include <sys/ioctl.h>
+#include <sys/kd.h>
+#include <sys/mman.h>
+#include <sys/mount.h>
+#include <sys/prctl.h>
+#include <sys/reboot.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <termios.h>
+#include <time.h>
+#include <unistd.h>
+#include <vector>
 
 std::string exename;
+
+bool is_pid_1_flag;
 
 struct winsize console_winsize;
 
@@ -79,25 +72,6 @@ the runlevel config file.
 current_containers_infoObj::current_containers_infoObj()
 	: current_containers_infoObj{load_runlevelconfig()}
 {
-}
-
-// Before re-execing turn off CLOEXEC on file descriptors
-
-void proc_container_group::prepare_to_transfer_fd(int &fd)
-{
-	fcntl(fd, F_SETFD, 0);
-}
-
-// re-exec ourselves
-
-void reexec()
-{
-	while (1)
-	{
-		execl(exename.c_str(), exename.c_str(), nullptr);
-		log_message(exename + _(": cannot re-execute myself!"));
-		sleep(5);
-	}
 }
 
 // Put this forked process into the cgroup
@@ -127,7 +101,7 @@ bool proc_container_group_data::cgroups_register(
 
 		if (write(fd, buf, end-buf) != (end-buf))
 		{
-			log_message("could not write pid to cgroup.procs");
+			log_message("could not write pid to " + dir);
 			close(fd);
 			return false;
 		}
@@ -154,7 +128,7 @@ bool proc_container_group_data::cgroups_dir_create()
 
 // In the event the cgroup has descendant cgroups, try to nuke them first.
 
-static bool remove_cgroup_tree(const std::string &dir)
+bool proc_container_group::cgroups_try_rmdir(const std::string &dir)
 {
 	std::error_code ec;
 	std::vector<std::filesystem::path> dirs;
@@ -192,7 +166,7 @@ bool proc_container_group::cgroups_try_rmdir(
 
 	auto dir=cgroups_dir();
 
-	if (! remove_cgroup_tree(dir) && errno != ENOENT)
+	if (! cgroups_try_rmdir(dir) && errno != ENOENT)
 	{
 		log_message(_("could not remove cgroup tree for ") + pc->name);
 		return false;
@@ -221,7 +195,7 @@ namespace {
 
 struct refresh_timerObj : public proc_timerObj {
 
-	refresh_timerObj() : refresh_timerObj(log_current_timespec().tv_sec)
+	refresh_timerObj() : refresh_timerObj(log_current_time_sec())
 	{
 	}
 
@@ -513,7 +487,7 @@ private:
 			  << "\e[0m";
 		}
 
-		auto current_time=log_current_timespec().tv_sec;
+		auto current_time=log_current_time_sec();
 
 		if (current_time < container_info.time_start)
 			// Sanity check
@@ -610,7 +584,7 @@ public:
 	  next_index_to_update gets increment on the next second.
 	*/
 
-	time_t index_timestamp=log_current_timespec().tv_sec;
+	time_t index_timestamp=log_current_time_sec();
 
 	/*! Something was started
 
@@ -751,7 +725,7 @@ struct debounce_reloadObj : public proc_timerObj {
 	{
 		std::string s{_("reload ")};
 
-		s.append(INSTALLCONFIGDIR);
+		s.append(installconfigdir());
 		return s;
 	}
 };
@@ -779,7 +753,7 @@ void check_reload_config(const char *filename)
 	// unit file but before it extracted the new one. The only way to
 	// avoid chaos is to debounce this.
 
-	auto current_time=log_current_timespec().tv_sec;
+	auto current_time=log_current_time_sec();
 
 	if (debounce_reload)
 	{
@@ -795,7 +769,8 @@ void check_reload_config(const char *filename)
 	}
 	else
 	{
-		log_message(_("reload pending"));
+		log_message(std::string{_("reload pending, triggered: ")}
+			+ filename);
 	}
 
 	time_t debounce_interval=6;
@@ -856,442 +831,14 @@ void debounce_reloadObj::triggered()
 	);
 }
 
-int create_vera_socket(const char *tmpname, const char *finalname)
-{
-	int fd;
-
-	// Create the privileged command socket.
-
-	while ((fd=try_create_vera_socket(tmpname, finalname)) < 0)
-	{
-		log_message(std::string{finalname} +
-			    _(": socket creation failure: ") +
-			    strerror(errno));
-		sleep(5);
-	}
-	return fd;
-}
-
-// Identify the int file descriptor associated with an object
-
-// For std::unordered_set, we need a hash and an equality test. The hash
-// and equality tests should only depend on the file descriptor. We can look
-// up the file descriptor in the std::unordered_set by either an int file
-// descriptor or, for convenience, by the external_filedesc too.
-//
-// The default template assumes that the object passed is the file descriptor
-// itself, and simply returns it.
-
-template<typename T>
-struct get_file_descriptor {
-
-	template<typename U>
-	static int getfd(U &&u) noexcept
-	{
-		return u;
-	}
-};
-
-// The std::unordered_set stores socket_connections which have a member
-// called fd, which is an external_filedesc. We use the concept to
-// retrieve the file descriptor, that identifies the socket connection.
-
-template<typename T>
-concept get_file_descriptor_from_fd = requires(T &ptr) {
-	{ ptr.fd->fd } -> std::convertible_to<int>;
-};
-
-template<get_file_descriptor_from_fd T>
-struct get_file_descriptor<T>
-{
-	template<typename U>
-	static int getfd(U &&u) noexcept
-	{
-		return u.fd->fd;
-	}
-};
-
-// For std::unordered_set, a transparent equality test.
-struct file_descriptor_equal {
-	typedef void is_transparent;
-
-	template<typename T, typename U>
-	bool operator()(T &&a,
-			U &&b) const noexcept
-	{
-		return get_file_descriptor<std::remove_cvref_t<T>>{}.getfd(
-			std::forward<T>(a)
-		) ==
-			get_file_descriptor<std::remove_cvref_t<U>>{}.getfd(
-				std::forward<U>(b)
-			);
-	}
-};
-
-// For std::unordered_set, a transparent hash function.
-
-struct file_descriptor_hash {
-	typedef void is_transparent;
-
-	template<typename T>
-	size_t operator()(T &&u) const
-	{
-		return get_file_descriptor<std::remove_cvref_t<T>>{}.getfd(
-			std::forward<T>(u)
-		);
-	}
-};
-
-// This keeps track of how many active connections per uid
-//
-// polled_socket_connection's constructor increments this value, and its
-// destructor decrements it. The uid is removed when there are no more
-// active connections for it.
-
-static std::unordered_map<uid_t, size_t> active_connections_by_uid;
-
-// A single active connection
-
-struct polled_socket_connection {
-
-	// The file descriptor associated with this connection
-
-	external_filedesc fd;
-
-	// The credentials of the user who opened this connection
-
-	ucred credentials;
-
-	// The poller for this connection
-
-	polledfd poller;
-
-	polled_socket_connection(external_filedesc fd, const ucred &cred);
-	~polled_socket_connection();
-
-	polled_socket_connection(const polled_socket_connection &other) = delete;
-
-	polled_socket_connection &operator=(const polled_socket_connection &other) = delete;
-};
-
-// The poller for the command socket
-
-struct priv_poller_t {
-
-	// The listening socket
-	external_filedesc cmd_socket;
-
-	// The poller for the listening socket
-	polledfd poll_cmd;
-
-	// The set of active connections
-
-	std::unordered_set<
-		polled_socket_connection,
-		file_descriptor_hash,
-		file_descriptor_equal
-	> connections;
-};
-
-priv_poller_t priv_poller;
-
-static bool validate_secure_connection(
-	const external_filedesc &efd,
-	const ucred &cred,
-	const std::function<void (const std::string &)> &error
-)
-{
-#ifdef SO_PEERPIDFD
-	// Kernel 6.5 required for this
-	int pidfdn = -1;
-	socklen_t pidfd_len = sizeof(pidfdn);
-
-	if (getsockopt(efd->fd, SOL_SOCKET, SO_PEERPIDFD,
-			&pidfdn, &pidfd_len) < 0)
-	{
-		error(_("failed to read your pidfd\n"));
-		return false;
-	}
-
-	auto pidfd=std::make_shared<external_filedescObj>(pidfdn);
-
-	if (syscall(__NR_pidfd_send_signal, pidfd->fd, 0, nullptr, 0) < 0)
-	{
-		error("failed to send signal to pidfd\n");
-		return false;
-	}
-#endif
-
-	// root? Don't bother. If you have root, you're secure.
-
-	if (cred.uid != 0)
-	{
-		// Read /proc/<pid>/auxv to verify secure execution mode
-
-		char pidbuf[std::numeric_limits<pid_t>::digits10 + 2];
-		auto [last, ec]= std::to_chars(
-			pidbuf, pidbuf + sizeof(pidbuf), cred.pid
-		);
-
-		std::string_view pidbuf_sv{pidbuf, (size_t)(last-pidbuf)};
-
-		std::string proc_pid;
-
-		proc_pid.reserve(pidbuf_sv.size() + sizeof("/proc//auxv") - 1);
-		proc_pid += "/proc/";
-		proc_pid += pidbuf_sv;
-		proc_pid += "/auxv";
-
-		bool secure_execution=false;
-		std::ifstream auxv{proc_pid};
-
-		// Read the file structure using the platform's native unsigned
-		// long word-size;
-
-		unsigned long entry[2];
-		while (auxv.read(reinterpret_cast<char*>(entry), sizeof(entry)))
-		{
-			if (entry[0] == AT_SECURE && entry[1] == 1)
-				secure_execution=true;
-
-			if (entry[0] == 0 && entry[1] == 0)
-				break;
-		}
-
-		if (!secure_execution)
-		{
-			std::string err;
-
-			err = _("user process pid " );
-			err.append(pidbuf_sv);
-			err += _(" is not in secure execution mode");
-			error(err);
-			return false;
-		}
-	}
-
-	return true;
-}
-
 void create_priv_poller()
 {
-	umask(0111);
-	int fd=create_vera_socket(PRIVCMDSOCKET ".tmp",
-				  PRIVCMDSOCKET);
-	umask(022);
-
-	auto cmd_socket=std::make_shared<external_filedescObj>(fd);
-
-	// Poll the command socket for connections. Call proc_do_request()
-	// for each accepted connection.
-
-	polledfd poll_cmd{fd,
-		[]
-		(int fd)
-		{
-			struct sockaddr addr;
-			socklen_t addrlen=sizeof(addr);
-
-			// Accept the new connection, make sure it has the
-			// close-on-exec bit set.
-
-			int conn_fd=accept4(fd,
-					    &addr,
-					    &addrlen,
-					    SOCK_CLOEXEC);
-
-			if (conn_fd < 0)
-				return;
-
-			// Turn on the close-on-exec bit and set the socket to
-			// non-blocking, so that we don't have to worry about
-			// closing file descriptors after forking and executing
-			// a command, and so that we don't block when reading
-			// from the socket, or writing too, for that matter,
-			// in case of an obnoxious user that sends a command
-			// and that holds the socket open and doesn't read it,
-			// although at this time we're unlikely to be using a
-			// lot of socket writes.
-
-			if (fcntl(conn_fd, F_SETFL, O_CLOEXEC|O_NONBLOCK) < 0)
-			{
-				log_message(
-					"could not configure a "
-					"new connection");
-				close(conn_fd);
-				return;
-			}
-
-			struct ucred cred{};
-			socklen_t len = sizeof(cred);
-			if (getsockopt(conn_fd, SOL_SOCKET, SO_PEERCRED, &cred,
-					       &len) < 0)
-			{
-				log_message("could not retrieve credentials "
-						    "for a new connection");
-				close(conn_fd);
-				return;
-			}
-
-			if (cred.uid != 0)
-			{
-				auto iter=active_connections_by_uid.find(
-					cred.uid
-				);
-
-				if (iter != active_connections_by_uid.end() &&
-				    iter->second >= MAX_NONROOT_CONNECTIONS)
-				{
-					log_message("maximum number of non-root "
-							"connections reached "
-							"(uid "
-							+ std::to_string(
-								cred.uid
-							) + ")");
-					close(conn_fd);
-					return;
-				}
-			}
-
-			auto efd=std::make_shared<
-					external_filedesc_privcmdsocketObj
-				>(conn_fd);
-
-			if (!validate_secure_connection(efd, cred,
-				[&]
-				(const std::string &err)
-				{
-					(void)efd->write_all(err);
-					log_message(err);
-				}))
-				return;
-
-			priv_poller.connections.emplace(efd, cred);
-		}};
-
-	priv_poller=priv_poller_t{
-		cmd_socket,
-		std::move(poll_cmd)
-	};
-}
-
-polled_socket_connection::polled_socket_connection(
-	external_filedesc fd,
-	const ucred &cred
-)
-	: fd{std::move(fd)},
-	  credentials{cred},
-	  poller{this->fd->fd,
-		[]
-		(int fd)
-		{
-			// This is a new connection received on the poller
-			// socket. We need to figure out which connection this
-			// is, save the socket, remove the connection from the
-			// poller (so that after we're done the connection is
-			// closed), then process the connection.
-
-			auto iter=priv_poller.connections.find(fd);
-			if (iter == priv_poller.connections.end())
-				return;
-
-			// Zero errno before receiving. This is so that we can
-			// tell when the read on the non-blocking socket failed
-			// because there's nothing to read (spurious wake-up).
-			// All other error conditions, indicated by an empty
-			// fds array, is an error and we remove this file
-			// descriptor from the poller, which closes it.
-			//
-			// All commands must pass in at least one file
-			// descriptor with the command itself and its parameters
-			// so if some clown sends us an empty file descriptor
-			// array, we treat it as an error and remove this file
-			// descriptor from the poller, which closes it.
-
-			errno=0;
-			auto [cmdfds, legacy_cmd]=receive_fds(iter->fd);
-			if (cmdfds.empty())
-			{
-				if (errno == EAGAIN || errno == EWOULDBLOCK)
-					// Note the file desc is still polled,
-					// so we'll get another chance at
-					// reading.
-					return;
-
-				// If the user sends an empty cmdfds array, we
-				// assume that it's a legacy client and
-				// create a temporary file descriptor and write
-				// the legacy command into it.
-
-				cmdfds.push_back(tmpfile_filedesc());
-
-				if (!cmdfds.back()->write_all(legacy_cmd.data()))
-					throw std::runtime_error(
-						_("Failed to write legacy "
-							"command to socket"));
-			}
-
-			// Save the sock and remove the connection from the
-			// poller (so that after we're done the connection is
-			// closed).
-
-			auto sock=iter->fd;
-			priv_poller.connections.erase(iter);
-
-			proc_check_and_do_request(
-				std::move(sock),
-				cmdfds,
-				iter->credentials
-			);
-		}
-	}
-{
-	++active_connections_by_uid[credentials.uid];
-}
-
-polled_socket_connection::~polled_socket_connection()
-{
-	auto iter=active_connections_by_uid.find(credentials.uid);
-
-	// The uid is guaranteed to be there since we increment it in
-	// the constructor, and the only way this object could have been
-	// created is if that happened.
-
-	--iter->second;
-	if (iter->second == 0)
-		active_connections_by_uid.erase(iter);
-}
-
-external_filedesc send_session_start_request(
-	external_filedesc parent_socket,
-	const std::string &name
-)
-{
-	if (!name.empty() && !proc_validpath(name))
-	{
-		std::cerr << _("Invalid session: ") << name << "\n" << std::flush;
-		exit(1);
-	}
-	auto [cmdfd, cmdfds]=connect_vera_priv();
-
-	if (!request_session_start(cmdfds[0], name))
-		exit(1);
-
-	wrap_request_send_fd(cmdfd, cmdfds);
-	auto response=cmdfd->readln();
-
-	int errcode=0;
-
-	if (!response.empty())
-	{
-		std::cerr << response << "\n" << std::flush;
-		errcode=1;
-	}
-
-	write(parent_socket->fd, &errcode, sizeof(errcode));
-	parent_socket={};
-
-	return cmdfd;
+	vera_socket_poller_and_connections::instance =
+		vera_socket_poller_and_connections{
+			is_pid_1()
+				? create_default_vera_socket()
+				: import_default_vera_socket()
+		};
 }
 
 void execvp_after_forking(const char *path, char **argv_ptrs)
@@ -1299,111 +846,38 @@ void execvp_after_forking(const char *path, char **argv_ptrs)
 	execvp(path, argv_ptrs);
 }
 
-std::optional<uid_sessionid_t> proc_get_sessionid(
-	const external_filedesc &efd,
-	const ucred &cred,
-	const std::function<void (const std::string &)> &error)
-{
-	// Read /proc/<pid>/sessionid and /proc/<pid>/loginuid
-	char pidbuf[std::numeric_limits<pid_t>::digits10 + 2];
-	auto [last, ec]=std::to_chars(pidbuf, pidbuf + sizeof(pidbuf), cred.pid);
-
-	std::string_view pidbuf_sv{pidbuf, (size_t)(last-pidbuf)};
-
-	std::string proc_pid;
-
-#if 0
-	std::error_code fs_ec;
-	std::string symlink=std::filesystem::read_symlink(proc_pid, fs_ec);
-
-	if (fs_ec)
-	{
-		error("cannot read exe symlink for " + proc_pid +
-			": " + fs_ec.message());
-		return {};
-	}
-#endif
-
-	// Read /proc/<pid>/sessionid to get the session id, we already know
-	// the UID.
-
-	proc_pid.clear();
-	proc_pid += "/proc/";
-	proc_pid += pidbuf_sv;
-	proc_pid += "/sessionid";
-
-	std::ifstream sessid{proc_pid};
-
-	std::string line;
-
-	size_t sessid_n=0;
-	if (!sessid || !std::getline(sessid, line) ||
-		std::from_chars(
-			line.c_str(),
-			line.c_str()+line.size(),
-			sessid_n
-		).ec != std::errc{})
-	{
-		error("failed to read your session id\n");
-		return {};
-	}
-	sessid.close();
-
-	proc_pid="/proc/";
-	proc_pid.append(pidbuf_sv);
-	proc_pid+="/loginuid";
-
-	sessid.open(proc_pid);
-
-	uid_t loginuid_n=-1;
-	if (!sessid || !std::getline(sessid, line) ||
-		std::from_chars(
-			line.c_str(),
-			line.c_str()+line.size(),
-			loginuid_n
-		).ec != std::errc{})
-	{
-		error("failed to read your loginuid\n");
-		return {};
-	}
-
-	return uid_sessionid_t{active_session_t{loginuid_n, sessid_n}};
-}
-
 void sigusr2()
 {
+	if (!is_pid_1())
+		return;
+
 	log_message("closing sockets");
 
-	priv_poller=priv_poller_t{};
+	vera_socket_poller_and_connections::instance=
+		vera_socket_poller_and_connections{};
 }
 
 void sigusr1()
 {
-	priv_poller=priv_poller_t{};
+	if (!is_pid_1())
+		return;
+
+	vera_socket_poller_and_connections::instance =
+		vera_socket_poller_and_connections{};
 
 	log_message("reopening sockets");
 	create_priv_poller();
 }
 
-// The vera init daemon
+bool is_pid_1()
+{
+	return is_pid_1_flag;
+}
+
+// Initialize pid 1 vera init daemon
 
 void vera_init()
 {
-	bool is_pid_1=getpid() == 1;
-
-	update_current_time();
-
-	bool initial;
-
-	if (getenv(reexec_envar))
-	{
-		initial=false;
-	}
-	else
-	{
-		initial=true;
-	}
-
 	if (ioctl(0, TIOCGWINSZ, &console_winsize) < 0 ||
 	    console_winsize.ws_row < 8) // Sanity check
 	{
@@ -1414,17 +888,16 @@ void vera_init()
 	}
 	else
 	{
-		if (initial)
-			std::cout << "vera: console size is "
-				  << console_winsize.ws_col
-				  << "x" << console_winsize.ws_row << "\n"
-				  << std::flush;
+		std::cout << "vera: console size is "
+			<< console_winsize.ws_col
+			<< "x" << console_winsize.ws_row << "\n"
+			<< std::flush;
 	}
-	create_priv_poller();
 
 	// Create our cgroup
 
-	std::string cgroups=proc_container_group_data::get_cgroupfs_base_path();
+	std::string cgroups=
+		proc_container_group_data::get_cgroupfs_default_base_path();
 
 	mkdir(cgroups.c_str(), 0755);
 
@@ -1446,68 +919,59 @@ void vera_init()
 		}
 	}
 
-	if (!initial)
+	log_message("starting");
+
+	// Disable ctrlaltdel
+
+	reboot(RB_DISABLE_CAD);
+
+	int f = open("/dev/tty", O_RDWR | O_NOCTTY);
+
+	if (f < 0)
 	{
-		log_message("restarted");
+		f=dup(0);
 	}
-	else
+
+	if (f >= 0)
 	{
-		log_message("starting");
-
-		if (is_pid_1)
-		{
-			// Disable ctrlaltdel
-
-			reboot(RB_DISABLE_CAD);
-
-			int f = open("/dev/tty", O_RDWR | O_NOCTTY);
-
-			if (f < 0)
-			{
-				f=dup(0);
-			}
-
-			if (f >= 0)
-			{
-				(void) ioctl(f, KDSIGACCEPT, SIGWINCH);
-				close(f);
-			}
-
-			// No core dumps and no debugging, please.
-			prctl(PR_SET_DUMPABLE, 0);
-		}
-
-		proc_gc(installconfigdir(),
-			localconfigdir(),
-			overrideconfigdir(),
-			[]
-			(const std::string &warning_message)
-			{
-				log_message(warning_message);
-			});
-
-		{
-			unsigned switchlogdays=7;
-
-			auto iter=environconfigvars.find("SWITCHLOGDAYS");
-
-			if (iter != environconfigvars.end())
-			{
-				const char *p=iter->second.c_str();
-
-				std::from_chars(p, p+iter->second.size(),
-						switchlogdays);
-			}
-			switchlog_purge(
-				SWITCHLOGDIR,
-				switchlogdays,
-				log_message);
-		}
-
+		(void) ioctl(f, KDSIGACCEPT, SIGWINCH);
+		close(f);
 	}
+
+	// No core dumps and no debugging, please.
+	prctl(PR_SET_DUMPABLE, 0);
 
 	// Garbage collection on the configuration directory.
 
+	proc_gc(installconfigdir(),
+		localconfigdir(),
+		overrideconfigdir(),
+		[]
+		(const std::string &warning_message)
+		{
+			log_message(warning_message);
+		});
+
+	unsigned switchlogdays=7;
+
+	auto iter=environconfigvars.find("SWITCHLOGDAYS");
+
+	if (iter != environconfigvars.end())
+	{
+		const char *p=iter->second.c_str();
+
+		std::from_chars(p, p+iter->second.size(),
+				switchlogdays);
+	}
+
+	switchlog_purge(
+		SWITCHLOGDIR,
+		switchlogdays,
+		log_message);
+}
+
+void vera_loop(int argc, char **argv)
+{
 	// We'll monitor the config directory for changes.
 
 	monitor_hierarchy monitor_installconfigdir{
@@ -1545,7 +1009,7 @@ void vera_init()
 			}),
 		container_install::initial{});
 
-	if (initial && is_pid_1)
+	if (is_pid_1())
 	{
 		// Create a fake request to switch to the default runlevel
 		//
@@ -1564,14 +1028,45 @@ void vera_init()
 		}
 	}
 
-	// Enter the event loop
+	if (!is_pid_1())
+	{
+		auto cmdfd=import_vera_cmdfd();
 
-	while (1)
+		if (cmdfd)
+		{
+			if (argc > 1 && argv[1][0])
+			{
+				std::vector<external_filedesc> cmd;
+
+				cmd.push_back(tmpfile_filedesc());
+
+				std::string unit=INSTALLED_SESSIONS_PREFIX "/";
+				unit += argv[1];
+
+				if (cmd[0] && send_start(cmd[0], unit))
+				{
+					proc_do_request(cmdfd, cmd, {});
+				}
+			}
+			else
+			{
+				(void)cmdfd->write_all("\n");
+			}
+		}
+
+		unset_vera_fd_env_vars();
+	}
+
+	// Enter the event loop
+	// A session manager will close the cmd_socket upon connection
+	// termination, in which case we simply return, and exit.
+
+	while (vera_socket_poller_and_connections::instance.cmd_socket)
 	{
 		do_poll(run_timers());
 
 		// If we determined the console's size...
-		if (console_winsize.ws_row)
+		if (is_pid_1() && console_winsize.ws_row)
 		{
 			auto &inprogress=proc_container_inprogress();
 
@@ -1589,7 +1084,7 @@ void vera_init()
 				}
 			}
 		}
-		proc_check_reexec();
+		proc_check_quiescent();
 	}
 }
 
@@ -1621,11 +1116,9 @@ constexpr std::string_view adjusted_default_path()
 	return SBINDIR ":" DEFAULT_PATH;
 }
 
-void vera()
+void vera(int argc, char **argv)
 {
-	setenv("PATH",
-	       adjusted_default_path().data(),
-	       1);
+	setenv("PATH", adjusted_default_path().data(), 1);
 
 	int fd;
 
@@ -1633,7 +1126,7 @@ void vera()
 
 	// init compatibility: set CONSOLE
 
-	if (!getenv("CONSOLE"))
+	if (is_pid_1() && !getenv("CONSOLE"))
 	{
 		fd=open("/dev/console", O_RDONLY|O_NONBLOCK);
 
@@ -1682,19 +1175,54 @@ void vera()
 	}
 	std::locale::global(std::locale{""});
 
-	bindtextdomain(PACKAGE, LOCALEDIR);
-	textdomain(PACKAGE);
+	bindtextdomain(TEXTDOMAIN, LOCALEDIR);
+	textdomain(TEXTDOMAIN);
 
 	// halt.c in syvinit wants to see INIT_VERSION
+	// This also lets our init stub to know that the system was booted
+	// by vera.
+
 	setenv("INIT_VERSION", "vera-" PACKAGE_VERSION, 1);
-	vera_init();
+
+	update_current_time();
+	create_priv_poller();
+
+	if (is_pid_1())
+		vera_init();
+	else
+	{
+		if (prctl(PR_SET_CHILD_SUBREAPER, 1))
+		{
+			log_message(_("Failed to set subreaper flag"));
+		}
+		setsid();
+		setpgid(0, 0);
+
+		std::ifstream i{"/proc/self/cgroup"};
+		std::string line;
+		while (std::getline(i, line))
+		{
+			std::string_view sv{line};
+			if (sv.substr(0, 3) == "0::")
+			{
+				proc_container_group_data::set_session_path(
+					sv.substr(3)
+				);
+				break;
+			}
+		}
+	}
+
+	vera_loop(argc, argv);
 }
 
 int main(int argc, char **argv)
 {
+	is_pid_1_flag = (getpid() == 1);
+
 	// Set up logging.
 
-	log_to_syslog=getpid() == 1 ? log_to_real_syslog:log_to_stdout;
+	log_to_syslog = log_to_real_syslog;
 
 	// Capture who we are.
 	exename=argv[0];
@@ -1707,7 +1235,7 @@ int main(int argc, char **argv)
 		++slash;
 
 	try {
-		vera();
+		vera(argc, argv);
 	} catch (const std::exception &e)
 	{
 		std::cerr << e.what() << std::endl;

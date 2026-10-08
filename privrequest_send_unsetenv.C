@@ -3,12 +3,12 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "privrequest.H"
 #include "messages.H"
+#include "privrequest.H"
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
 
 bool send_unsetenv(const external_filedesc &fd,
 		    std::string name)

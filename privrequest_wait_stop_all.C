@@ -4,13 +4,13 @@
 */
 #include "config.h"
 #include "privrequest.H"
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <string_view>
 
-bool request_reexec(const external_filedesc &efd)
+int wait_stop_all(const external_filedesc &efd)
 {
-	return efd->write_all("reexec\n");
+	efd->readln();
+	return 0;
 }

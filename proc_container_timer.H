@@ -22,6 +22,7 @@ public:
 	 */
 
 	proc_container_timerObj(
+		std::string_view description,
 		const current_containers_info &all_containers,
 		const proc_container &container,
 		time_t time_start,
@@ -32,6 +33,9 @@ public:
 
 	//! Destructor removes this from my_iter, if it's not end()
 	~proc_container_timerObj();
+
+	//! The timer's description/label that was passed to the constructor.
+	std::string timer_description;
 
 	std::weak_ptr<current_containers_infoObj> all_containers;
 
@@ -66,13 +70,14 @@ Returns a proc_container_timer handle. Destroying the handle cancels the
 timer.
 */
 
-proc_container_timer create_timer(
-	const current_containers_info &all_containers,
-	const proc_container &container,
-	time_t timeout,
-	const std::function<void (const current_containers_callback_info &
-				  )> &done
-);
+	proc_container_timer create_timer(
+		std::string_view description,
+		const current_containers_info &all_containers,
+		const proc_container &container,
+		time_t timeout,
+		const std::function<void (const current_containers_callback_info &
+					  )> &done
+	);
 
 void update_timer_containers(const current_containers &new_current_containers);
 

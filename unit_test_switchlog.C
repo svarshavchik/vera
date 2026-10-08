@@ -3,14 +3,26 @@
 ** See COPYING for distribution information.
 */
 
-#include <optional>
-#include <vector>
-#include <string>
-#include <sstream>
+#include "config.h"
 #include <algorithm>
+#include <mutex>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <vector>
 
 std::optional<std::stringstream> current_switchlog;
-std::vector<std::string> completed_switchlog;
+static std::mutex completed_switchlog_lock;
+static std::vector<std::string> &get_completed_switchlog_impl()
+{
+	static std::vector<std::string> v;
+	return v;
+}
+std::vector<std::string> get_completed_switchlog()
+{
+	std::lock_guard<std::mutex> l{completed_switchlog_lock};
+	return get_completed_switchlog_impl();
+}
 
 void switchlog_reset()
 {
@@ -34,15 +46,19 @@ void switchlog_stop()
 	{
 		current_switchlog->seekg(0);
 
-		completed_switchlog.clear();
+	{
+		std::lock_guard<std::mutex> switchlog_lock{completed_switchlog_lock};
+
+		get_completed_switchlog_impl().clear();
 
 		std::string l;
 
-		while (!std::getline(*current_switchlog, l).eof())
-			completed_switchlog.push_back(std::move(l));
+			while (!std::getline(*current_switchlog, l).eof())
+				get_completed_switchlog_impl().push_back(std::move(l));
 
-		std::sort(completed_switchlog.begin(),
-			  completed_switchlog.end());
+			std::sort(get_completed_switchlog_impl().begin(),
+				  get_completed_switchlog_impl().end());
+		}
 		current_switchlog.reset();
 	}
 }

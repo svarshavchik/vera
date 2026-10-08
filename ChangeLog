@@ -1,3 +1,30 @@
+2026-11-09  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Reimplement sessions. A separate vera daemon runs as a session
+	manager in its own container, using PR_SET_CHILD_SUBREAPER to deal
+	with its problem children. Use is_pid_1() to discriminate attributes
+	that differ between the real pid 1 and a session manager.
+
+	Make vlad suid root, and the first thing it does is drop root. This
+	runs vlad in secure execution mode, and vera validates that the
+	connecting process is AT_SECURE.
+
+	Remove the reexec command. The package installs staging binaries,
+	vera-inst and vlad-inst, and sysdown installs hardlinks to them,
+	updates take effect on a reboot. This removes a lot of clumsy code
+	that implements reexec. doinst.sh checks if it's an initial install
+	and handles the initial linking of staging binaries.
+
+	General refactoring, classes and fucntions sharing files with other
+	classes and functions get factored out into their own source files.
+
+	pam_vera reimplemented in C, a C++ PAM .so is unstable.
+
+	Test code refactoring. Optionally test controller functions by running
+	a separate execution thread that listens on a socket for connections
+	that are handled. Protect static unit test variables by a mutex, for
+	thread-safe access.
+
 2026-08-06  Sam Varshavchik  <mrsam@courier-mta.com>
 
 	* Try to recursively remove a cgroup directory, if we can't, for

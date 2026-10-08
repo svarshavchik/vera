@@ -4,10 +4,10 @@
 */
 
 #include "config.h"
-#include "unit_test.H"
 #include "proc_container.C"
-#include <iostream>
+#include "unit_test.H"
 #include <algorithm>
+#include <iostream>
 #include <vector>
 
 struct sort_test_dependencies {

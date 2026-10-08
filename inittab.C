@@ -3,23 +3,23 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
+#include "hook.H"
 #include "inittab.H"
 #include "log.H"
-#include "hook.H"
+#include "proc_loader.H"
 #include "verac.h"
 #include "yaml_writer.H"
-#include "proc_loader.H"
 #include <algorithm>
-#include <set>
+#include <filesystem>
+#include <fstream>
 #include <map>
-#include <unordered_set>
-#include <unordered_map>
+#include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
-#include <fstream>
-#include <sstream>
-#include <filesystem>
 #include <sys/stat.h>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace {
 #if 0

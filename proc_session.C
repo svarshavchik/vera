@@ -3,9 +3,9 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include <string_view>
-#include <charconv>
 #include "proc_loader.H"
+#include <charconv>
+#include <string_view>
 
 bool is_in_session(
 	std::string_view path,
@@ -26,31 +26,7 @@ std::string_view is_in_session_prefix(std::string_view path)
 	if (is_in_session(path, INSTALLED_SESSIONS_PREFIX))
 		return INSTALLED_SESSIONS_PREFIX;
 	if (is_in_session(path, ACTIVE_SESSIONS_PREFIX))
-	{
-		size_t i=sizeof(ACTIVE_SESSIONS_PREFIX)-1;
-
-		size_t j=0;
-
-		// We have:
-		// ACTIVE_SESSIONS_PREFIX/<userid>/<session-number>/<unitname>
-		//
-		// Search for the third slash, which delimits the session name
-		// prefix.
-
-		for (; i < path.size(); ++i)
-		{
-			if (path[i] == '/')
-			{
-				++j;
-
-				if (j == 3)
-				{
-					break;
-				}
-			}
-		}
-		return path.substr(0, i);
-	}
+		return ACTIVE_SESSIONS_PREFIX;
 	return {};
 }
 
@@ -92,13 +68,11 @@ std::optional<active_session_t> active_session_from_path(
 
 	i=path.find('/');
 
-	if (i == std::string_view::npos)
+	if (i != std::string_view::npos)
 		return {};
 
-	auto sessid_sv=path.substr(0, i);
-
-	uid_t uid;
-	size_t sessid;
+	uid_t uid{0};
+	size_t sessid{0};
 
 	auto r1=std::from_chars(
 		uid_sv.data(),
@@ -106,8 +80,8 @@ std::optional<active_session_t> active_session_from_path(
 		uid
 	);
 	auto r2=std::from_chars(
-		sessid_sv.data(),
-		sessid_sv.data()+sessid_sv.size(),
+		path.data(),
+		path.data()+path.size(),
 		sessid
 	);
 

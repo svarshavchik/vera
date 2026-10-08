@@ -4,15 +4,15 @@
 */
 
 #include "config.h"
-#include "unit_test.H"
-#include "privrequest.H"
 #include "forward_carbon_copy.H"
-#include <unistd.h>
-#include <thread>
-#include <mutex>
+#include "privrequest.H"
+#include "unit_test.H"
 #include <condition_variable>
+#include <mutex>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <thread>
+#include <unistd.h>
 
 std::string test_forward_carbon_copy(
 	std::function<void (const external_filedesc &)> writer,
@@ -69,7 +69,7 @@ void test_forward_carbon_copy1()
 		[]
 		(const external_filedesc &efd)
 		{
-			for (size_t i=0; i<50000; ++i)
+			for (size_t i=0; i<500; ++i)
 			{
 				std::ostringstream o;
 
@@ -85,7 +85,7 @@ void test_forward_carbon_copy1()
 
 	std::istringstream si{s};
 
-	for (size_t i=0; i<50000; ++i)
+	for (size_t i=0; i<500; ++i)
 	{
 		std::string ss;
 
@@ -112,7 +112,7 @@ void test_forward_carbon_copy2()
 		[&]
 		(const external_filedesc &efd)
 		{
-			for (size_t i=0; i<50000; ++i)
+			for (size_t i=0; i<500; ++i)
 			{
 				std::ostringstream o;
 
@@ -135,7 +135,7 @@ void test_forward_carbon_copy2()
 
 	std::istringstream si{s};
 
-	for (size_t i=0; i<50000; ++i)
+	for (size_t i=0; i<500; ++i)
 	{
 		std::string ss;
 

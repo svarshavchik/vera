@@ -3,15 +3,15 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "inittab.H"
 #include "configdirs.h"
+#include "inittab.H"
 #include "proc_loader.H"
+#include "verac_parseinittab.c"
 #include <filesystem>
+#include <getopt.h>
+#include <map>
 #include <string>
 #include <string_view>
-#include <map>
-#include <getopt.h>
-#include "verac_parseinittab.c"
 
 const char *inittabfile    = "/etc/inittab";
 const char *rcdir          = "/etc/rc.d";

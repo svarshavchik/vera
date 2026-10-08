@@ -3,20 +3,20 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_container_group.H"
 #include "current_containers_info.H"
 #include "log.H"
-#include "poller.H"
 #include "messages.H"
+#include "poller.H"
 #include "privrequest.H"
+#include "proc_container_group.H"
 #include <algorithm>
-#include <unistd.h>
-#include <string.h>
-#include <sstream>
-#include <fstream>
 #include <fcntl.h>
-#include <iostream>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string.h>
+#include <unistd.h>
 
 std::string proc_container_group_data::cgroups_dir() const
 {
@@ -182,9 +182,16 @@ bool proc_container_group_data::install(
 				create_info.all_containers
 			},
 			name=container->name]
-		(int fd)
+		(int fd, bool error)
 		mutable
 		{
+			if (error)
+			{
+				log_message(name +
+					_(" :stderr/stdout pipe read error"));
+				return;
+			}
+
 			auto l=all_containers.lock();
 
 			if (l)
@@ -287,105 +294,13 @@ bool proc_container_group_data::cgroups_register(pid_t pid)
 	return cgroups_register(cgroups_dir(), pid);
 }
 
-void proc_container_group::save_transfer_info(std::ostream &o)
-{
-	o << stdouterrpipe[0] << " " << stdouterrpipe[1] << " "
-	  << -1 << "\n";
-}
-
-void proc_container_group::prepare_to_transfer()
-{
-	prepare_to_transfer_fd(stdouterrpipe[0]);
-	prepare_to_transfer_fd(stdouterrpipe[1]);
-
-	log_message(container->name + _(": container prepared to re-exec"));
-}
-
-bool proc_container_group::restored(
-	std::istream &i,
-	const group_create_info &create_info)
-{
-	std::string s;
-
-	if (!std::getline(i, s))
-		return false;
-
-	std::istringstream is{std::move(s)};
-
-	int cgroup_eventsfd;
-
-	if (!(is >> stdouterrpipe[0] >> stdouterrpipe[1] >> cgroup_eventsfd))
-		return false;
-
-	// COMPAT: until 0.02 this was a file descriptor for cgroup.events. We
-	// are not keeping this file descriptor open, any more. We open
-	// cgroup.events as needed.
-	if (cgroup_eventsfd >= 0)
-		close(cgroup_eventsfd);
-
-	if (fcntl(stdouterrpipe[0], F_SETFD, FD_CLOEXEC) < 0 ||
-	    fcntl(stdouterrpipe[1], F_SETFD, FD_CLOEXEC) < 0)
-		return false;
-
-	container=create_info.cc->first;
-
-	if (!install(cgroup_events(), create_info))
-		return false;
-
-	log_message(container->name + _(": restored after re-exec"));
-
-	return true;
-
-}
-
-void proc_container_group::all_restored(const group_create_info &create_info)
-{
-	// Obscure race condition. Make sure we note that if something is not
-	// populated.
-
-	std::string scratch_buffer;
-
-	bool populated=false;
-
-	auto fd=open(cgroup_events().c_str(), O_RDONLY);
-
-	if (fd >= 0)
-	{
-		auto efd=std::make_shared<external_filedescObj>(fd);
-
-		populated=is_populated(fd, scratch_buffer);
-	}
-
-	create_info.all_containers->populated(
-		create_info.cc->first->name,
-		populated,
-		true);
-
-	if (populated)
-	{
-		log_message(container->name + _(": reactivated after re-exec"));
-	}
-	else
-	{
-		log_message(container->name + _(": not active after re-exec"));
-	}
-}
-
 // Send a signal to all processes in a container.
 
 void proc_container_group::cgroups_sendsig_all(int sig)
 {
 	if (sig == SIGKILL)
 	{
-		std::string s{cgroups_dir(container->name)
-			      + "/cgroup.kill"};
-		int fd=open(s.c_str(), O_WRONLY);
-
-		if (fd >= 0)
-		{
-			write(fd, "1", 1);
-			close(fd);
-		}
+		cgroups_kill(cgroups_dir(container->name));
 		return;
 	}
 
@@ -399,6 +314,19 @@ void proc_container_group::cgroups_sendsig_all(int sig)
 	while (cp.i >> p)
 	{
 		cgroups_sendsig(p, sig);
+	}
+}
+
+void proc_container_group::cgroups_kill(std::string dir)
+{
+	dir += "/cgroup.kill";
+	int fd=open(dir.c_str(), O_WRONLY);
+
+	if (fd >= 0)
+	{
+		if (write(fd, "1", 1))
+			; // IGNORE
+		close(fd);
 	}
 }
 

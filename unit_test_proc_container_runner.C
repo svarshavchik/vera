@@ -3,21 +3,16 @@
 ** See COPYING for distribution information.
 */
 
-#include <unistd.h>
-#include <vector>
+#include "config.h"
 #include "unit_test.H"
 #include <sstream>
+#include <unistd.h>
+#include <vector>
 
 static pid_t get_next_pid(const proc_container &container,
 			  std::vector<std::vector<char>> &argv)
 {
-	pid_t pid=next_pid++;
-
-	if (next_pid == 0)
-		++next_pid;
-
-	if (all_forks_fail)
-		pid= -1;
+	pid_t pid=get_and_increment_next_pid();
 
 	std::ostringstream o;
 
@@ -33,7 +28,7 @@ static pid_t get_next_pid(const proc_container &container,
 
 	o << " (pid " << pid << ")";
 
-	logged_runners.push_back(o.str());
+	add_logged_runner(o.str());
 
 	if (pid != -1)
 		populated(container, true);

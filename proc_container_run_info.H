@@ -6,12 +6,8 @@
 #define proc_container_run_info_h
 
 #include <type_traits>
-#include <functional>
-#include <optional>
-
 #include "proc_container_state.H"
 #include "proc_container_group.H"
-#include <iostream>
 
 struct proc_container_run_info {
 	//! The actual state
@@ -129,44 +125,6 @@ struct proc_container_run_info {
 	//! When containers get updated, make a note of it.
 
 	void updated(const proc_container &pc);
-
-	//! Determine whether this container's state is transferrable
-
-	//! Before re-execing ourselves each container gets checked.
-	//! is_transferrable() gets called to capture the container's
-	//! serialized metadata.
-	//!
-	//! Only started and stopped containers can be transferrable,
-	//! and the started container cannot have a reload_or_restart
-	//! runner. If this is the case: writes the container's state
-	//! to the given stream and returns true.
-	//!
-	//! Returns false if the container's state cannot be saved.
-
-	bool is_transferrable(const proc_container &pc,
-			      std::ostream &o);
-
-	//! About to re-exec ourselves.
-
-	//! All containers are transferrable. This removes the close-on
-	//! exec flag on any file descriptors here.
-
-	void prepare_to_transfer(const proc_container &pc);
-
-	//! We are reexeced. Restore ourselves.
-
-	//! Receives the input stream for the output stream that was passed
-	//! to is_transferrable.
-
-	void restored(std::istream &i,
-		      const group_create_info &create_info,
-		      const std::function<void (state_started &,
-						pid_t)> &reinstall_respawn_runner
-	);
-
-	//! After all containers were restored, this gets called for them.
-
-	void all_restored(const group_create_info &create_info);
 };
 
 #endif

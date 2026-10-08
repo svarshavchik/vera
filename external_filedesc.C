@@ -4,13 +4,13 @@
 */
 #include "config.h"
 #include "external_filedesc.H"
-#include <sys/socket.h>
 #include <algorithm>
-#include <string>
+#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <errno.h>
+#include <string>
 #include <sys/mman.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 
 external_filedescObj::~external_filedescObj()

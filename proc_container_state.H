@@ -14,6 +14,13 @@
 #include "log.H"
 #include <list>
 
+/*! A starting or a stopping container keeps track of who requested the action.
+
+*/
+struct requesters_list {
+	std::list<external_filedesc> requesters;
+};
+
 //! A process container that's not running
 struct state_stopped {
 
@@ -55,13 +62,11 @@ struct get_requester_stdout {
 };
 
 //! A process container that's starting
-struct state_starting : state_requester_stdout {
+struct state_starting : state_requester_stdout, requesters_list {
 
 	//! Starting this container because it is a dependency.
 
 	bool dependency;
-	//! The connections that requested this container to get started.
-	std::list<external_filedesc> requesters;
 
 	state_starting(
 		bool dependency,
@@ -102,7 +107,7 @@ struct state_started : state_requester_stdout {
 	bool dependency;
 
 	//! When this container started.
-	time_t start_time=log_current_timespec().tv_sec;
+	time_t start_time=log_current_time_sec();
 
 	state_started(bool dependency) : dependency{dependency} {}
 
@@ -216,13 +221,10 @@ typedef std::variant<stop_pending, stop_running,
 		     stop_removing> stopping_phase;
 
 //! A process container that's stopping
-struct state_stopping : state_requester_stdout {
+struct state_stopping : state_requester_stdout, requesters_list {
 
 	//! Its current phase
 	stopping_phase phase;
-
-	//! The connections that requested this container to get stopped.
-	std::list<external_filedesc> requesters;
 
 	//! Non default, non-copy constructor forwards to phase's constructor.
 

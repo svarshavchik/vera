@@ -4,13 +4,13 @@
 */
 #include "config.h"
 #include "privrequest.H"
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 
 void sort_pids(std::unordered_map<pid_t, pid_info> &processes,
 	       hier_pid_info::hier_pids &pids)

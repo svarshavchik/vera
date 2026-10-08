@@ -3,11 +3,13 @@
 ** See COPYING for distribution information.
 */
 
+#include "config.h"
 #include "log.H"
 #include "messages.H"
-#include <string_view>
+#include <algorithm>
 #include <locale>
 #include <sstream>
+#include <string_view>
 
 std::string log_elapsed(time_t n)
 {

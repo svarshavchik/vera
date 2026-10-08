@@ -5,8 +5,8 @@
 #include "config.h"
 #include "parsed_yaml.H"
 #include "proc_loader.H"
-#include <fstream>
 #include <dirent.h>
+#include <fstream>
 
 int read_handler(void *ptr,
 		 unsigned char *buf,

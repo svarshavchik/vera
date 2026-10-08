@@ -41,7 +41,6 @@ stamp-h1
 /testcontroller
 /testcontroller2
 /testcontroller2fdleak
-/testcontroller3
 /testcontroller4
 /testdepcomputations
 /testinittab
@@ -51,9 +50,9 @@ stamp-h1
 /testswitchlog
 /update-logrotate
 /v2-controllers
-/vera
+/vera-inst
 /vera-all
 /vera-init
 /vera-logrotate
-/vlad
+/vlad-inst
 /vlad-all

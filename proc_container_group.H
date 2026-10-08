@@ -43,7 +43,38 @@ struct proc_container_group_data {
 
 	proc_container container;
 
-	static const char *get_cgroupfs_base_path();
+	//! Return the default cgroups base path
+
+	static const char *get_cgroupfs_default_base_path();
+
+	/*! Returns the default or the session cgroups base path
+
+	  If pid 1, then it's the default cgroups base path.
+
+	  Otherwise it's the path to the session's cgroups.
+
+	*/
+
+	static std::string_view get_cgroupfs_base_path();
+
+	/*! Set the session cgroups base path.
+
+	  This is called by a session vera manager when it gets started, once
+	  it figures out where its session's cgroups should be.
+
+	*/
+
+	static void set_session_path(std::string_view path);
+
+	/*! No-arg overload. Computes the session path from the current process
+	  session ID and sets it.
+
+	  Returns an empty string on success, or an error message string on
+	  failure. The error message is not printed externally; the caller
+	  decides how to report it.
+
+	*/
+	static std::string set_session_path();
 
 	//! Return the cgroups directory for this container.
 
@@ -52,6 +83,12 @@ struct proc_container_group_data {
 	//! Return ths cgroups directory for the given container
 
 	static std::string cgroups_dir(std::string name);
+
+	/*! Return the cgroups directory for the given container under the
+	given base path.
+	*/
+
+	static std::string cgroups_dir(std::string_view base, std::string name);
 
 	//! Create a cgroups directory.
 
@@ -165,9 +202,15 @@ public:
 	bool cgroups_try_rmdir(const proc_container &pc,
 			       const external_filedesc &requester_stdout);
 
+	static bool cgroups_try_rmdir(const std::string &dir);
+
 	//! Send a signal to all processes in the group
 
 	void cgroups_sendsig_all(int);
+
+	//! Kill all processes in a cgroups hierarchy
+
+	static void cgroups_kill(std::string dir);
 
 	//! Send a signal to all processes except children with same exes.
 
@@ -217,34 +260,6 @@ public:
 	using proc_container_group_data::populated;
 
 	using proc_container_group_data::log_output;
-	///////////////////////////////////////////////////////////////////
-	//
-	// Saving and restoring state for a re-exec.
-
-	//! Serialize our open file descriptors into the given output stream.
-	void save_transfer_info(std::ostream &);
-
-	//! Everything has been serialized, remove their close-on-exec flag.
-	void prepare_to_transfer();
-
-private:
-	//! Handle transferring for a given file descriptor
-
-	//! Implemented differently in unit tests.
-
-	static void prepare_to_transfer_fd(int &);
-public:
-	//! Restore the serialized file descriptors, set their close-on-exec.
-
-	//! Called in lieu of create() after a re-exec. Returns false if there
-	//! was a problem.
-
-	bool restored(std::istream &,
-		      const group_create_info &create_info);
-
-	//! Called after all containers are restored.
-
-	void all_restored(const group_create_info &create_info);
 };
 
 #endif

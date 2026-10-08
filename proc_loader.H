@@ -73,10 +73,7 @@ struct proc_find {
 	virtual void started(const std::filesystem::path &);
 	virtual void finished(const std::filesystem::path &);
 
-	void find()
-	{
-		scan(".");
-	}
+	void find();
 
 	void scan(const std::filesystem::path &);
 };
@@ -256,7 +253,15 @@ std::unordered_map<std::string, proc_override> proc_get_overrides(
 	const std::string &config_local,
 	const std::string &config_override);
 
-//! Return a specific override
+/*! Return a specific override
+
+This verifies that name is a valid container name, and that the container's
+definition exists.
+
+If the override file does not exist, then a default proc_override is
+returned.
+
+*/
 
 proc_override proc_get_override(const std::string &config_global,
 				const std::string &config_override,

@@ -3,25 +3,25 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_loader.H"
 #include "messages.H"
-#include "yaml_writer.H"
 #include "parsed_yaml.H"
+#include "proc_loader.H"
+#include "yaml_writer.H"
 #include <algorithm>
-#include <filesystem>
-#include <vector>
-#include <string>
-#include <unistd.h>
-#include <iostream>
-#include <fstream>
-#include <sstream>
 #include <algorithm>
-#include <system_error>
-#include <memory>
 #include <errno.h>
-#include <sys/stat.h>
-#include <sys/file.h>
 #include <fcntl.h>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <system_error>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <vector>
 
 std::unordered_map<std::string, std::string> environconfigvars;
 

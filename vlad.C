@@ -5,48 +5,46 @@
 
 #include "config.h"
 #include "configdirs.h"
+#include "connect_vera_priv.H"
+#include "hook.H"
+#include "inittab.H"
+#include "messages.H"
+#include "parsed_yaml.H"
+#include "privrequest.H"
 #include "proc_container_group.H"
 #include "proc_loader.H"
-#include "parsed_yaml.H"
-#include "messages.H"
-#include "external_filedesc.H"
-#include "connect_vera_priv.H"
-#include "forward_carbon_copy.H"
-#include "privrequest.H"
-#include "inittab.H"
-#include "hook.H"
 #include "switchlog.H"
 #include "verac.h"
 #include "vvconfigdirs.H"
-#include <unistd.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/reboot.h>
-#include <sys/kd.h>
-#include <sys/ioctl.h>
-#include <sys/mount.h>
-#include <sys/wait.h>
-#include <sys/mman.h>
-#include <stdlib.h>
-#include <syslog.h>
-#include <iostream>
-#include <string.h>
-#include <getopt.h>
-#include <time.h>
-#include <termios.h>
-#include <fstream>
-#include <locale>
-#include <iomanip>
-#include <string>
-#include <vector>
-#include <set>
 #include <algorithm>
+#include <fcntl.h>
+#include <fstream>
+#include <getopt.h>
+#include <iomanip>
+#include <iostream>
 #include <iterator>
-#include <sys/prctl.h>
+#include <locale>
+#include <set>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <string.h>
+#include <syslog.h>
 #include <sys/auxv.h>
+#include <sys/ioctl.h>
+#include <sys/kd.h>
+#include <sys/mman.h>
+#include <sys/mount.h>
+#include <sys/prctl.h>
+#include <sys/reboot.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <termios.h>
+#include <time.h>
+#include <unistd.h>
+#include <vector>
 
 int all_flag;
 int stopped_flag;
@@ -56,6 +54,7 @@ int waitrunlevel_flag;
 int nowait_flag;
 int override_flag;
 int resources_flag;
+int session_flag;
 
 const struct option options[]={
 	{"all", 0, &all_flag, 1},
@@ -66,11 +65,18 @@ const struct option options[]={
 	{"wait", 0, &waitrunlevel_flag, 1},
 	{"nowait", 0, &nowait_flag, 1},
 	{"override", 0, &override_flag, 1},
+	{"session", 0, &session_flag, 1},
 	{nullptr},
 };
 
 extern int optind;
 
+bool is_pid_1()
+{
+	// We want to read global configuration directories.
+
+	return true;
+}
 void pager()
 {
 	if (!isatty(1))
@@ -258,96 +264,20 @@ void do_override(const std::string &name,
 	exit(exit_code);
 }
 
-// send start/stop/restart/reload request
-static std::tuple<external_filedesc, external_filedesc> vlad_ssrr(
-	bool (*send_command)(const external_filedesc &, std::string),
-	std::string unit)
+// Session managers deal only with INSTALLED_SESSIONS_PREFIX, so add
+// the prefix if it's not there.
+
+static std::string add_default_prefix(std::string unit)
 {
-	auto [cmdfd, cmdfds]=connect_vera_priv();
-
-	external_filedesc stdoutcc;
-
-	if (!nowait_flag)
-	{
-		auto [socket1, socket2]=create_vera_socketpair();
-
-		stdoutcc=std::move(socket1);
-		cmdfds.push_back(std::move(socket2));
-	}
-
-	if (!send_command(cmdfds[0], std::move(unit)))
-	{
-		std::cerr << _("Failed to send command") << "\n" << std::flush;
-		exit(1);
-	}
-	wrap_request_send_fd(cmdfd, cmdfds);
-
-	return {cmdfd, stdoutcc};
+	if (session_flag && unit.find('/') == std::string::npos)
+		unit=INSTALLED_SESSIONS_PREFIX "/" + unit;
+	return unit;
 }
 
 void vlad_start(std::string unit)
 {
-	auto [cmdfd, stdoutcc]=vlad_ssrr(send_start, unit);
-
-	auto ret=get_start_status(cmdfd);
-
-	if (!ret.empty())
-	{
-		std::cerr << ret << std::endl;
-		exit(1);
-	}
-
-	if (nowait_flag)
-		return;
-
-	if (stdoutcc)
-		forward_carbon_copy(stdoutcc, 1);
-
-	if (!get_start_result(cmdfd))
-	{
-		std::cerr << unit
-			  << _(": could not be started, check the "
-			       "log files for more information")
-			  << std::endl;
-		exit(1);
-	}
-}
-
-// switch command request
-
-static void vlad_switch(const std::string &runlevel)
-{
-	auto [cmdfd, cmdfds]=connect_vera_priv();
-
-	if (!request_runlevel(cmdfds[0], runlevel))
-		throw std::runtime_error(_("Failed to request runlevel"));
-
-	wrap_request_send_fd(cmdfd, cmdfds);
-
-	auto ret=get_runlevel_status(cmdfd);
-
-	if (!ret.empty())
-	{
-		std::cerr << ret << std::endl;
-		exit(1);
-	}
-
-	if (waitrunlevel_flag)
-		wait_runlevel(cmdfd);
-}
-
-// freeze request
-
-static void vlad_freeze(const std::string &name)
-{
-	auto [cmdfd, cmdfds]=connect_vera_priv();
-
-	if (!request_freeze(cmdfds[0], name))
-		throw std::runtime_error(_("Failed to request freeze"));
-
-	wrap_request_send_fd(cmdfd, cmdfds);
-
-	auto ret=get_freeze_thaw_status(cmdfd);
+	auto ret=do_start(session_flag,
+	    add_default_prefix(std::move(unit)), nowait_flag);
 
 	if (!ret.empty())
 	{
@@ -356,25 +286,7 @@ static void vlad_freeze(const std::string &name)
 	}
 }
 
-// thaw request
 
-static void vlad_thaw(const std::string &name)
-{
-	auto [cmdfd, cmdfds]=connect_vera_priv();
-
-	if (!request_thaw(cmdfds[0], name))
-		throw std::runtime_error(_("Failed to request thaw"));
-
-	wrap_request_send_fd(cmdfd, cmdfds);
-
-	auto ret=get_freeze_thaw_status(cmdfd);
-
-	if (!ret.empty())
-	{
-		std::cerr << ret << std::endl;
-		exit(1);
-	}
-}
 
 void dump_processes(const hier_pid_info::hier_pids &processes,
 		    size_t level)
@@ -512,12 +424,9 @@ void dump_readable(const std::string &name,
 			     std::unordered_set<std::string>
 			     container_state_info::*,
 			     const char *>,
-			     5>{{{&container_state_info
+			     4>{{{&container_state_info
 					     ::dep_requires,
 					     _("Requires:")},
-				 {&container_state_info
-				  ::dep_requires_first,
-				  _("Requires First:")},
 				 {&container_state_info
 				  ::dep_required_by,
 				  _("Required By:")},
@@ -614,24 +523,6 @@ static auto get_requested_log(const std::string &lognum_str)
 		throw std::runtime_error{"Requested log not found"};
 
 	return switchlog_analyze(logs.at(logs.size()-lognum));
-}
-
-static bool vera_hook(hook_op op)
-{
-	return hook("/etc/rc.d",
-		    "/sbin",
-		    "/usr/sbin",
-		    SBINDIR "/vera-init",
-		    PKGDATADIR,
-		    HOOKFILE,
-		    op);
-}
-
-static bool rehook()
-{
-	return rehook_sbin_init("/sbin",
-				SBINDIR "/vera-init") &&
-		vera_hook(hook_op::rehook);
 }
 
 static void set_or_add_resource(
@@ -801,6 +692,12 @@ static void get_resource(const std::string &name,
 		  std::ostreambuf_iterator<char>(std::cout));
 }
 
+bool vera_up()
+{
+	external_filedesc cmdfd=try_connect_vera_priv();
+
+	return cmdfd ? true:false;
+}
 static void vlad(std::vector<std::string> args)
 {
 	if (args.size() == 2 && args[0] == "start")
@@ -811,9 +708,8 @@ static void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "stop")
 	{
-		auto [cmdfd, stdoutcc]=vlad_ssrr(send_stop, args[1]);
-
-		auto ret=get_stop_status(cmdfd);
+		auto ret=do_stop(session_flag,
+			add_default_prefix(args[1]), nowait_flag);
 
 		if (!ret.empty())
 		{
@@ -821,20 +717,13 @@ static void vlad(std::vector<std::string> args)
 			exit(1);
 		}
 
-		if (nowait_flag)
-			return;
-
-		forward_carbon_copy(stdoutcc, 1);
-
-		wait_stop(cmdfd);
 		return;
 	}
 
 	if (args.size() == 2 && args[0] == "restart")
 	{
-		auto [cmdfd, stdoutcc]=vlad_ssrr(send_restart, args[1]);
-
-		auto ret=get_restart_status(cmdfd);
+		auto ret=do_restart(session_flag,
+			add_default_prefix(args[1]), nowait_flag);
 
 		if (!ret.empty())
 		{
@@ -842,39 +731,13 @@ static void vlad(std::vector<std::string> args)
 			exit(1);
 		}
 
-		if (nowait_flag)
-			return;
-
-		forward_carbon_copy(stdoutcc, 1);
-
-		int rc=wait_restart(cmdfd);
-
-		if (WIFSIGNALED(rc))
-		{
-			std::cerr << args[1]
-				  << _(": restart terminated by signal ")
-				  << WSTOPSIG(rc)
-				  << std::endl;
-			exit(1);
-		}
-		rc=WEXITSTATUS(rc);
-
-		if (rc)
-		{
-			std::cerr << args[1]
-				  << _(": could not be restarted, check the "
-				       "log files for more information")
-				  << std::endl;
-			exit(rc);
-		}
 		return;
 	}
 
 	if (args.size() == 2 && args[0] == "reload")
 	{
-		auto [cmdfd, stdoutcc]=vlad_ssrr(send_reload, args[1]);
-
-		auto ret=get_reload_status(cmdfd);
+		auto ret=do_reload(session_flag,
+			add_default_prefix(args[1]), nowait_flag);
 
 		if (!ret.empty())
 		{
@@ -882,59 +745,35 @@ static void vlad(std::vector<std::string> args)
 			exit(1);
 		}
 
-		if (nowait_flag)
-			return;
-
-		forward_carbon_copy(stdoutcc, 1);
-
-		int rc=wait_reload(cmdfd);
-
-		if (WIFSIGNALED(rc))
-		{
-			std::cerr << args[1]
-				  << _(": reload terminated by signal ")
-				  << WSTOPSIG(rc)
-				  << std::endl;
-			exit(1);
-		}
-		rc=WEXITSTATUS(rc);
-
-		if (rc)
-		{
-			std::cerr << args[1]
-				  << _(": could not be reloaded, check the "
-				       "log files for more information")
-				  << std::endl;
-			exit(rc);
-		}
 		return;
 	}
 
-	if (args.size() == 1 && (args[0] == "reexec" ||
-				 args[0] == "u" ||
+	if (args.size() == 1 && (args[0] == "u" ||
 				 args[0] == "U"))
 	{
-		auto [cmdfd, cmdfds]=connect_vera_priv();
-
-		if (!request_reexec(cmdfd))
-		{
-			std::cerr << _("Failed to reexec") << std::endl;
-			exit(1);
-		}
-
-		cmdfd->readln();
+		// Ignored telinit compatibility, we don't reexec.
 		return;
 	}
 
 	if (args.size() == 2 && args[0] == "switch")
 	{
-		vlad_switch(args[1]);
+		auto ret=privrequest_switch_runlevel(
+			args[1],
+			waitrunlevel_flag
+		);
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
 		return;
 	}
 
 	if (args.size() == 1 && args[0] == "current")
 	{
-		auto [cmdfd, cmdfds]=connect_vera_priv();
+		auto cmdfd=connect_vera_priv();
+		std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 		if (!request_current_runlevel(cmdfds[0]))
 		{
@@ -967,20 +806,29 @@ static void vlad(std::vector<std::string> args)
 
 	if (args.size() >= 1 && args[0] == "status")
 	{
+		if (session_flag)
+		{
+			if (auto err=proc_container_group_data::set_session_path(); !err.empty())
+			{
+				std::cerr << err << std::endl;
+				exit(1);
+			}
+		}
+
 		pager();
 
-		auto [cmdfd, cmdfds]=connect_vera_priv();
+		auto status_opt=do_status(session_flag);
 
-		if (!request_status(cmdfd, cmdfds))
+		if (!status_opt)
 		{
-			perror("request_status");
+			std::cerr << _("Failed to request status") << std::endl;
 			exit(1);
 		}
 
 		if (args.size() >= 2)
 			stopped_flag=1;
 
-		auto status=get_status(cmdfd, cmdfds);
+		auto &status=*status_opt;
 
 		update_status_overrides(
 			status,
@@ -996,10 +844,12 @@ static void vlad(std::vector<std::string> args)
 		{
 			for (size_t i=1; i<args.size(); ++i)
 			{
-				auto iter=status.find(args[i]);
+				auto s=add_default_prefix(args[i]);
+
+				auto iter=status.find(s);
 
 				if (iter != status.end())
-					containers.insert(args[i]);
+					containers.insert(s);
 			}
 		}
 		else
@@ -1032,11 +882,7 @@ static void vlad(std::vector<std::string> args)
 
 	if (args.size() == 1 && args[0] == "vera-up")
 	{
-		auto [cmdfd, cmdfds]=try_connect_vera_priv();
-
-		if (cmdfd)
-			exit(0);
-		exit(1);
+		exit(vera_up() ? 0:1);
 	}
 
 	if (args.size() == 1 && args[0] == "hook")
@@ -1047,7 +893,8 @@ static void vlad(std::vector<std::string> args)
 			  SBINDIR "/vera-init",
 			  PKGDATADIR,
 			  HOOKFILE,
-			  hook_op::permanently))
+			  hook_op::permanently,
+			  vera_up()))
 			exit(1);
 		std::cout << "Switched to vera for future boots." << std::endl;
 		exit(0);
@@ -1061,7 +908,8 @@ static void vlad(std::vector<std::string> args)
 			  SBINDIR "/vera-init",
 			  PKGDATADIR,
 			  HOOKFILE,
-			  hook_op::once))
+			  hook_op::once,
+			  vera_up()))
 			exit(1);
 		std::cout << "Switched to vera for the next reboot."
 			  << std::endl;
@@ -1147,7 +995,14 @@ static void vlad(std::vector<std::string> args)
 	}
 	if (args.size() == 1 && args[0] == "rehook")
 	{
-		if (!rehook())
+		if (!hook("/etc/rc.d",
+			"/sbin",
+			"/usr/sbin",
+			SBINDIR "/vera-init",
+			PKGDATADIR,
+			HOOKFILE,
+			hook_op::rehook,
+			vera_up()))
 		{
 			std::cerr << _("vera is not hooked.") << std::endl;
 			exit(1);
@@ -1180,7 +1035,8 @@ static void vlad(std::vector<std::string> args)
 
 	if (args.size() == 3 && args[0] == "sysdown")
 	{
-		auto [cmdfd, cmdfds]=connect_vera_priv();
+		auto cmdfd=connect_vera_priv();
+		std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 		if (!send_sysdown(cmdfds[0], std::move(args[1]),
 				std::move(args[2])))
@@ -1203,7 +1059,8 @@ static void vlad(std::vector<std::string> args)
 
 	if (args.size() == 3 && args[0] == "setenv")
 	{
-		auto [cmdfd, cmdfds]=connect_vera_priv();
+		auto cmdfd=connect_vera_priv();
+		std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 		if (!send_setenv(cmdfds[0], args[1], args[2]))
 		{
@@ -1217,7 +1074,8 @@ static void vlad(std::vector<std::string> args)
 
 	if (args.size() == 2 && args[0] == "unsetenv")
 	{
-		auto [cmdfd, cmdfds]=connect_vera_priv();
+		auto cmdfd=connect_vera_priv();
+		std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 		if (!send_unsetenv(cmdfds[0], args[1]))
 		{
@@ -1245,7 +1103,16 @@ static void vlad(std::vector<std::string> args)
 			return;
 		}
 
-		vlad_switch(args[0]);
+		auto ret=privrequest_switch_runlevel(
+			args[0],
+			waitrunlevel_flag
+		);
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
+
 		exit(0);
 	}
 
@@ -1420,12 +1287,22 @@ static void vlad(std::vector<std::string> args)
 	}
 	if (args.size() == 2 && args[0] == "freeze")
 	{
-		vlad_freeze(args[1]);
+		auto ret=do_freeze(args[1]);
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
 		exit(0);
 	}
 	if (args.size() == 2 && args[0] == "thaw")
 	{
-		vlad_thaw(args[1]);
+		auto ret=do_thaw(args[1]);
+		if (!ret.empty())
+		{
+			std::cerr << ret << std::endl;
+			exit(1);
+		}
 		exit(0);
 	}
 
@@ -1467,8 +1344,6 @@ static void vlad(std::vector<std::string> args)
 	{
 		std::string name;
 
-		auto [s1, s2]=create_vera_socketpair();
-
 		if (args.size() > 1)
 		{
 			name=args[1];
@@ -1481,55 +1356,25 @@ static void vlad(std::vector<std::string> args)
 			}
 		}
 
-		auto [cmdfd, cmdfds]=connect_vera_priv();
-
-		if (!request_session_start(cmdfds[0], name))
-			exit(1);
-
-		cmdfds.push_back(std::move(s2));
-		s2={};
-
-		pid_t p=fork();
-
-		if (p < 0)
+		auto error=session_start(name);
+		if (!error.empty())
 		{
-			perror("fork");
+			std::cerr << _("Failed to start session: ") << error
+					 << "\n" << std::flush;
 			exit(1);
 		}
-
-		if (p == 0)
-		{
-			cmdfd={};
-			cmdfds.clear();
-
-			privrequest_execve_prep_pg(); // For our own benefit.
-
-			while (request_and_execute_fork(s1))
-				;
-
-			exit(0);
-		}
-
-		wrap_request_send_fd(cmdfd, cmdfds);
-
-		s1 = {};
-
-		auto ret=get_start_status(cmdfd);
-		if (ret != "")
-		{
-			std::cerr << ret << "\n" << std::flush;
-			exit(1);
-		}
-
-		if (!get_start_result(cmdfd))
-			exit(1);
-
 		exit(0);
 	}
+
 	if (args.size() == 1 && args[0] == "session-stop")
 	{
-		if (!process_session_stop())
+		auto err=do_stop_all(nowait_flag);
+		if (!err.empty())
+		{
+			std::cerr << _("Failed to stop session: ") << err
+					 << "\n" << std::flush;
 			exit(1);
+		}
 		exit(0);
 	}
 
@@ -1542,17 +1387,25 @@ void log_message(const std::string &message)
 	std::cerr << message << std::endl;
 }
 
+void exec_vera(char **argv)
+{
+	execv(SBINDIR "/vera", argv);
+	perror(SBINDIR "/vera");
+	std::cerr << "execv failed" << std::endl;
+	exit(1);
+}
+
 void execvp_after_forking(const char *path, char **argv_ptrs)
 {
 	execvp(path, argv_ptrs);
 }
 
-static void vlad(int argc, char **argv)
+static void vlad_main(int argc, char **argv)
 {
 	std::locale::global(std::locale{""});
 
-	bindtextdomain(PACKAGE, LOCALEDIR);
-	textdomain(PACKAGE);
+	bindtextdomain(TEXTDOMAIN, LOCALEDIR);
+	textdomain(TEXTDOMAIN);
 
 	int c;
 
@@ -1565,7 +1418,8 @@ static void vlad(int argc, char **argv)
 
 			auto p=s.find('=');
 
-			auto [cmdfd, cmdfds]=connect_vera_priv();
+			auto cmdfd=connect_vera_priv();
+			std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 			if (p != s.npos)
 			{
@@ -1606,7 +1460,20 @@ static void drop_privileges() __attribute__((constructor(101)));
 
 static void drop_privileges()
 {
-	setuid(getuid());
+	auto u=getuid();
+	if (setresuid(u,u,u) < 0)
+	{
+		std::cerr << "setresuid failed: "
+			<< strerror(errno) << std::endl;
+		_exit(1);
+	}
+
+	if (prctl(PR_SET_DUMPABLE, 1) < 0)
+	{
+		std::cerr << "prctl(PR_SET_DUMPABLE, 1) failed: "
+			<< strerror(errno) << std::endl;
+		_exit(1);
+	}
 }
 
 int main(int argc, char **argv)
@@ -1642,7 +1509,7 @@ int main(int argc, char **argv)
 #endif
 
 	try {
-		vlad(argc, argv);
+		vlad_main(argc, argv);
 	} catch (const std::exception &e)
 	{
 		std::cerr << e.what() << std::endl;

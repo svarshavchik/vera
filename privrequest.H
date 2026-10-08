@@ -8,6 +8,7 @@
 #include "external_filedesc.H"
 #include "proc_loaderfwd.H"
 #include <algorithm>
+#include <optional>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <string>
@@ -18,6 +19,7 @@
 #include <unordered_set>
 #include <map>
 #include <time.h>
+#include <optional>
 
 std::string environconfig();
 
@@ -72,8 +74,13 @@ struct hier_pid_info {
 // Returns an empty string if it did, or an error message.
 std::string get_start_status(const external_filedesc &efd);
 
-// Wait for the start request to finish.
-bool get_start_result(const external_filedesc &efd);
+/*! Wait for the start request to finish.
+
+Returns the result of the start command. WEXITSTATUS(returned) is 0 on success.
+
+*/
+
+int get_start_result(const external_filedesc &efd);
 
 #define START_RESULT_OK "0"
 
@@ -85,8 +92,23 @@ bool get_start_result(const external_filedesc &efd);
 // Returns an empty string if it did, or an error message.
 std::string get_stop_status(const external_filedesc &efd);
 
-// Wait for the stop request to finish.
-void wait_stop(const external_filedesc &efd);
+// Wait for the stop request to finish. Always returns 0.
+int wait_stop(const external_filedesc &efd);
+
+// Send a stop-all request
+
+// The name parameter is ignored. The command sent is always "stop-all"
+// regardless of the unit.
+
+[[nodiscard]] bool send_stop_all(const external_filedesc &efd, std::string name);
+
+// Initial stop-all attempt, did it work?
+
+// Returns an empty string if it did, or an error message.
+std::string get_stop_all_status(const external_filedesc &efd);
+
+// Wait for the stop-all request to finish. Always returns 0.
+int wait_stop_all(const external_filedesc &efd);
 
 // Send a restart request
 [[nodiscard]] bool send_restart(const external_filedesc &efd, std::string name);
@@ -121,9 +143,6 @@ int wait_reload(const external_filedesc &efd);
 
 std::string get_sysdown_status(const external_filedesc &efd);
 
-// Request a re-exec
-[[nodiscard]] bool request_reexec(const external_filedesc &efd);
-
 // Request a new runlevel
 
 [[nodiscard]] bool request_runlevel(const external_filedesc &efd,
@@ -137,6 +156,12 @@ std::string get_runlevel_status(const external_filedesc &efd);
 
 // Wait for the new runlevel to come up.
 int wait_runlevel(const external_filedesc &efd);
+
+// Call request_runlevel, get_runlevel_status, and optionally wait_runlevel.
+std::string privrequest_switch_runlevel(
+		const std::string &runlevel,
+		bool waitrunlevel_flag
+        );
 
 // Request the current runlevel and aliases
 
@@ -160,48 +185,36 @@ std::vector<std::string> get_current_runlevel(const external_filedesc &efd);
 std::tuple<external_filedesc, external_filedesc,
 	std::vector<external_filedesc>> create_fake_request();
 
-// Send a status request to the daemon
-//
-// efd and fds are returned from a successful try_connect_vera_priv()
-//
-// Returns true if the request was sent, false otherwise.
-//
-// try_connect_vera_priv() is defined in hook.H and hook.C, and it returns
-// (if successful)  the connection to the vera daemon, and a vector containing
-// one external_filedesc, which is a temporary file descriptor into which the
-// command to the daemon gets written. request_status() writes the status
-// request, and creates a 2nd temp filedesc that gets added to fds. This can
-// now be sent to the daemon.
 
-bool request_status(
-	const external_filedesc &efd,
-	std::vector<external_filedesc> &fds
-);
 
 /*! Session start request */
 
 [[nodiscard]] bool request_session_start(
-	const external_filedesc &efd,
-	const std::string &name
+	const external_filedesc &efd
 );
 
-/*! Session stop request */
+/*! Start the session manager
 
-[[nodiscard]] bool request_session_stop(const external_filedesc &efd);
+Connects to vera, uses request_session_start() to send a session-start
+request. If a green light is given, runs vera in session manager mode.
 
-/*! The session-stop command implementation */
+Meanwhile, returns an error message if session-start failed, otherwise an
+empty string.
 
-[[nodiscard]] bool process_session_stop();
+*/
+[[nodiscard]] std::string session_start(std::string session);
 
 /*! What receive_fd() returns
 
-  It returns a list of file descriptors received over the socket, and,
-  for the public socket (which has credentials enabled) the sender's
-  credentials.
+  It returns a list of file descriptors received over the socket. If no file
+  descriptors are received, it reads a small amount of bytes, which are saved
+  in a small char buffer. The data is always 0-terminated.
+
+  An error or an end-of-file condition results in nullopt being returned.
 */
 
-typedef std::tuple<std::vector<external_filedesc>,
-		   std::array<char,32> > receive_fds_ret_t;
+typedef std::optional<std::tuple<std::vector<external_filedesc>,
+		   std::array<char,32> >> receive_fds_ret_t;
 
 /*! Helper function used to receive the file descriptors over a socket.
 
@@ -211,6 +224,7 @@ typedef std::tuple<std::vector<external_filedesc>,
 */
 
 receive_fds_ret_t receive_fds(const external_filedesc &efd);
+receive_fds_ret_t receive_fds(int fd);
 
 /*! Send file descriptors to the vera daemon
 
@@ -247,9 +261,29 @@ void wrap_request_send_fd(
 	const std::vector<external_filedesc> &fds
 );
 
-// Create a socket pair for vera requests
+/*! Create a socket pair for vera requests
 
-std::tuple<external_filedesc, external_filedesc> create_vera_socketpair();
+  Creates a socket pair and returns the two ends as external_filedesc.
+  The socket is created as a local socket, and the close-on-exec bit is
+  set.
+
+  Returns nullopt if the socket pair cannot be created.
+*/
+
+std::optional<
+	std::tuple<external_filedesc, external_filedesc>
+> create_vera_socketpair();
+
+/*! Set up file descriptors for a start/stop/reload/restart command.
+
+  Creates a tmpfile and optionally a socket pair for stdout redirection.
+  Returns nullopt if the socket pair cannot be created.
+
+*/
+std::optional<
+	std::tuple<std::vector<external_filedesc>, external_filedesc>
+>
+setup_cmd(bool nowait);
 
 struct container_state_info {
 	std::string state;
@@ -265,7 +299,7 @@ struct container_state_info {
 	hier_pid_info::hier_pids processes;
 
 	// The dependencies
-	std::unordered_set<std::string> dep_requires, dep_requires_first,
+	std::unordered_set<std::string> dep_requires,
 		dep_required_by, dep_starting_first, dep_stopping_first;
 
 
@@ -301,21 +335,21 @@ inline bool container_state_info::operator==(
 	const container_state_info &other
 ) const=default;
 
-/*! Receive and parse the container state.
 
-  The sequence of events was request_status() followed by request_send_fd().
-  get_status() waits for the response from the daemon, at which point the
-  statusfd has the daemon status, which get_status() parses and returns.
+/*! Get and parse container status in one go.
 
-  Returns a map, the key is the container name.
+Sends a status request to the vera daemon via connect_vera_priv()
+(which returns the connection efd and a memfd containing the command).
+Writes the status request and creates a 2nd memfd into which the daemon
+writes its response. It then receives and parses the container state from
+the daemon's status fd, returning a map where the key is the container name.
+Returns std::nullopt if request fails.
 
-  container_state_info does not reflect overrides.
+container_state_info does not reflect overrides.
+
 */
-
-std::unordered_map<std::string, container_state_info> get_status(
-	const external_filedesc &efd,
-	const std::vector<external_filedesc> &cmdfds
-);
+std::optional<std::unordered_map<std::string,
+	container_state_info>> do_status(bool session);
 
 /*! "/proc/"
 
@@ -382,55 +416,21 @@ int wait_setunsetenv(const external_filedesc &fd);
 
 std::string get_freeze_thaw_status(const external_filedesc &efd);
 
-/*! Create a fork request to the session manager
+/*! Initiate a freeze for a container and wait for it to complete.
 
-Takes the argv of the command to run and the environment variables and
-creates a request to the session manager to fork accordingly.
-
-pidpipe: when the child has been forked, the pid is written to this pipe.
-
-releasepipe: after the pid is written to this pipe, the child process
-reads this pipe, then proceeds to try to exec the command, and then
-the pidpipe is either closed, or a forkstatus is written to it indicating
-the reason for the failure. vera reads the pid, registers the pid into
-
-outerrpipe is a socket that gets connected to standard output and error of
-the forked process.
+Connects to the vera daemon, sends a freeze request, and returns the
+status. Returns an empty string on success or an error message on failure.
 
 */
+[[nodiscard]] std::string do_freeze(const std::string &name);
 
-[[nodiscard]] bool request_fork(
-	const external_filedesc &efd,
-	int pidpipe,
-	int releasepipe,
-	int outerrpipe,
-	const std::vector<std::vector<char>> &argv,
-	const std::unordered_map<std::string, std::string> &environconfigvars
-);
+/*! Initiate a thaw for a container and wait for it to complete.
 
-/*! Session manager waits for a fork request, and reads it
-
-Returns the argv vector, the environment config map, the pidpipe and
-releasepipe from the request.
+Connects to the vera daemon, sends a thaw request, and returns the
+status. Returns an empty string on success or an error message on failure.
 
 */
-
-std::tuple<std::vector<std::vector<char>>,
-	std::unordered_map<std::string, std::string>,
-	external_filedesc, external_filedesc, external_filedesc> receive_fork(
-	const external_filedesc &efd
-);
-
-/*! Receive and execute the fork in the session manager.
-
-Calls receive_fork(). Returns false if the socket is closed. If a fork
-request is received, invokes the execvp_after_forking with the arguments
-for execve() in the child process and the original parent process returns
-true.
-
-*/
-
-bool request_and_execute_fork(const external_filedesc &efd);
+[[nodiscard]] std::string do_thaw(const std::string &name);
 
 /*! Executes execvp() in the child process.
 
@@ -488,5 +488,50 @@ void privrequest_execve_prep_args(
 */
 
 void privrequest_execve_prep_pg();
+
+/*! The start command
+
+Uses do_ssrr() to process a "start" command.
+
+*/
+std::string do_start(bool session, std::string unit, bool nowait);
+
+/*! The stop command
+
+Uses do_ssrr() to process a "stop" command.
+
+*/
+std::string do_stop(bool session, std::string unit, bool nowait);
+
+/*! The restart command
+
+Uses do_ssrr() to process a "restart" command.
+
+*/
+std::string do_restart(bool session, std::string unit, bool nowait);
+
+/*! The reload command
+
+Uses do_ssrr() to process a "reload" command.
+
+*/
+std::string do_reload(bool session, std::string unit, bool nowait);
+
+/*! The stop-all command
+
+Uses do_ssrr() to process a "stop-all" command for all session containers.
+*/
+std::string do_stop_all(bool nowait);
+
+/*! Atomically update binary symlinks for vera/vlad.
+
+    For each service in {vera, vlad}, checks that the "-inst" hard link
+    (e.g. /sbin/vera-inst) exists and is equivalent to the binary path
+    (e.g. /sbin/vera). If a stale link is found, removes the temporary
+    and replaces it, atomically via a rename. All filesystem operations
+    use std::error_code to avoid exceptions.
+
+    */
+void update_binlinks(std::string_view sbindir);
 
 #endif

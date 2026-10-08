@@ -3,11 +3,12 @@
 
 #include <stdio.h>
 
-#define PRIVCMDSOCKET LOCALSTATEDIR "/vera.priv"
 #define HOOKFILE CONFIGDIR "/hook"
 
 #define HOOKED_ON	"hooked=on"
 #define HOOKED_ONCE	"hooked=once"
+#define VERA_SESSION_CMD	"session\n"
+#define VERA_STOP_ALL_CMD	"stop-all\n"
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,9 +17,22 @@ extern "C" {
 }
 #endif
 
-//! An environment variable is set when we re-execed.
+/*! The AF_UNIX socket used to communicate with the privileged Vera daemon
 
-extern const char reexec_envar[];
+The socket's filename. It is "vera.priv" in LOCALSTATEDIR. Unit tests provide
+an alternate pathname in the current directory, just "vera.priv".
+*/
+
+extern const char PRIVCMDSOCKET[];
+
+/*! sbin directory
+
+This is "/sbin", but unit tests provide an alternate pathname in current
+directory.
+
+*/
+
+extern const char sbindir[];
 
 /* Make an AF_UNIX connection */
 

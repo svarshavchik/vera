@@ -4,11 +4,11 @@
 */
 #include "config.h"
 #include "privrequest.H"
+#include <fcntl.h>
 #include <iostream>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
 
 int wait_setunsetenv(const external_filedesc &fd)
 {

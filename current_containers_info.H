@@ -10,6 +10,7 @@
 #include "proc_container.H"
 #include "external_filedesc.H"
 #include "proc_loader.H"
+#include "proc_timerfwd.H"
 #include <sys/wait.h>
 #include <functional>
 #include <unordered_map>
@@ -72,22 +73,10 @@ struct active_session_info {
 	*/
 	std::optional<active_session_connection> current_manager;
 
-	/*! Containers in this session
-
+	/*! If we cannot rmdir the session containers, we SIGKILL everything,
+	    then try again later.
 	*/
-	proc_container_set containers;
-
-	/*! Whether this session is in the process of stopping
-
-	*/
-
-	bool stopping{false};
-
-	/*! Check if this session is now stopped
-
-	*/
-
-	bool is_now_stopped(const current_containers_infoObj &cci) const;
+	proc_timer stopping_timer;
 
 	/*!
 	  Default constructor
@@ -96,20 +85,6 @@ struct active_session_info {
 	  current_manager at some later time.
 	*/
 	active_session_info()=default;
-
-	/*! Construct after a reexec
-
-	  Reconstructs after a reexec. We know the file descriptor to the
-	  session manager, if there is one, and the session id. If they
-	  check out, we can construct the current_manager.
-	*/
-	active_session_info(external_filedesc fd, size_t sessionid)
-	{
-		if (!fd || fd->fd < 0)
-			return;
-
-		current_manager.emplace(std::move(fd), sessionid);
-	}
 };
 
 /*! Active units
@@ -158,41 +133,16 @@ public:
 	  for a specific sessionid. active_sessions gets looked up, and we
 	  go from there.
 	*/
-	void handle_session_fd(size_t sessionid);
-	/*!
-		Fork and run a program in a session container
+	void handle_session_fd(size_t sessionid, bool error);
 
-		Returns the pid of the child process, or -1 if the fork failed.
+	/*! A session should be finished
 
-		Parameters:
-		container - the container for the process.
-
-		argv - vector of vectors of characters - the program and its
-		arguments, each vector of character's last char is a \0.
-
-		exec_pipe0 and exec_pipe1 - pipe that's used to send the child
-		process's pid and a failure executing the program to.
-		exec_pipe1 is sent to the active session's manager. The
-		session manager first writes the pid to exec_pipe1, then tries
-		to execute the program. A successful execution closes
-		exec_pipe1. After reading the child process's pid, if reading
-		exec_pipe0 results in an EOF condition the child program is
-		deemed to have started successfully, otherwise a fork_status
-		gets read with more details.
-		group - the container group.
-		session - the session that the process should be running in.
+	    Try to remove its container, schedule a retry if it fails.
 	*/
-	pid_t start_in_session(
-		const proc_container &container,
-		std::vector<std::vector<char>> &argv,
-		external_filedesc &exec_pipe0,
-		external_filedesc &exec_pipe1,
-		proc_container_group &group,
-		const active_session_t &session
-	);
+	void handle_session_stopped(uid_sessionid_t uidsession);
 
-	//! A re-exec has been requested
-	bool reexec_requested=false;
+	//! Action to take when no action is in progress, or pending.
+	void (current_containers_infoObj::*quiescent_action)()=nullptr;
 
 	//! Verbose logging enabled
 
@@ -353,7 +303,7 @@ private:
 		void request_switch(const proc_container &pc,
 				    const external_filedesc &requester);
 
-		//! After a container reload/reexec
+		//! After a container reload
 
 		//! The containers were reloaded, after an update or a reinstall
 		//! so refresh the active and custom.
@@ -624,6 +574,10 @@ public:
 		  external_filedesc requester,
 		  external_filedesc requester_stdout);
 
+	void stop_all(
+		external_filedesc requester,
+		external_filedesc requester_stdout);
+
 private:
 	void stop_with_all_requirements(
 		current_container iter,
@@ -636,20 +590,37 @@ public:
 
 	/*! Start a session
 
-	  This is called when a session manager notifies us that a new session
-	  wishes to have its containers started.
+	  This is called when a session manager gets connected.
 
 	  uidsessionid - the new session's id
-	  start - if non-empty, what container to start in the session
+	  pid - the session manager's pid
 	  socketfd - the socket connection that sent the session-start command
 	  session_managerfd - the socket connection to the session manager, for
-	  requests to start containers in the given session
+	  session-related requests
 	*/
 	void session_start(
 		const uid_sessionid_t &uidsessionid,
-		std::string start,
+		pid_t pid,
+		uid_t uid,
+		gid_t gid,
 		const external_filedesc &socketfd,
 		const external_filedesc &session_managerfd
+	);
+
+	/*! The session command
+
+	  uidsessionid - session id
+	  socketfd - connection that sent the request
+	  passthrough_fds - file descriptors to pass through to the session
+
+	  passthrough_fds will contain the socket to be sent to the session
+	  manager, as the connection from the caller.
+
+	*/
+	void session(
+		const uid_sessionid_t &uidsessionid,
+		const external_filedesc &socketfd,
+		const std::vector<external_filedesc> &passthrough_fds
 	);
 
 	/* Stop a session
@@ -665,14 +636,6 @@ public:
 		const external_filedesc &waitfd
 	);
 
-	/* A container has stopped.
-
-	Check to see if this is a session container, if so whether
-	the session was stopping, and is now fully stopped.
-	*/
-
-	void check_stopped_session(const uid_sessionid_t &uidsessionid);
-
 	//! Report when the container is empty
 
 	void populated(
@@ -680,10 +643,7 @@ public:
 		const std::string &s,
 
 		//! If false, the container is now empty.
-		bool is_populated,
-
-		//! True if being called after restoring from a reexec
-		bool restored=false
+		bool is_populated
 	);
 
 	//! Log a message on behalf of a container
@@ -692,33 +652,17 @@ public:
 	//! winds up here.
 	void log_output(const std::string &name);
 
-	//! Reexec ourselves
+	//! Check if a quiescent action should be executed
 
-	//! If a reexec was requested. This is called from the main
-	//! event loop.
-	void check_reexec();
+	//! If a quiescent action has been set and there's no timers set,
+	//! nothing is pending, the action is invoked. This is called from
+	//! the main event loop.
+	void check_quiescent();
 
+	//! All containers stopped. Terminate the session manager.
 
-private:
+	void do_stopsession();
 
-	/*! Check if we've just been re-executed
-
-	This gets called from install to check to see if this
-	has been re-execed. Populates a vector of placeholder containers
-	with a recovered run_info. The vector is left empty if this
-	is not a re-execution.
-
-	We also recover the opened file descriptors for active sessions.
-
-	*/
-	void restore_reexec(
-		std::vector<proc_container> &restored_containers,
-		std::unordered_map<uid_sessionid_t,
-					   active_session_info> &active_sessions,
-		std::string &active
-	);
-
-public:
 	//! Return the pids in the container
 	std::vector<pid_t> container_child_pids(const proc_container &pc);
 
@@ -751,6 +695,24 @@ proc_container_runner create_runner(
 	const std::function<void (const current_containers_callback_info &,
 				  int)> &done
 );
+
+//! Create the container group if it does not exist, or return
+//! the existing one. The `resources_from` parameter is the
+//! container name used to locate the override configuration
+//! for proc_get_validated_override().
+
+proc_container_group *create_or_get_runner_group(
+	const current_containers_info &all_containers,
+	const std::string &resources_from,
+	const current_container &cc);
+
+/*! Call create_or_get_runner_group() with cc->first->name as the
+    resources_from parameter.
+!!*/
+
+proc_container_group *create_or_get_runner_group(
+	const current_containers_info &all_containers,
+	const current_container &cc);
 
 /*! Recreate a running process
 

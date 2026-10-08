@@ -3,8 +3,10 @@
 ** See COPYING for distribution information.
 **/
 
-#include <vector>
+#include "config.h"
 #include "switchlog.H"
+#include <algorithm>
+#include <vector>
 
 static std::vector<std::string_view>
 next_switchlog_line(std::istream &i, std::string &line)

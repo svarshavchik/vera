@@ -4,15 +4,15 @@
 */
 
 #include "config.h"
-#include "unit_test.H"
-#include "poller.H"
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <memory>
-#include <filesystem>
-#include <algorithm>
 #include "poller.C"
+#include "poller.H"
+#include "unit_test.H"
+#include <algorithm>
+#include <fcntl.h>
+#include <filesystem>
+#include <memory>
+#include <sys/stat.h>
+#include <unistd.h>
 
 void testpolledfd1()
 {
@@ -30,11 +30,12 @@ void testpolledfd1()
 	a=std::make_shared<polledfd>(
 		pipea[0],
 		[&]
-		(int fd)
+		(int fd, bool error)
 		{
 			char ch;
 
-			read(fd, &ch, 1);
+			if (read(fd, &ch, 1))
+				; // IGNORE
 
 			b=std::shared_ptr<polledfd>{};
 			++counter;
@@ -44,19 +45,22 @@ void testpolledfd1()
 	b=std::make_shared<polledfd>(
 		pipeb[0],
 		[&]
-		(int fd)
+		(int fd, bool error)
 		{
 			char ch;
 
-			read(fd, &ch, 1);
+			if (read(fd, &ch, 1))
+				; // IGNORE
 
 			a=std::shared_ptr<polledfd>{};
 			++counter;
 		}
 	);
 
-	write(pipea[1], "", 1);
-	write(pipeb[1], "", 1);
+	if (write(pipea[1], "", 1))
+		; // IGNORE
+	if (write(pipeb[1], "", 1))
+		; // IGNORE
 
 	do_poll(0);
 	close(pipea[1]);
@@ -81,11 +85,12 @@ void testpolledfd2()
 	polledfd a{
 		pipea[0],
 		[&]
-		(int fd)
+		(int fd, bool error)
 		{
 			char ch;
 
-			read(fd, &ch, 1);
+			if (read(fd, &ch, 1))
+				; // IGNORE
 
 			++counter;
 		}
@@ -93,7 +98,8 @@ void testpolledfd2()
 
 	polledfd b{std::move(a)};
 
-	write(pipea[1], "", 1);
+	if (write(pipea[1], "", 1))
+		; // IGNORE
 
 	do_poll(0);
 	close(pipea[1]);

@@ -54,7 +54,8 @@ void log_message(const std::string &);
 
  */
 
-const struct timespec &log_current_timespec();
+struct timespec log_current_time_spec();
+time_t log_current_time_sec();
 
 //! Timeout for SIGTERM to do its work
 

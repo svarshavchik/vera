@@ -3,18 +3,18 @@
 a** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_loader.H"
 #include "messages.H"
-#include "yaml_writer.H"
 #include "parsed_yaml.H"
 #include "privrequest.H"
-#include <functional>
-#include <string>
-#include <fstream>
-#include <set>
-#include <optional>
-#include <memory>
+#include "proc_loader.H"
+#include "yaml_writer.H"
 #include <algorithm>
+#include <fstream>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <set>
+#include <string>
 
 void proc_get_environconfig(
 	const std::function<void (const std::string &)> &error

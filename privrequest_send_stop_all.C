@@ -4,13 +4,13 @@
 */
 #include "config.h"
 #include "privrequest.H"
+#include "verac.h"
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <string_view>
 
-bool request_session_stop(const external_filedesc &efd)
+bool send_stop_all(const external_filedesc &efd, std::string name)
 {
-	return efd->write_all("session-stop\n");
+	return efd->write_all(VERA_STOP_ALL_CMD);
 }

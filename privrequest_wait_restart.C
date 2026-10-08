@@ -4,12 +4,12 @@
 */
 #include "config.h"
 #include "privrequest.H"
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sstream>
 #include <fcntl.h>
 #include <locale>
+#include <sstream>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 
 int wait_restart(const external_filedesc &efd)
 {

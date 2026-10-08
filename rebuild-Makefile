@@ -113,7 +113,7 @@ while (defined(my $l=<$fh>))
 
 sub print_sourcelist {
 
-	my $continue = "";
+	my $continue = "\\\n";
 	my $lastmodule_nopad="";
 	my $lastmodule_pad="";
 
@@ -182,13 +182,13 @@ foreach my $module (sort keys %combined)
 	}
 }
 
-print "\nPAM_VERA_LIB_SOURCES=\\\n";
+print "\nPAM_VERA_LIB_SOURCES=";
 print_sourcelist(@pamverasources);
 
-print "\nCOMMON_LIB_SOURCES=\\\n";
+print "\nCOMMON_LIB_SOURCES=";
 print_sourcelist(@commonsources);
 
-print "\nOTHER_LIB_SOURCES=\\\n";
+print "\nOTHER_LIB_SOURCES=";
 print_sourcelist(@othersources);
 
 print "\n##ENDGEN\n";

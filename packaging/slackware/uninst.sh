@@ -1,6 +1,8 @@
 #! /bin/sh
 
-test ! -f /sbin/vera || exit 0      # Upgrading
+test ! -f /sbin/vera-inst || exit 0      # Upgrading
+
+rm -f /sbin/vlad /sbin/vera
 
 # Remove dangling .so symlinks that doinst.sh installed
 

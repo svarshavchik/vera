@@ -11,6 +11,17 @@
 #include <memory>
 #include <filesystem>
 
+/*! File descriptor poller
+
+This is called when the file descriptor is available for reading. The
+function receives two parameters, the file descriptor, and an error indication.
+
+It is up to the callback to ensure that the error indication always results
+in the poller being removed, otherwise the poller gets called repeatedly.
+*/
+
+typedef std::function<void (int, bool)> poller_cb_t;
+
 /*! Container for all active file descriptor pollers.
 
   It is keyed by the file descriptor, and the value is the callback
@@ -22,7 +33,7 @@
 
 */
 typedef std::unordered_multimap<int,
-				std::function<void (int)>> poll_callbacks_t;
+				poller_cb_t> poll_callbacks_t;
 
 //! A polled file descriptor
 
@@ -45,9 +56,9 @@ class polledfd {
 
 public:
 	polledfd()=default;
-	polledfd(int fd, const std::function<void (int)> &callback);
+	polledfd(int fd, const poller_cb_t &callback);
 
-	polledfd(int fd, std::function<void (int)> &&callback);
+	polledfd(int fd, poller_cb_t &&callback);
 
 	~polledfd();
 
@@ -175,7 +186,7 @@ will rewatch everything, this is just an extra safety measure.
 
  */
 
-bool poller_is_transferrable();
+bool poller_is_quiescent();
 
 /*! Monitor a directory for changes.
 

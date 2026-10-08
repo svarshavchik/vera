@@ -860,31 +860,11 @@ cat >loadtest.txt <<EOF
 Successfully created session system/sessions/active/1001/1
 Successfully created session system/sessions/active/1002/2
 Failed to create session system/sessions/active/1001/1
-system/sessions/active/1001/1/sess1:start=forking:stop=manual
-system/sessions/active/1001/1/sess1:alternative-group=system/sessions/active/1001/1/altgroup
-system/sessions/active/1001/1/sess1:sigterm:notify=parents
-system/sessions/active/1001/1/sess1:requires system/sessions/active/1001/1/sess2
+system/sessions/active/1001/1:start=oneshot:stop=manual
+system/sessions/active/1001/1:sigterm:notify=all
 
-system/sessions/active/1001/1/sess2:start=forking:stop=manual
-system/sessions/active/1001/1/sess2:alternative-group=system/sessions/active/1001/1/altgroup
-system/sessions/active/1001/1/sess2:sigterm:notify=parents
-
-system/sessions/active/1001/1/something:start=forking:stop=manual
-system/sessions/active/1001/1/something:sigterm:notify=parents
-system/sessions/active/1001/1/something:required-by system/sessions/active/1001/1/sess2
-
-system/sessions/active/1002/2/sess1:start=forking:stop=manual
-system/sessions/active/1002/2/sess1:alternative-group=system/sessions/active/1002/2/altgroup
-system/sessions/active/1002/2/sess1:sigterm:notify=parents
-system/sessions/active/1002/2/sess1:requires system/sessions/active/1002/2/sess2
-
-system/sessions/active/1002/2/sess2:start=forking:stop=manual
-system/sessions/active/1002/2/sess2:alternative-group=system/sessions/active/1002/2/altgroup
-system/sessions/active/1002/2/sess2:sigterm:notify=parents
-
-system/sessions/active/1002/2/something:start=forking:stop=manual
-system/sessions/active/1002/2/something:sigterm:notify=parents
-system/sessions/active/1002/2/something:required-by system/sessions/active/1002/2/sess2
+system/sessions/active/1002/2:start=oneshot:stop=manual
+system/sessions/active/1002/2:sigterm:notify=all
 
 system/sessions/installed/sess1:installed-session
 system/sessions/installed/sess1:start=forking:stop=manual
@@ -913,42 +893,10 @@ $VALGRIND ./testprocloader recreatetest globaldir localdir overridedir \
    system/sessions/installed/sess1 \
    system/sessions/installed/sess2 \
    system/sessions/installed/something \
-   system/sessions/active/1001/1/sess1 \
-   system/sessions/active/1001/1/sess2 \
-   system/sessions/active/1002/2/sess1 \
-   system/sessions/active/1002/2/sess2 \
-   system/sessions/active/1001/1/something \
-   system/sessions/active/1002/2/something \
    system/notsessions/active/1002/3/something \
    system/startup >loadtest.out
 
 cat >loadtest.txt <<EOF
-system/sessions/active/1001/1/sess1:start=forking:stop=manual
-system/sessions/active/1001/1/sess1:alternative-group=system/sessions/active/1001/1/altgroup
-system/sessions/active/1001/1/sess1:sigterm:notify=parents
-system/sessions/active/1001/1/sess1:requires system/sessions/active/1001/1/sess2
-
-system/sessions/active/1001/1/sess2:start=forking:stop=manual
-system/sessions/active/1001/1/sess2:alternative-group=system/sessions/active/1001/1/altgroup
-system/sessions/active/1001/1/sess2:sigterm:notify=parents
-
-system/sessions/active/1001/1/something:start=forking:stop=manual
-system/sessions/active/1001/1/something:sigterm:notify=parents
-system/sessions/active/1001/1/something:required-by system/sessions/active/1001/1/sess2
-
-system/sessions/active/1002/2/sess1:start=forking:stop=manual
-system/sessions/active/1002/2/sess1:alternative-group=system/sessions/active/1002/2/altgroup
-system/sessions/active/1002/2/sess1:sigterm:notify=parents
-system/sessions/active/1002/2/sess1:requires system/sessions/active/1002/2/sess2
-
-system/sessions/active/1002/2/sess2:start=forking:stop=manual
-system/sessions/active/1002/2/sess2:alternative-group=system/sessions/active/1002/2/altgroup
-system/sessions/active/1002/2/sess2:sigterm:notify=parents
-
-system/sessions/active/1002/2/something:start=forking:stop=manual
-system/sessions/active/1002/2/something:sigterm:notify=parents
-system/sessions/active/1002/2/something:required-by system/sessions/active/1002/2/sess2
-
 system/sessions/installed/sess1:installed-session
 system/sessions/installed/sess1:start=forking:stop=manual
 system/sessions/installed/sess1:alternative-group=system/sessions/installed/altgroup
@@ -968,59 +916,36 @@ system/sessions/installed/something:required-by system/sessions/installed/sess2
 system/startup:start=forking:stop=manual
 system/startup:description=system startup
 system/startup:sigterm:notify=parents
-system/sessions/active/1001/1: successfully restored
-system/sessions/active/1002/2: successfully restored
 EOF
 diff -U 3 loadtest.txt loadtest.out
 
 rm -rf globaldir localdir overridedir
+mkdir overridedir
+mkdir localdir
+mkdir -p globaldir/system/sessions/active/1001
+cat >globaldir/system/sessions/active/1001/1 <<EOF
+name: 1
+version: 1
+EOF
 
-mkdir -p globaldir/system/sessions/installed localdir overridedir
+cat >globaldir/system/sessions/active/1002 <<EOF
+name: 1002
+version: 1
+EOF
 
-BIGNAME=`dd if=/dev/zero bs=228 count=1 2>/dev/null | tr '\0' 'A'`
-
-cat >globaldir/system/sessions/installed/$BIGNAME <<EOF
-name: $BIGNAME
+mkdir -p globaldir/system/sessions/active/1001/3
+cat >globaldir/system/sessions/active/1001/3/unit <<EOF
+name: unit
 version: 1
 EOF
 
 $VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-    10001/10001 | grep '^E:' >loadtest.out || /bin/true
-
+   | sort >loadtest.out
 cat >loadtest.txt <<EOF
-E: system/sessions/active/10001/10001/${BIGNAME}: invalid container name
+E: system/sessions/active/1001/1: active session containers cannot be loaded.
+E: system/sessions/active/1001/3/unit: active session containers cannot be loaded.
+E: system/sessions/active/1002: active session containers cannot be loaded.
 EOF
-diff -U 3 loadtest.txt loadtest.out
-
-rm -rf globaldir/system/sessions/installed/$BIGNAME
-
-cat >globaldir/system/sessions/installed/sess3 <<EOF
-name: sess3
-requires: $BIGNAME
-version: 1
-EOF
-
-$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-    10002/10002 | grep '^E:' >loadtest.out || /bin/true
-
-cat >loadtest.txt <<EOF
-E: system/sessions/active/10002/10002/$BIGNAME: invalid dependency
-EOF
-diff -U 3 loadtest.txt loadtest.out
-
-cat >globaldir/system/sessions/installed/sess3 <<EOF
-name: sess3
-alternative-group: $BIGNAME
-version: 1
-EOF
-
-$VALGRIND ./testprocloader loadalltest globaldir localdir overridedir \
-    10002/10002 | grep '^E:' >loadtest.out || /bin/true
-
-cat >loadtest.txt <<EOF
-E: system/sessions/active/10002/10002/$BIGNAME: invalid alternative group
-EOF
-
 diff -U 3 loadtest.txt loadtest.out
 
 rm -rf globaldir localdir overridedir \

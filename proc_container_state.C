@@ -3,8 +3,8 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_container_statefwd.H"
 #include "messages.H"
+#include "proc_container_statefwd.H"
 
 static void set_scheduled(state_timeline &timeline,
 			  const elapsed_time &timestamp)

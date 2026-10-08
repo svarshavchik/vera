@@ -3,21 +3,20 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "poller.H"
-
-#include <sys/epoll.h>
-#include <sys/inotify.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <dirent.h>
 #include "log.H"
 #include "messages.H"
+#include "poller.H"
+#include <algorithm>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <iostream>
+#include <sys/epoll.h>
+#include <sys/inotify.h>
+#include <tuple>
+#include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
-#include <tuple>
-#include <algorithm>
-#include <iostream>
 
 namespace {
 #if 0
@@ -78,12 +77,12 @@ global_epoll::~global_epoll()
 #endif
 }
 
-polledfd::polledfd(int fd, const std::function<void (int)> &callback)
-	: polledfd{fd, std::function<void (int)>{callback}}
+polledfd::polledfd(int fd, const poller_cb_t &callback)
+	: polledfd{fd, poller_cb_t{callback}}
 {
 }
 
-polledfd::polledfd(int fd, std::function<void (int)> &&callback)
+polledfd::polledfd(int fd, poller_cb_t &&callback)
 	: fd{fd}
 {
 	auto &ep=get_epoll();
@@ -104,7 +103,7 @@ polledfd::polledfd(int fd, std::function<void (int)> &&callback)
 	{
 		epoll_event ev{};
 
-		ev.events=EPOLLIN | EPOLLRDHUP;
+		ev.events=EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLHUP;
 		ev.data.fd=fd;
 
 		while (epoll_ctl(ep.epollfd, EPOLL_CTL_ADD, fd, &ev) < 0)
@@ -215,7 +214,11 @@ void do_poll(int timeout)
 						    events[i].data.fd
 					    ));
 			}
-			iter->second(iter->first);
+			auto ev=events[i].events;
+			if ((ev & (EPOLLERR | EPOLLHUP)) && !(ev & EPOLLIN))
+				iter->second(iter->first, true);
+			else if (ev & (EPOLLIN | EPOLLRDHUP))
+				iter->second(iter->first, false);
 		}
 		timeout=0; // Drain, but don't wait any more.
 	}
@@ -321,8 +324,13 @@ private:
 	{
 		this_is_the_polled_fd=polledfd{fd,
 			[]
-			(int fd)
+			(int fd, bool errflag)
 			{
+				if (errflag)
+					std::cerr <<
+						_("Errors reported on "
+						   "inotify file descriptor ")
+						   << fd << std::endl;
 				get_inotify().do_inotify();
 			}
 		};
@@ -420,7 +428,16 @@ void global_inotify::do_inotify()
 			// Then we can safely remove the installed callback.
 
 			if (ptr->mask & IN_IGNORED)
-				installed.erase(iter);
+			{
+				// The invoked callback could've done something
+				// that updates the installed list (added or
+				// removed some file descriptor pollers), so
+				// we cannot dereference iter, must look it up
+				// again.
+				iter=installed.find(ptr->wd);
+				if (iter != installed.end())
+					installed.erase(iter);
+			}
 		}
 	}
 
@@ -496,7 +513,7 @@ poller_transferblock get_poller_transferblock()
 	return handler;
 }
 
-bool poller_is_transferrable()
+bool poller_is_quiescent()
 {
 	auto handler=current_poller_transferblock.lock();
 
@@ -588,6 +605,9 @@ inotify_watch_handler &inotify_watch_handler::operator=(
 	inotify_watch_handler &&o
 )
 {
+	if (&o == this)
+		return *this;
+
 	destroy();
 
 	wd=o.wd;
@@ -609,8 +629,12 @@ inotify_watch_handler &inotify_watch_handler::operator=(
 
 	if (pending_iter != in.pending_adds.end())
 	{
-		in.pending_adds.emplace(this, std::move(pending_iter->second));
+		// If the original was in pending_adds, then this one replaces
+		// it, but emplace inavlidates pending_iter, so we erase first,
+		// emplace second.
+		auto cpy=std::move(pending_iter->second);
 		in.pending_adds.erase(pending_iter);
+		in.pending_adds.emplace(this, cpy);
 	}
 	else if (wd >= 0)
 	{

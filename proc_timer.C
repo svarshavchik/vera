@@ -3,8 +3,8 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_timer.H"
 #include "log.H"
+#include "proc_timer.H"
 #include <map>
 
 static current_timers_t current_timers;
@@ -70,7 +70,7 @@ int run_timers()
 		if (b == current_timers.end())
 			break;
 
-		const auto &now=log_current_timespec();
+		auto now=log_current_time_spec();
 
 		if (b->first > now.tv_sec)
 		{

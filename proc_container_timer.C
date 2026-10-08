@@ -3,19 +3,19 @@
 ** See COPYING for distribution information.
 */
 #include "config.h"
-#include "proc_container_timer.H"
 #include "current_containers_info.H"
 #include "log.H"
+#include "proc_container_timer.H"
 
 std::string proc_container_timerObj::description() const
 {
 	auto c=container.lock();
 
-	std::string description{_("container reload: ")};
+	std::string full_description{timer_description};
 
-	description.append(c ? c->name:"<removed container>");
+	full_description.append(c ? c->name:"<removed container>");
 
-	return description;
+	return full_description;
 }
 
 void proc_container_timerObj::triggered()
@@ -53,6 +53,7 @@ void proc_container_timerObj::update_timer_containers(const current_containers &
 }
 
 proc_container_timerObj::proc_container_timerObj(
+	std::string_view description,
 	const current_containers_info &all_containers,
 	const proc_container &container,
 	time_t time_start,
@@ -60,6 +61,7 @@ proc_container_timerObj::proc_container_timerObj(
 	const std::function<void (const current_containers_callback_info &
 						 )> &done
 ) : proc_timerObj{time_start, time_end},
+    timer_description{static_cast<std::string>(description)},
     all_containers(all_containers), container{container}, done{done}
 {
 }
@@ -69,6 +71,7 @@ proc_container_timerObj::~proc_container_timerObj()
 }
 
 proc_container_timer create_timer(
+	std::string_view description,
 	const current_containers_info &all_containers,
 	const proc_container &container,
 	time_t timeout,
@@ -76,11 +79,11 @@ proc_container_timer create_timer(
 				  )> &done
 )
 {
-	time_t time_start=log_current_timespec().tv_sec;
+	time_t time_start=log_current_time_sec();
 	time_t time_end=time_start+timeout;
 
 	auto timer=std::make_shared<proc_container_timerObj>(
-		all_containers, container, time_start, time_end, done
+		description, all_containers, container, time_start, time_end, done
 	);
 
 	install_timer(timer);

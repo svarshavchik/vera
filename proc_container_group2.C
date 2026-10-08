@@ -2,13 +2,20 @@
 ** Copyright 2026 S. Varshavchik
 ** See COPYING for distribution information.
 */
+#include "config.h"
 #include "proc_container_group.H"
 
 std::string proc_container_group_data::cgroups_dir(std::string name)
 {
-	std::string n;
+	return cgroups_dir(get_cgroupfs_base_path(), std::move(name));
+}
 
-	std::string_view base{get_cgroupfs_base_path()};
+std::string proc_container_group_data::cgroups_dir(
+	std::string_view base,
+	std::string name
+)
+{
+	std::string n;
 
 	for (auto &c:name)
 		if (c == '/')

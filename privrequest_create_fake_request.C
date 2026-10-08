@@ -4,26 +4,22 @@
 */
 #include "config.h"
 #include "privrequest.H"
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
-#include <fcntl.h>
 
 std::tuple<external_filedesc, external_filedesc,
 	std::vector<external_filedesc>> create_fake_request()
 {
-	int sockets[2];
-
-	if (socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0, sockets) < 0)
-		throw "socketpair() failed";
+	auto opt_sp = create_vera_socketpair();
+	if (!opt_sp)
+		return {};
+	auto &[socket0, socket1] = *opt_sp;
 
 	std::tuple<external_filedesc, external_filedesc,
 	std::vector<external_filedesc>> efd{
-		std::make_shared<external_filedescObj>(
-			sockets[0]
-		), std::make_shared<external_filedescObj>(
-			sockets[1]
-		),
+		std::move(socket0), std::move(socket1),
 		std::vector<external_filedesc>{}
 	};
 

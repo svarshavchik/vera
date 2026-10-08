@@ -9,7 +9,6 @@
 #include <unordered_set>
 #include <time.h>
 #include <functional>
-#include <optional>
 #include <libintl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -249,26 +248,6 @@ public:
 	//! Constructor
 	proc_containerObj(const std::string &name);
 
-	/*! Clone an existing container for a new session.
-
-	This is used when a session is started. The installed_container is
-	expected to have an is_in_session_prefix of INSTALLED_SESSIONS_PREFIX.
-
-	The passed in active_session_path is expected to have an
-	is_in_session_prefix of
-	ACTIVE_SESSIONS_PREFIX/<userid>/<session number>.
-
-	We calculate the new container's name and alternative_group based on
-	active_session_path and installed_container->name.
-
-	IMPORTANT: the caller is responsible for checking that both the name
-	and the alternative_group is proc_validpath().
-
-	*/
-	proc_containerObj(const std::string_view &installed_session_prefix,
-			  const std::string_view &active_session_path,
-			  const proc_container &installed_container);
-
 	//! Destructor
 	~proc_containerObj();
 
@@ -346,13 +325,6 @@ public:
 		: new_container{std::make_shared<proc_containerObj>(name)}
 	{
 	}
-
-	//! Constructor used when creating a new session
-	proc_new_containerObj(
-		const std::string_view &installed_session_prefix,
-		const std::string_view &active_session_path,
-		const proc_new_container &installed_container
-	);
 
 	//! What other process containers this one requires
 	std::unordered_set<std::string> dep_requires;
@@ -490,30 +462,11 @@ std::string proc_container_restart(const std::string &);
 std::string proc_container_reload(const std::string &,
 				  const std::function<void (int)> &);
 
-/*! Get session id from a connection.
-
-  Used when a session command is received. We already have the ucred.
-  Validate that the pid is valid, then read /proc to read the process's
-  sessionid, attach it to the uid, and call it a day.
-
-  Verifies that the connection is from the save dev+inode as the pid 1
-  process.
-
-*/
-std::optional<uid_sessionid_t> proc_get_sessionid(
-	const external_filedesc &efd,
-	const ucred &cred,
-	const std::function<void (const std::string &)> &error
-);
-
 //! For unit tests
 void proc_containers_reset();
 
-//! Check if a re-exec has been requested, and call reexec() if so.
-void proc_check_reexec();
-
-//! exec() or bust.
-void reexec() __attribute__((noreturn));
+//! Check if a quiescent action is being delayed by pending activity.
+void proc_check_quiescent();
 
 //! sigusr1 signal received
 void sigusr1();

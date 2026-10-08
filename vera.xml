@@ -1,5 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
- "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd">
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+
+   <!ENTITY INSTALLED_SESSIONS_PREFIX "system/sessions/installed">
+ ]>
 
 <article id="index.html">
   <sect1 id="INSTALL">
@@ -292,7 +296,6 @@
 	<cmdsynopsis>
 	  <command>vlad</command>
 	  <group choice='req'>
-	    <arg choice='plain'>reexec</arg>
 	    <arg choice='plain'>vera-up</arg>
 	    <arg choice='plain'>hook</arg>
 	    <arg choice='plain'>hookonce</arg>
@@ -366,7 +369,14 @@
               <manvolnum>8</manvolnum>
 	    </citerefentry>
 	    </link> for more information on adding custom units and
-	    processes to <command>vera</command>.
+	  processes to <command>vera</command>, and
+	  <link linkend="vera.sessions.8">
+	    <citerefentry>
+	      <refentrytitle>vera.sessions</refentrytitle>
+	      <manvolnum>8</manvolnum>
+	    </citerefentry>
+	  </link>
+	  for more information on managing session units.
 	</para>
 
 	<para>
@@ -396,42 +406,6 @@
 
       <refsect1 id="management">
 	<title>MANAGING <command>vera</command></title>
-	<para>
-	  <quote>reexec</quote> signals the <command>vera</command> system
-	  process to restart itself. This is needed after installing a new
-	  version of <command>vera</command> or one of the system libraries
-	  it uses (the system was already converted to run
-	  <command>vera</command> instead of <command>init</command> and
-	  a new version of <command>vera</command> was installed).
-	  It's possible that <command>vera</command> will not
-	  restart immediately. If any units are in the middle of being
-	  stopped, started, restarted, or respawned a
-	  <quote>reexec</quote> gets delayed until
-	  all pending activity finishes.
-	</para>
-
-	<note>
-	  <para>
-	    The Slackware package takes care of running <quote>reexec</quote>
-	    when installing a package update.
-	  </para>
-	</note>
-
-	<note>
-	  <para>
-	    This can be a lengthy delay when there's a respawned unit that
-	    reached its maximum number of attempts and it's waiting until
-	    it's respawnable.
-	    Additionally, <quote>reexec</quote> resets all respawned units'
-	    counters and limits.
-	  </para>
-
-	  <para>
-	    This is not considered critical, a <quote>reexec</quote> is
-	    not something that normally happens.
-	  </para>
-	</note>
-
 	<para>
 	  <command>vlad vera-up</command> tries to connect to
 	  <command>vera</command>'s public socket. A successful connection
@@ -753,23 +727,29 @@
 	</itemizedlist>
 
 	<para>
-	  The <command>rehook</command> command checks that
-	  <filename>/sbin/init</filename> is hard-linked to the current
-	  <filename>vera-init</filename> executable.
-	  Updating (via <command>make install</command> or a built package)
-	  installs a new <command>vera-init</command> binary,
-	  and this recreates the hard link.
-	  <command>rehook</command> then checks all the other files that get
-	  hooked via symbolic links. If the symbolic link is gone this is
-	  presumed to be the result of erroneously updating the hooked
-	  program, and it is re-hooked again using the same process that
-	  <command>hook</command> or <command>hookonce</command> uses.
+	  The <command>rehook</command> command checks that at least one of the
+	  files that the <command>hook</command> command saves as the original
+	  file exists. This indicates that <command>vera</command> is currently
+	  hook. If not, <command>rehook</command> does nothing. Otherwise the
+	  the list of files that get saved is checked, and if the original
+	  copy of that file does not exist it is made from the current file,
+	  and <command>vera</command>'s file is hooked into place. This would
+	  occur when updating <command>vera</command> to a newer version that
+	  hooks an additional file.
 	</para>
 
 	<para>
 	  The <command>inittab</command> and
 	  <command>rehook</command> commands run automatically when
-	  <command>vera</command> gets updated.
+	  <command>vera</command> gets updated. The <command>vera</command>
+	  package installs binaries named <command>vlad-inst</command>,
+	  <command>vera-inst</command>, and an installation script checks
+	  whether <command>vlad</command> and <command>vera</command>
+	  exist, and hard-links them if not. If they exist the existing binaries
+	  are left untouched. They are the current active binaries. The
+	  <command>vera</command> package also installs a
+	  <command>vera-init</command> binary which gets linked as
+	  <filename>/sbin/init</filename>.
 	</para>
       </refsect1>
 
@@ -873,6 +853,21 @@
 	    </para>
 	  </listitem>
 	</itemizedlist>
+
+	<para>
+	  Before executing the <quote>sysdown</quote> script a check is made
+	  whether <command>vera-init</command> is different from the current
+	  <command>/sbin/init</command>. The same check is made with
+	  <command>vlad-inst</command> and <command>vera-inst</command>,
+	  they are checked if they're different than
+	  <command>vlad</command> and <command>vera</command> respectively.
+	  If they are different it must mean that an updated
+	  <command>vera</command> package was installed, so the new binaries
+	  replace the active binaries. <command>vera</command> does not
+	  implement a <quote>reexec</quote>-based approach to activating a new
+	  version in a live system. Instead, the newer version is activated when
+	  the system shuts down.
+	</para>
       </refsect1>
 
       <refsect1 id="bugs">
@@ -904,16 +899,6 @@
 	  unhooking <command>vera</command> (twice) and rebooting back into
 	  <command>init</command>
 	  (see <xref linkend="management" /> for more information).
-	</para>
-
-	<para>
-	  Using <command>killall</command> to send a
-	  <errorcode>SIGKILL</errorcode> ends up terminating
-	  <command>vera</command>'s
-	  secondary process that handles commands like
-	  <command>status</command>. Use
-	  <quote><command>kill -usr1 1</command></quote>
-	  to restart it.
 	</para>
 
 	<para>
@@ -951,7 +936,13 @@
               <refentrytitle>vera.units</refentrytitle>
               <manvolnum>8</manvolnum>
 	    </citerefentry>
-	    </link>.
+	    </link>,
+	  <link linkend="vera.sessions.8">
+	    <citerefentry>
+	      <refentrytitle>vera.sessions</refentrytitle>
+	      <manvolnum>8</manvolnum>
+	    </citerefentry>
+	  </link>.
 	</para>
       </refsect1>
 
@@ -1221,6 +1212,18 @@ multi-user                # Reverts to the previous default runlevel
       </refsect1>
     </refentry>
 
+      <refsect1 id="runlevels_seealso">
+	<title>SEE ALSO</title>
+
+	<para>
+	  <link linkend="vera.8">
+	    <citerefentry>
+              <refentrytitle>vera</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>.
+	</para>
+      </refsect1>
     <refentry id="vera.units.8">
       <refmeta>
 	<refentrytitle>vera units</refentrytitle>
@@ -1668,7 +1671,7 @@ echo $pids</programlisting>
 	  <note>
 	    <para>
 	      There's no output from <quote>vlad status</quote> if the given
-	      container does not exist or if it's suppressed byx the absense of
+	      container does not exist or if it's suppressed by the absense of
 	      <option>--all</option> and
 	      <option>--stopped</option>. Therefore any
 	      existing values of these shell variables remain unchanged.
@@ -3242,8 +3245,165 @@ version: 1
 	      </link>.
 	</para>
       </refsect1>
+
+      <refsect1 id="units_bugs">
+	<title>BUGS</title>
+
+	<para>
+	  After something gets installed or removed from the
+	  <filename>@INSTALLCONFIGDIR@</filename> or
+	  <filename>@LOCALCONFIGDIR@</filename> there's a brief delay before
+	  the change takes effect. This is because some package managers
+	  remove a file before putting an updated version there, from the new
+	  version of the package. If <command>vera</command> manages to rescan
+	  the directory the missing unit file gets processed as a removed
+	  container and the unit gets stopped. A debounce delay of several
+	  seconds elapses before the configuration directory gets rescanned.
+	</para>
+
+	<para>
+	  The debounce delay may be insufficient on a very loaded system.
+	  Do not install or update <command>vera</command> or any packages
+	  that ship unit configuration files if the system is very loaded.
+	</para>
+      </refsect1>
     </refentry>
 
+    <refentry id="vera.sessions.8">
+      <refmeta>
+	<refentrytitle>vera session support</refentrytitle>
+	<manvolnum>8</manvolnum>
+	<refmiscinfo>S. Varshavchik</refmiscinfo>
+      </refmeta>
+
+      <refnamediv>
+	<refname>vera.sessions</refname>
+	<refpurpose>Vera session support</refpurpose>
+      </refnamediv>
+
+      <refsynopsisdiv>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>session-start</arg>
+	  <arg choice='opt'><replaceable>unit</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>--session</arg>
+	  <group choice='req'>
+	    <arg choice='plain'>start</arg>
+	    <arg choice='plain'>stop</arg>
+	    <arg choice='plain'>restart</arg>
+	    <arg choice='plain'>reload</arg>
+	    <arg choice='plain'>status</arg>
+	  </group>
+	  <arg choice='plain'><replaceable>unit</replaceable></arg>
+	</cmdsynopsis>
+	<cmdsynopsis>
+	  <command>vlad</command>
+	  <arg choice='plain'>session-stop</arg>
+	</cmdsynopsis>
+      </refsynopsisdiv>
+      <refsect1 id="sessions_description">
+	<title>DESCRIPTION</title>
+
+	<para>
+	  A session is a logical grouping of processes associated with a
+	  particular instance of user activity, such as a login session.
+	  Each session can optionally have its own <command>vera</command>
+	  manager process that is responsible for managing the processes in
+	  that session. <command>vera</command> does not create or destroy
+	  sessions, this is handled elsewhere, such as by ssh or the desktop
+	  environment. <command>vera</command>'s role is to manage units
+	  for a particular session.
+	</para>
+
+	<para>
+	  The session manager controls only the units in the
+	  <quote>&INSTALLED_SESSIONS_PREFIX;</quote> hierarchy (see
+	  <link linkend="vera.units.8">
+	    <citerefentry>
+              <refentrytitle>vera.units</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	  </link> for more information). Multiple sessions can exist at the same
+	  time. So there can be multiple <quote>&INSTALLED_SESSIONS_PREFIX;</quote>
+	  units running at the same time, each under a separate session manager.
+	  Regular units are system-wide units, only one instance of a
+	  regular unit can be active at a time.
+	</para>
+
+	<para>
+	  <command>vlad session-start</command> starts a manager for a
+	  new session, the session that's running the command.
+	  If a unit is specified, this also automatically
+	  <command>start</command>s the unit.
+	</para>
+
+	<para>
+	  Only <quote>&INSTALLED_SESSIONS_PREFIX;</quote> units can be started
+	  as part of a session, they cannot be started as regular units.
+	</para>
+
+	<para>
+	  <command>vlad session-stop</command> stops all active session units
+	  (for the command's session),
+	  then stops the session's manager. Nothing in the
+	  <command>vera</command> package runs <command>session-start</command>
+	  automatically,
+	  this must be separately arranged. The <command>vera</command>
+	  package installs a PAM module, pam_vera, that issues a
+	  <command>session-stop</command> command when the user session
+	  terminates.
+	</para>
+
+	<para>
+	  The <option>--session</option> option sends a
+	  <command>start</command>,
+	  <command>stop</command>,
+	  <command>restart</command>,
+	  <command>reload</command> or <command>status</command>
+	  command to the session manager that's running the command.
+	  All other options for each command can be used together with
+	  the <option>--session</option> option.
+	  For example
+	  <command>vlad --session --stopped status</command> shows all
+	  <quote>&INSTALLED_SESSIONS_PREFIX;</quote> units, including stopped
+	  ones, for the current session.
+	</para>
+
+	<para>
+	  The <quote>&INSTALLED_SESSIONS_PREFIX;</quote> prefix is optional
+	  with <command>shell-start</command> and <option>--session</option>.
+	  <command>vlad --session start &INSTALLED_SESSIONS_PREFIX;/gnome</command>
+	  and <command>vlad --session start gnome</command> are equivalent.
+	</para>
+      </refsect1>
+
+      <refsect1 id="sessions_dependencies">
+	<title>DEPENDENCIES</title>
+
+	<para>
+	  <quote>&INSTALLED_SESSIONS_PREFIX;</quote> units can depend on
+	  other
+	  <quote>&INSTALLED_SESSIONS_PREFIX;</quote> units, but cannot depend
+	  on regular units. Regular units cannot depend on any
+	  <quote>&INSTALLED_SESSIONS_PREFIX;</quote> units.
+	</para>
+      </refsect1>
+      <refsect1 id="sessions_seealso">
+	<title>SEE ALSO</title>
+
+	<para>
+	  <link linkend="vera.8">
+	    <citerefentry>
+              <refentrytitle>vera</refentrytitle>
+              <manvolnum>8</manvolnum>
+	    </citerefentry>
+	    </link>.
+	</para>
+      </refsect1>
+    </refentry>
     <refentry id="vera.logs.8">
       <refmeta>
 	<refentrytitle>vera logs</refentrytitle>
@@ -3578,6 +3738,21 @@ version: 1
 	      <command>status</command> command with the
 	      <option>--resources</option> option lists a unit's resources
 	      in the order they were set.
+	    </para>
+	  </refsect3>
+	  <refsect3>
+	    <title>Session resources</title>
+
+	    <para>
+	        Setting resources for a
+		<quote>&INSTALLED_SESSIONS_PREFIX;</quote> unit sets
+		these resources on every started session. The current
+		implementation
+		is an all-or-nothing proposition.
+		The same resources get set for every session, for every
+		user, and every session type. There's currently no
+		mechanism to set different resources for different users
+		or session types.
 	    </para>
 	  </refsect3>
 	  <refsect3>
