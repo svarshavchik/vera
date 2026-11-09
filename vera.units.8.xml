@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refentry id="vera.units.8">
+    <refmeta>
+      <refentrytitle>vera units</refentrytitle>
+      <manvolnum>8</manvolnum>
+      <refmiscinfo>S. Varshavchik</refmiscinfo>
+    </refmeta>
+
+    <refnamediv>
+      <refname>vera.units</refname>
+      <refpurpose>Vera units</refpurpose>
+    </refnamediv>
+
+    <refsynopsisdiv>
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <arg choice="opt" rep="norepeat">--nowait</arg>
+        <group choice="req" rep="norepeat">
+          <arg choice="plain" rep="norepeat">start</arg>
+          <arg choice="plain" rep="norepeat">stop</arg>
+          <arg choice="plain" rep="norepeat">restart</arg>
+          <arg choice="plain" rep="norepeat">reload</arg>
+        </group>
+        <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
+      </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <group choice="req" rep="norepeat">
+          <arg choice="plain" rep="norepeat">mask</arg>
+          <arg choice="plain" rep="norepeat">disable</arg>
+          <arg choice="plain" rep="norepeat">enable</arg>
+          <arg choice="plain" rep="norepeat">freeze</arg>
+          <arg choice="plain" rep="norepeat">thaw</arg>
+        </group>
+        <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
+      </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <arg choice="plain" rep="norepeat">setenv</arg>
+        <arg choice="req" rep="norepeat"><replaceable>name</replaceable></arg>
+        <arg choice="req" rep="norepeat"><replaceable>value</replaceable></arg>
+      </cmdsynopsis>
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <arg choice="plain" rep="norepeat">unsetenv</arg>
+        <arg choice="req" rep="norepeat"><replaceable>name</replaceable></arg>
+      </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <group choice="opt" rep="norepeat">
+          <arg choice="plain" rep="norepeat">--all</arg>
+          <arg choice="plain" rep="norepeat">--stopped</arg>
+        </group>
+        <group choice="opt" rep="norepeat">
+          <arg choice="plain" rep="norepeat">--dependencies</arg>
+          <arg choice="plain" rep="norepeat">--resources</arg>
+          <arg choice="plain" rep="norepeat">--terse</arg>
+        </group>
+        <arg choice="plain" rep="norepeat">status</arg>
+        <arg choice="opt" rep="repeat">unit</arg>
+      </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <arg choice="plain" rep="norepeat">validate</arg>
+        <arg choice="req" rep="norepeat">filename</arg>
+        <arg choice="opt" rep="norepeat">path</arg>
+      </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad</command>
+        <group choice="req" rep="norepeat">
+          <arg choice="plain" rep="norepeat">edit</arg>
+          <arg choice="plain" rep="norepeat">revert</arg>
+        </group>
+        <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
+      </cmdsynopsis>
+    </refsynopsisdiv>
+
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.units_description.8.xml" parse="xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.units.8.xml" parse="xml"/>
+
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.dependencies.8.xml" parse="xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.additionalconfig.8.xml" parse="xml"/>
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.files.8.xml" parse="xml"/>
+
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.units_seealso.8.xml" parse="xml"/>
+
+<xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="vera.units.units_bugs.8.xml" parse="xml"/>
+  </refentry>

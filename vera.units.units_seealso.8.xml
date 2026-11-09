@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refsect1 PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refsect1 id="units_seealso">
+  <title>SEE ALSO</title>
+
+  <para>
+    <link linkend="vera.8">
+      <citerefentry>
+        <refentrytitle>vera</refentrytitle>
+        <manvolnum>8</manvolnum>
+      </citerefentry>
+      </link>,
+      <link linkend="vera.runlevels.8">
+        <citerefentry>
+          <refentrytitle>vera.runlevels</refentrytitle>
+          <manvolnum>8</manvolnum>
+        </citerefentry>
+      </link>.
+  </para>
+</refsect1>

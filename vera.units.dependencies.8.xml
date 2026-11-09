@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refsect1 PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refsect1 id="dependencies">
+  <title>Dependencies</title>
+
+  <para>
+    Many settings in unit specification files refer to other units.
+    They describe their mutual relationships and
+    dependencies.
+  </para>
+
+  <para>
+    These references are formatted as <acronym>YAML</acronym> lists.
+    A reference to just one other unit can be given as a single
+    scalar value instead of a list with one value.
+  </para>
+
+  <para>
+    Other units get referenced by their filename, or
+    <quote>name</quote>. It is not an error if the referenced unit
+    is masked or not installed at all. This gets quietly
+    ignored. The distribution's package manager presumably enforces
+    programs' actual dependencies and requirements.
+    <command>vera</command>'s dependencies define the mutual relationship
+    between different units when they are installed together:
+  </para>
+
+  <variablelist>
+    <varlistentry>
+      <term>The <quote>Requires</quote> dependency</term>
+      <listitem>
+        <para>
+          This key is a list of other units
+          that get automatically started when this unit gets started.
+          A manual or an automatic start of
+          this unit also automatically starts the required units.
+          Stopping this unit automatically stops the required units if
+          they are not required by any other started unit.
+        </para>
+
+        <para>
+          This is a one-way requirement. If unit <command>A</command>
+          <quote>Requires: B</quote>, then: starting <command>A</command>
+          automatically starts
+          <command>B</command> (if it's installed and not masked);
+          the opposite is not true.
+        </para>
+        <note>
+          <para>
+            <quote>Required</quote> dependencies are transitive.
+            If unit <command>A</command> requires
+            <command>B</command> and
+            <command>B</command> requires
+            <command>C</command>, then
+            <command>A</command> also requires
+            <command>C</command>.
+          </para>
+        </note>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>The <quote>Required-By</quote> dependency</term>
+      <listitem>
+        <para>
+          This key is the one-way street in
+          the other direction. If unit <command>A</command> is
+          <quote>Required-By: B</quote>, then:
+          starting <command>B</command> automatically
+          starts <command>A</command>; the opposite is not true.
+        </para>
+
+        <para>
+          The <quote>Required-By: B</quote> dependency is logically
+          equivalent to <quote>B</quote> specifying a
+          <quote>Requires: A</quote>; this has the same result.
+        </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>The <quote>Enabled</quote> dependency</term>
+
+      <listitem>
+        <para>
+          This key is equivalent to
+          a <quote>required-by</quote>, but takes effect only when the
+          unit is enabled.
+          It typically refers to runlevels or targets, as described
+          above. The only result from a
+          <command>vlad enable <replaceable>unit</replaceable></command>
+          is that the unit's <quote>enabled</quote> keys get logically
+          processed as <quote>required-by</quote>.
+        </para>
+
+        <para>
+          For example: a unit that's defined as
+          <quote>enabled: system/graphical</quote>,
+          then it gets enabled (by the <command>enable</command> command).
+          The resulting
+          <quote>required-by</quote>
+          of the <quote>system/graphical</quote> has the
+          following effect:
+          switching, or starting, the
+          <quote>system/graphical</quote> runlevel starts this unit
+          (as part of the runlevel).
+        </para>
+
+        <para>
+          The order of multiple
+          <quote>requires</quote>/<quote>required-by</quote> units is
+          immaterial. Listing them in a particular order does not control
+          their relative starting or stopping order.
+          For example: unit <command>A</command>
+          <quote>Requires: [B, C, D, E]</quote>.
+          These four units get started by starting <command>A</command>.
+          The actual order in
+          which they get started gets defined by their
+          <quote>before</quote> and <quote>after</quote> dependencies.
+          Additionally, a
+          <quote>requires-first</quote> dependency (see below) creates
+          a <quote>before</quote> and <quote>after</quote> dependencies
+          automatically.
+        </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>The <quote>Before</quote> and <quote>After</quote>
+      dependencies</term>
+
+      <listitem>
+        <para>
+          These dependencies appear in both the <quote>Starting</quote>
+          and <quote>Stopping</quote> keys. They control the
+          starting and stopping order when multiple units get started
+          or stopped together. When there are two or more units getting
+          started or stopped at the same time:
+        </para>
+
+        <itemizedlist>
+          <listitem>
+            <para>
+              <command>vera</command> checks each unit's
+              <quote>Before</quote> and <quote>After</quote> dependencies.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              This uses just the dependencies for the
+              units that are getting started or stopped.
+              Other listed <quote>before</quote>s and <quote>after</quote>s
+              units get ignored.
+            </para>
+
+            <note>
+              <para>
+                <quote>Before</quote> and <quote>After</quote> dependencies
+                are transitive. For example: <command>A</command> starts
+                before <command>B</command> and <command>B</command>
+                starts before <command>C</command>; <command>D</command>
+                requires <command>A</command> and <command>C</command>.
+                Starting <command>D</command> starts <command>A</command>
+                before <command>C</command>. <command>B</command> does not
+                get started (it's not required by <command>D</command>).
+              </para>
+            </note>
+          </listitem>
+          <listitem>
+            <para>
+              The <quote>Before</quote> and <quote>After</quote>
+              dependencies get combined to derive their relative starting
+              order, with respect to each other. For example, if
+              <command>A</command> starts <quote>Before: B</quote> then:
+              <command>A</command> gets started before <command>B</command>
+              gets started; if
+              <command>A</command> starts <quote>After: B</quote> then:
+              <command>A</command> gets started after <command>B</command>
+              gets started. The same applies to stopping units.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              A <quote>Requires</quote>/<quote>Required-By</quote>
+              dependency automatically creates the appropriate
+              <quote>Before</quote> and <quote>After</quote> dependencies.
+              A unit <command>A</command> that requires
+              (or requires first, see below)
+              <command>B</command> (directly
+              by its <quote>Requires</quote> or the other one's
+              <quote>Required-By</quote>) implies that <command>A</command>
+              starts <quote>After</quote> <command>B</command> and
+              stops <quote>Before</quote> <command>B</command>.
+            </para>
+          </listitem>
+
+          <listitem>
+            <para>
+              In the absence of direct or indirect ordering between two
+              concurrent units, <command>vera</command> starts or stops
+              them at the same time, in parallel.
+            </para>
+          </listitem>
+
+          <listitem>
+            <para>
+              The most common use cases should have mirror images
+              of their starting and stopping dependencies.
+              A <quote>Before</quote> starting dependency is typically
+              a <quote>After</quote> stopping dependency, and vice versa.
+            </para>
+          </listitem>
+
+          <listitem>
+            <para>
+              It doesn't take many units to inadvertently create circular
+              dependencies. <command>vera</command> randomly breaks circular
+              dependencies after lodging a complaint.
+            </para>
+          </listitem>
+        </itemizedlist>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term>The <quote>Requires-First</quote> dependency</term>
+      <listitem>
+        <para>
+          A <quote>Requires-First</quote> dependency combines
+          <quote>Requires</quote> together with <quote>Before</quote>
+          and <quote>After</quote> dependencies.
+          A <quote>Requires-First</quote> dependency, first, is
+          equivalent to a <quote>Requires</quote> dependency,
+          and additionally:
+        </para>
+
+        <orderedlist inheritnum="ignore" continuation="restarts">
+          <listitem>
+            <para>
+              The transitive set of <quote>Requires</quote> and
+              <quote>Requires-First</quote> dependencies get calculated.
+              For the purposes of this calculation all
+              <quote>Required-By</quote> dependencies are logically
+              the same as specifying the equivalent
+              <quote>Requires</quote> dependencies.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              A second set of transitive dependencies get calculated from
+              <quote>Requires-First</quote> dependencies, only.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Any units that are present in both sets get removed from
+              the first set. The first set now contains only units that
+              come from <quote>Requires</quote> and
+              <quote>Required-By</quote> dependencies.
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              Every unit in the first set gets a
+              <quote>Starting/After</quote> and a
+              <quote>Stopping/Before</quote> dependency on each
+              <quote>Requires-First</quote> unit.
+            </para>
+          </listitem>
+        </orderedlist>
+
+        <para>
+          The end result is that all <quote>Required-First</quote> units
+          get started before any of the <quote>Requires</quote> units
+          (and they get stopped after them). Otherwise,
+          <quote>Required-First</quote> and
+          <quote>Requires</quote> units get started concurrently,
+          subject to any other before and after dependencies.
+        </para>
+      </listitem>
+    </varlistentry>
+  </variablelist>
+  <refsect2 id="hierdep">
+    <title>Specifying hierarchical dependencies</title>
+
+    <para>
+      A dependency (<quote>Requires</quote>,
+      <quote>Required-By</quote>, and all <quote>Before</quote> and
+      <quote>After</quote>s) can specify a hierarchical name, and
+      it applies to all logical units in that hierarchy.
+    </para>
+
+    <para>
+      See <xref linkend="hierarchy"/> for a description of
+      unit hierarchies. For example:
+    </para>
+    <blockquote>
+      <informalexample>
+         <programlisting format="linespecific">
+Before: networking
+         </programlisting>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      This defines the dependency for <quote>networking/vpn</quote>,
+      <quote>networking/interfaces</quote> and all other units in the
+      <quote>networking</quote> hierarchy (and to
+      <quote>networking</quote> itself, if this unit is defined).
+    </para>
+  </refsect2>
+</refsect1>

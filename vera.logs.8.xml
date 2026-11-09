@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refentry id="vera.logs.8">
+  <refmeta>
+    <refentrytitle>vera logs</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo>S. Varshavchik</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>vera.logs</refname>
+    <refpurpose>Vera logging</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">logs</arg>
+    </cmdsynopsis>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">log</arg>
+      <arg choice="opt" rep="norepeat">number</arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1 id="logs_description">
+    <title>DESCRIPTION</title>
+
+    <para>
+      <command>vera</command> logs all runlevel switches, this includes
+      system startup and shutdown.
+      The logs are retained for a set number of days, the oldest
+      log files get automatically removed at system startup. The number
+      of days of log
+      retention is controlled by the <envar>SWITCHLOGDAYS</envar>
+      environment variable.
+      <quote><command>vlad setenv SWITCHLOGDAYS 5</command></quote> sets
+      the retention period to five days. At most five days of logs are
+      kept (dates without logs don't count toward the limit).
+    </para>
+
+    <note>
+      <para>
+        There will be an extra day of logs at times. Logs get purged
+        at system boot before a new log gets created, possibly for a brand
+        new day.
+      </para>
+    </note>
+
+    <blockquote>
+      <informalexample>
+            <programlisting format="linespecific">
+       # vlad logs
+       2 2024-03-23 20:52:48 reboot
+       1 2024-03-23 20:53:18 multi-user</programlisting>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      The <command>logs</command> command lists all available switch
+      logs, from the oldest to the newest. It produces the following
+      output:
+    </para>
+    <itemizedlist>
+      <listitem>
+        <para>
+          The log number. The logs are numbered from
+          the newest to the oldest, so log #1 is always the most recent
+          log.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          The timestamp of each runlevel switch.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          Which runlevel was switched to.
+        </para>
+      </listitem>
+    </itemizedlist>
+
+    <para>
+      The log files record low-level details and times, the
+      <quote><command>vlad log</command></quote>
+      command reads log file #1, the
+      most recent log file,
+      and processes the logs into a basic list of units and how
+      long it took for each unit to start.
+      An optional parameter reads a different log file.
+      <quote><command>vlad log 2</command></quote> reads log file #2.
+    </para>
+
+    <para>
+      The <command>log</command> command produces a listing of units
+      that were started or stopped, one unit per line.
+      Each line contains:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          How long the unit's starting or stopping command took to run
+          to completion.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          How long the unit waited for other units to start
+          or stop, before it could start or stop.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          The unit's name.
+        </para>
+      </listitem>
+    </itemizedlist>
+
+    <para>
+      An asterisk, <quote>*</quote> appears at the beginning of the line
+      of the unit that took the longest time to start or stop.
+      The asterisk's only purpose is to identify the unit with the
+      longest starting or stopping time.
+    </para>
+  </refsect1>
+  <refsect1 id="logs_seealso">
+    <title>SEE ALSO</title>
+
+    <para>
+      <link linkend="vera.8">
+        <citerefentry>
+          <refentrytitle>vera</refentrytitle>
+          <manvolnum>8</manvolnum>
+        </citerefentry>
+        </link>.
+    </para>
+  </refsect1>
+
+  <refsect1 id="logs_bugs">
+    <title>BUGS</title>
+
+    <para>
+      <literal>system/inittab/rc</literal> is often listed as the
+      slowest-starting unit. The actual culprit will be some other
+      unit that gets started by <literal>system/inittab/rc</literal>.
+      This is an artifact of how the <quote>inittab</quote> command
+      converts the <command>init</command> scripts to
+      <command>vera</command> units.
+    </para>
+  </refsect1>
+</refentry>

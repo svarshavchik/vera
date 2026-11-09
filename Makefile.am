@@ -547,10 +547,10 @@ vera.units.8.in: vera.man.stamp
 vlad.8: vera.man.stamp
 	touch vlad.8
 
-vera.man.stamp: vera.xml
+vera.man.stamp: $(wildcard vera*.xml) veraxmldefs.ent
 	rm -rf veraman.tmp
 	mkdir -p veraman.tmp
-	xsltproc  --nonet -o veraman.tmp/ http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $(srcdir)/vera.xml
+	xsltproc  --xinclude --nonet -o veraman.tmp/ http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $(srcdir)/vera.xml
 	mv veraman.tmp/vera.8 veraman.tmp/vera.8.in
 	mv veraman.tmp/vera.extras.8 veraman.tmp/vera.extras.8.in
 	mv veraman.tmp/vera.logs.8 veraman.tmp/vera.logs.8.in
@@ -568,7 +568,7 @@ CLEANFILES += init.8 vera.8.in \
 INSTALL: vera.html.stamp
 	touch INSTALL
 
-vera.html.stamp: vera.xml
+vera.html.stamp: $(wildcard vera*.xml) veraxmldefs.ent
 	rm -rf html.tmp
 	xsltproc --nonet -o html.tmp/ \
 	   --stringparam chunk.first.sections 1 \

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refsect1 PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refsect1 id="files">
+  <title>FILES</title>
+
+  <variablelist>
+    <varlistentry>
+      <term><filename>@INSTALLCONFIGDIR@</filename></term>
+      <listitem>
+        <para>
+          Unit specification files.
+        </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><filename>@LOCALCONFIGDIR@</filename></term>
+      <listitem>
+        <para>
+          Locally modified unit specification files.
+        </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><filename>@OVERRIDECONFIGDIR@</filename></term>
+      <listitem>
+        <para>
+          <command>vera</command>-maintained directory that tracks
+          masked and enabled units.
+        </para>
+      </listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><filename>@ENVIRONCONFIG@</filename></term>
+      <listitem>
+        <para>
+          Environment variables that are set for all started commands.
+          This file is maintained by
+          <command>setenv</command> and <command>unsetenv</command>
+          commands.
+        </para>
+      </listitem>
+    </varlistentry>
+  </variablelist>
+</refsect1>

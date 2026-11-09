@@ -1,0 +1,1007 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refsect1 PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refsect1 id="units">
+  <title>Unit specifications</title>
+  <synopsis format="linespecific"><filename>@INSTALLCONFIGDIR@</filename></synopsis>
+  <synopsis format="linespecific"><filename>@LOCALCONFIGDIR@</filename></synopsis>
+  <synopsis format="linespecific"><filename>@OVERRIDECONFIGDIR@</filename></synopsis>
+
+  <para>
+    Software packages install their unit specification files in
+    <filename>@INSTALLCONFIGDIR@</filename> as described below.
+    <filename>@LOCALCONFIGDIR@</filename> is the local override
+    directory. <command>vera</command> reads a unit file from
+    <filename>@LOCALCONFIGDIR@</filename> if one exists instead of the
+    original one from <filename>@INSTALLCONFIGDIR@</filename>.
+    This allows modifying or adjusting the software package's unit
+    specification file without touching the original one.
+  </para>
+
+  <para>
+    <filename>@OVERRIDECONFIGDIR@</filename> gets used for tracking
+    masked and enabled units, and does not normally need any manual
+    intervention.
+  </para>
+
+  <note>
+    <para>
+      <command>vera</command> ignores unit specification files in
+      <filename>@LOCALCONFIGDIR@</filename> unless the original
+      one is installed in
+      <filename>@INSTALLCONFIGDIR@</filename>.
+      <filename>@LOCALCONFIGDIR@</filename> overrides, and does not
+      supplement, the contents of
+      <filename>@INSTALLCONFIGDIR@</filename>.
+    </para>
+
+    <para>
+      These directories get cleaned up when <command>vera</command>
+      starts. Garbled or misnamed
+      unit specification files get removed.
+      Overrides of units
+      that no longer exist in
+      <filename>@INSTALLCONFIGDIR@</filename> also get removed.
+    </para>
+  </note>
+
+  <refsect2 id="unitfilename">
+    <title>Filename requirements</title>
+
+    <para>
+      Names of unit specification files must follow these requirements.
+      The valid
+      characters in unit specification filenames are:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>Lowercase letters <quote>a-z</quote></para>
+      </listitem>
+      <listitem>
+        <para>Uppercase letters <quote>A-Z</quote></para>
+      </listitem>
+      <listitem>
+        <para>Digits <quote>0-9</quote></para>
+      </listitem>
+      <listitem>
+        <para>A space, period, or a dash <quote>-</quote></para>
+      </listitem>
+      <listitem>
+        <para>
+          All characters with the high bit set, they are presumed
+          to use the default system locale's encoding (but this is not
+        checked)</para>
+      </listitem>
+    </itemizedlist>
+
+    <para>
+      All other punctuations and characters are prohibited. Additionally:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          A unit specification file's name
+          cannot start or end with a space, period, or a dash
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          No two consecutive spaces, periods, or dashes
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          Maximum filename length is <quote>NAME_MAX-1</quote> (254
+          octets)
+        </para>
+      </listitem>
+    </itemizedlist>
+
+    <para>
+      Files in the unit specification directories that do not meet these
+      requirements get ignored (and removed during the next reboot).
+    </para>
+
+    <note>
+      <para>
+        <command>vera</command> reserves unit names prefixed by
+        <quote>system/</quote>
+        for its internal use, specifically.
+      </para>
+
+      <itemizedlist>
+        <listitem>
+          <para>
+            <quote>/</quote> implies that unit specification files
+            can be installed in subdirectories, this is discussed
+            in <xref linkend="hierarchy"/>.
+          </para>
+        </listitem>
+
+        <listitem>
+          <para>
+            Each runlevel (see
+            <link linkend="vera.runlevels.8">
+              <citerefentry>
+                <refentrytitle>vera.runlevels</refentrytitle>
+                <manvolnum>8</manvolnum>
+              </citerefentry>
+              </link>)
+            has a corresponding
+            <quote>system/<replaceable>name</replaceable></quote>.
+            Installing a unit specification for a specific runlevel
+            is nothing more than defining <quote>enabled:
+            system/<replaceable>name</replaceable></quote> in its
+            specification file, for example:
+          </para>
+          <blockquote>
+            <informalexample>
+                    <literallayout format="linespecific" class="normal">
+enabled:
+   - system/multi-user
+   - system/graphical
+
+</literallayout>
+            </informalexample>
+          </blockquote>
+
+          <para>
+            Enabling this unit results in it getting started
+            automatically in the <quote>multi-user</quote> and
+            <quote>graphical</quote> runlevels.
+          </para>
+
+          <note>
+            <para>
+              Hierarchical and compound units must use absolute
+              dependencies,
+              <quote>/system/multi-user</quote> and
+              <quote>/system/graphical</quote>, for example.
+              (see <xref linkend="dependencies"/>
+              for more information).
+            </para>
+          </note>
+        </listitem>
+
+        <listitem>
+          <para>
+            Similarly, <quote>system/boot</quote>-required units
+            get started in all runlevels, and before the
+            runlevel-specific units.
+          </para>
+        </listitem>
+      </itemizedlist>
+    </note>
+  </refsect2>
+
+  <refsect2>
+    <title>Format of unit specification files</title>
+    <para>
+      This section describes the format of unit specification files.
+    </para>
+    <para>
+      The
+      <quote>validate</quote> command reads the
+      <replaceable>filename</replaceable> and checks that it meets
+      all formatting requirements. The command displays the parsed
+      representation of the unit specification. <quote>validate</quote>
+      also reads all existing unit configuration files from
+      <filename>@INSTALLCONFIGDIR@</filename> and prints a warning
+      message if any dependencies in the
+      <replaceable>filename</replaceable> do not exist.
+      This is not an error. <command>vera</command> ignores non-existent
+      dependencies to avoid unintentional typos.
+    </para>
+
+    <para>
+      <quote>validate</quote> assumes that
+      <replaceable>filename</replaceable> gets installed in
+      <filename>@INSTALLCONFIGDIR@</filename>. If it gets installed in
+      a subdirectory it is necessary to spell out the full subdirectory
+      path, as an optional parameter:
+    </para>
+    <blockquote>
+      <informalexample>
+              <programlisting format="linespecific">
+vlad validate startup web/startup
+              </programlisting>
+      </informalexample>
+    </blockquote>
+    <para>
+      This is an example of validating
+      the contents of the <filename>startup</filename> file that
+      gets installed as
+      <filename>@INSTALLCONFIGDIR@/web/startup</filename>.
+    </para>
+
+    <note>
+      <para>
+        Verifying the validity of dependencies requires that
+        <filename>@INSTALLCONFIGDIR@</filename> and its subdirectories
+        are accessible to the userid that's running
+        <quote>validate</quote>.
+      </para>
+    </note>
+
+    <para>
+      The <quote>edit</quote> command provides a way to manually edit
+      a unit specification file safely, with error checking.
+      The <quote>edit</quote> command does the following:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          The <quote>edit</quote> command makes a copy of any
+          existing modified unit specification file that already
+          exists in <filename>@LOCALCONFIGDIR@</filename>, otherwise
+          the original unit specification file gets copied from
+          <filename>@INSTALLCONFIGDIR@</filename>.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          The copied file gets opened in an editor. The
+          <envar>EDITOR</envar> environment variable specifies the
+          editor (defaults to
+          <command>vi</command>).
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          After the editor terminates (presumably after saving all
+          changes to the edited file), the <quote>validate</quote>
+          command
+          checks the modified unit specification file. If all
+          checks pass: the edited file gets installed in
+          <filename>@LOCALCONFIGDIR@</filename>, then the
+          <quote>edit</quote> command finishes.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          Otherwise the <quote>edit</quote> command offers three
+          options after showing all the error messages:
+        </para>
+        <variablelist>
+          <varlistentry>
+            <term>Abort</term>
+            <listitem>
+              <para>
+                The <quote>edit</quote> command finishes without
+                making any changes, the temporary copy of the
+                unit specification file gets removed.
+              </para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term>Re-edit</term>
+            <listitem>
+              <para>
+                The editor runs again, this offers the option to
+                fix the errors, then try to validate it again.
+              </para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term>Ignore</term>
+            <listitem>
+              <para>
+                The edited unit specification file gets installed
+                despite the reported errors.
+                This option is available in case the errors come from
+                other unit specification files and not the edited one's
+                (the <quote>validate</quote> command checks all unit
+                specification files that are currently installed).
+              </para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+      </listitem>
+    </itemizedlist>
+
+    <para>
+      For completeness' sake, the
+      <quote>revert</quote> command deletes the custom
+      unit specification file for the named unit, from
+      <filename>@LOCALCONFIGDIR@</filename>.
+    </para>
+
+    <para>
+      This is a slightly contrived example of a unit specification file
+      that shows most of its possible settings:
+    </para>
+
+    <blockquote>
+      <informalexample>
+              <literallayout format="linespecific" class="normal">
+Name: scheduler
+Description: "System Scheduler"
+
+Requires-First:
+    - boot
+
+Requires:
+    - time_service
+    - synchronization_service
+
+Required-by:
+    - calendar
+
+Enabled:
+    - system/multi-user
+    - system/graphical
+
+Starting:
+    type: forking
+    before:
+      - conference_service
+      - update_service
+    after:
+      - time_sync
+    command: "/usr/bin/scheduler start"
+
+Stopping:
+    type: automatic
+    after:
+      - conference_service
+      - update_service
+    before:
+      - time_sync
+    command: "/usr/bin/scheduler stop"
+
+Restart: "/usr/bin/scheduler restart"
+Reload: "/usr/bin/scheduler reload"
+
+Version: 1</literallayout>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      Unit specification files use the <acronym>YAML</acronym> format.
+      This documentation glosses over this detail, and describes the
+      unit specification file format in more general terms.
+    </para>
+
+    <para>
+      However these are full <acronym>YAML</acronym> documents and can use
+      any logically equivalent, alternative <acronym>YAML syntax</acronym>.
+      For example:
+    </para>
+    <blockquote>
+      <informalexample>
+        <literallayout format="linespecific" class="normal">before: [conference_service, update_service]</literallayout>
+      </informalexample>
+    </blockquote>
+    <para>
+      This is a logically equivalent <quote>before</quote> setting
+      from the previous example.
+    </para>
+
+    <para>
+      A unit specification file is a
+      <quote>Key: value</quote> map. Keys are not case
+      sensitive, <quote>name</quote> and <quote>Name</quote> are equivalent,
+      and there are only two required keys:
+    </para>
+
+    <variablelist>
+      <varlistentry>
+        <term>name</term>
+        <listitem>
+          <para>
+            <quote>name</quote> must be identical to the unit specification
+            file's name.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>version</term>
+        <listitem>
+          <para>
+            <quote>version</quote> must be set to 1.
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>
+      A <quote>description</quote> is optional.
+      <quote>version</quote> should be the last key in the file. Combined
+      with all other requirements this allows direct installation of
+      unit specification files, without any special procedures.
+      No explicit action is required to notify
+      <command>vera</command> to load them. Unit specification files get
+      ignored unless they have a <quote>version: 1</quote> and their
+      <quote>name</quote> matches their filename. This means that:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          When using package management software that installs
+          packages by creating each file with a temporary name, then
+          renaming the file after its contents are complete,
+          <command>vera</command> ignores anything in
+          <filename>@INSTALLCONFIGDIR@</filename> that doesn't parse
+          as valid <acronym>YAML</acronym> and without a matching
+          <quote>name</quote>. In effect, it ignores the temporary files
+          until they are renamed.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          Even if a new unit specification file gets copied directly into
+          <filename>@INSTALLCONFIGDIR@</filename>, as is: the unit
+          specification file gets ignored without a
+          <quote>version: 1</quote>. Placing this key at the end of
+          a unit specification file results in them getting ignored until
+          they are complete.
+        </para>
+      </listitem>
+    </itemizedlist>
+
+    <para>
+      For these reasons there is no <command>vlad</command> command for
+      installing updated
+      <command>vera</command> unit specification files. This
+      happens automatically, with
+      <citerefentry>
+        <refentrytitle>inotify</refentrytitle>
+        <manvolnum>7</manvolnum>
+        </citerefentry>'s assistance.
+    </para>
+
+    <note>
+      <para>
+        There's a brief delay before the updated unit specification files
+        get reloaded. The default delay is controlled by the
+        <envar>VERA_RELOAD_DELAY</envar> environment variable, and
+        defaults to 6 seconds. Use the <command>vlad setenv</command>
+        command to change the delay.
+      </para>
+    </note>
+  </refsect2>
+
+  <refsect2 id="startstop">
+    <title><quote>Starting</quote> and <quote>Stopping</quote></title>
+
+    <para>
+      The <quote>Starting</quote> key in a unit specification file contains
+      other <quote>Key: value</quote>
+      pairs that specify how this unit gets started.
+    </para>
+
+    <variablelist>
+      <varlistentry>
+        <term><quote>command: "/usr/bin/scheduler start"</quote></term>
+        <listitem>
+          <para>
+            This key gives the command that starts the unit's programs.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><quote>type: forking</quote></term>
+        <listitem>
+          <para>
+            The starting type specifies how the unit gets started.
+            The possible values for <quote>Type</quote> are:
+          </para>
+
+          <variablelist>
+            <varlistentry>
+              <term>forking (default)</term>
+              <listitem>
+                <para>
+                  The starting command forks and its child process
+                  is the permanent unit process. The original process
+                  terminates.
+                </para>
+              </listitem>
+            </varlistentry>
+
+            <varlistentry>
+              <term>oneshot</term>
+              <listitem>
+                <para>
+                  The starting process is the main unit process.
+                  After the starting process starts running the unit
+                  is considered to be fully started.
+                </para>
+              </listitem>
+            </varlistentry>
+
+            <varlistentry>
+              <term>respawn</term>
+              <listitem>
+                <para>
+                  The starting process is the main unit process.
+                  After the starting process starts running the unit
+                  is considered to be fully started.
+                </para>
+
+                <para>
+                  When the starting process terminates it gets
+                  immediately restarted.
+                </para>
+              </listitem>
+            </varlistentry>
+          </variablelist>
+
+          <note>
+            <para>
+              <quote>respawn</quote> requires a starting command.
+              For other starting types:
+              an unspecified starting command has the same results as if
+              the unit's starting command immediately terminated with
+              an exit code of 0, for a forking unit.
+              A <quote>oneshot</quote>
+              unit without a starting command is effectively a placeholder.
+              The unit is deemed to get started immediately, upon demand,
+              with all the other implications that follow (other units'
+              <quote>before</quote> and <quote>after</quote> dependencies,
+              for example).
+            </para>
+          </note>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><quote>timeout: 300</quote></term>
+        <listitem>
+          <para>
+            <quote>Timeout</quote> defaults to 60 seconds, if missing.
+            A forking unit's starting command must terminate with a 0
+            exit code before this timeout expires.
+          </para>
+
+          <para>
+            Once the forking unit's starting command terminates with a 0
+            exit code the unit is deemed to be started (and other units
+            that start after this get started themselves now).
+          </para>
+
+          <para>
+            In all other cases the unit's start is deemed to have failed
+            (see <xref linkend="failedstart"/> below).
+          </para>
+
+          <para>
+            A timeout of 0 indicates an infinite timeout, there is no
+            time limit for the starting command.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><quote>before</quote> and <quote>after</quote></term>
+        <listitem>
+          <para>
+            These keys specify other units that get started before or
+            after this one (see <xref linkend="dependencies"/>).
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>
+      The <quote>Stopping</quote> key in a unit specification file contains
+      other key/value pairs that specify how this unit gets stopped.
+    </para>
+
+    <variablelist>
+      <varlistentry>
+        <term><quote>command: "/usr/bin/scheduler stop"</quote></term>
+        <listitem>
+          <para>
+            This key gives the command that stops the unit's programs.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><quote>type: manual</quote></term>
+        <listitem>
+          <para>
+            The stopping type specifies how the unit gets stopped.
+            The possible values for <quote>Type</quote> are:
+          </para>
+
+          <variablelist>
+            <varlistentry>
+              <term>manual (default)</term>
+              <listitem>
+                <para>
+                  The unit gets stopped by running
+                  <command>vlad stop</command> for this unit, or if
+                  another unit that this unit requires gets stopped
+                  for any reason.
+                </para>
+              </listitem>
+            </varlistentry>
+
+            <varlistentry>
+              <term>automatic</term>
+              <listitem>
+                <para>
+                  The unit also gets stopped when all of its processes
+                  stop.
+                  When the last process in this unit stops this
+                  has the same
+                  results as running <command>vlad stop</command>.
+                </para>
+              </listitem>
+            </varlistentry>
+
+            <varlistentry>
+              <term>target</term>
+              <listitem>
+                <para>
+                  Only
+                  <command>vlad stop</command> stops this unit.
+                  The unit does not get stopped if other units
+                  required by it are stopped.
+                </para>
+
+                <para>
+                  This is used by placeholder units that serve as
+                  runlevel targets, or as <quote>Required-By</quote>
+                  or <quote>Enabled</quote> dependencies, for example:
+                  many units are required by
+                  <quote>system/multi-user</quote> or other runlevels.
+                  If any of those units stop this does not stop the
+                  entire runlevel and all other units in it, even though
+                  <quote>system/multi-user</quote> formally requires
+                  them.
+                </para>
+              </listitem>
+            </varlistentry>
+          </variablelist>
+          <note>
+            <para>
+              It's expected that the stopping command takes appropriate
+              measures to terminate all processes that were previously
+              started. In the event of an automatic stop there won't be any,
+              but the stopping command is free to perform whatever bookkeeping
+              a formal unit stop needs.
+            </para>
+          </note>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><quote>timeout: 300</quote></term>
+        <listitem>
+          <para>
+            <quote>Timeout</quote> defaults to 60 seconds, if missing.
+            A stopping command must terminate before its timeout expires.
+          </para>
+          <para>
+            A timeout of 0 indicates an infinite timeout, there is no
+            time limit for the stopping command.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><quote>before</quote> and <quote>after</quote></term>
+        <listitem>
+          <para>
+            These keys specify other units that get stopped before or
+            after this one (see <xref linkend="dependencies"/>).
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>
+      After the stopping command times out or terminates any remaining
+      processes in the unit (which may include a stuck stopping command)
+      receive a SIGTERM signal, followed by SIGKILL.
+    </para>
+
+    <para>
+      Commands inherit the following environment variables:
+    </para>
+    <informaltable>
+      <tgroup cols="2">
+        <thead>
+          <row>
+            <entry>Variable</entry>
+            <entry>Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry><envar>RUNLEVEL</envar></entry>
+            <entry>Current
+            <link linkend="vera.runlevels.8">runlevel</link></entry>
+          </row>
+          <row>
+            <entry><envar>PREVRUNLEVEL</envar></entry>
+            <entry>The previous
+            <link linkend="vera.runlevels.8">runlevel</link></entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </informaltable>
+
+    <note>
+      <para>
+        <envar>RUNLEVEL</envar> and
+        <envar>PREVRUNLEVEL</envar> are for <command>init</command>
+        compatibility and contain
+        the one digit <command>init</command> runlevel designations
+        (or the full <command>vera</command> runlevel name for a
+        non-default configuration that does not define
+        <command>init</command> aliases).
+      </para>
+
+      <para>
+        The <quote>switch</quote> command (see
+        <link linkend="vera.runlevels.8">
+          <citerefentry>
+            <refentrytitle>vera.runlevels</refentrytitle>
+            <manvolnum>8</manvolnum>
+          </citerefentry>
+          </link>)
+          immediately updates the
+          advertised runlevels. Commands started to stop units from the
+          previous runlevel see the new runlevel in the
+          <envar>RUNLEVEL</envar> environment variable.
+      </para>
+    </note>
+  </refsect2>
+
+  <refsect2 id="failedstart">
+    <title>Starting failures</title>
+
+    <para>
+      An attempt to start a <quote>forking</quote> unit fails if its
+      starting command times out or terminates with a non-zero exit
+      code. This has the following implications:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          Other units that require this unit but haven't started,
+          and are
+          waiting for the failed unit to start, do not
+          get started any more.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          The same actions that normally happen when the failed unit
+          gets stopped also happen, as if the <command>stop</command>
+          got executed for this unit, specifically: all other units that
+          were started as a failed unit's dependency get now stopped.
+        </para>
+      </listitem>
+    </itemizedlist>
+  </refsect2>
+
+  <refsect2 id="reloadrestart">
+    <title><quote>Reload</quote> and <quote>Restart</quote> commands</title>
+
+    <para>
+      The <quote>reload</quote> key and <quote>restart</quote> keys
+      define the commands executed by <command>vlad reload</command>
+      and <command>vlad restart</command> commands. These commands
+      are allowed only if the unit is already started.
+    </para>
+  </refsect2>
+
+  <refsect2 id="respawn">
+    <title><quote>respawn</quote> parameters</title>
+
+    <para>
+      A <quote>respawn</quote> starting type unit gets restarted
+      up to three times in thirty seconds. This is to prevent a
+      malfunctioning unit from slowing down the system.
+      An optional <quote>respawn</quote> key adjusts these default
+      settings:
+    </para>
+
+    <blockquote>
+      <informalexample>
+        <literallayout format="linespecific" class="normal">
+Name: sshd
+Description: SSH server
+Starting:
+   Command: /usr/sbin/sshd
+   Type: respawn
+Respawn:
+   attempts: 1
+   limit: 60</literallayout>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      Note that the <quote>type</quote> key in the <quote>starting</quote>
+      section defines this unit as a respawning unit, and the
+      standalone <quote>respawn</quote> key defines the respawning
+      parameters:
+    </para>
+
+    <variablelist>
+      <varlistentry>
+        <term>attempts</term>
+        <listitem>
+          <para>
+            This defines the maximum number of times the unit gets
+            started before it gets limited.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term>limit</term>
+        <listitem>
+          <para>
+            This value in the number of seconds before the counter
+            gets reset.
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>
+      <command>vera</command> starts this unit at most
+      <replaceable>attempts</replaceable> times in
+      <replaceable>limit</replaceable> seconds. If the unit
+      fails one more time before <replaceable>limit</replaceable>
+      seconds are up, <command>vera</command> waits until
+      <replaceable>limit</replaceable> seconds expire, before attempting
+      to restart the unit again.
+    </para>
+
+    <note>
+      <para>
+        This is only when the specified starting command
+        exits normally with a 0 exit status. Any other exit status
+        puts the unit into a penalty box until
+        <replaceable>limit</replaceable> seconds expire before
+        <command>vera</command> restarts the unit again.
+      </para>
+    </note>
+  </refsect2>
+
+  <refsect2 id="sigterm">
+    <title><acronym>SIGTERM</acronym> and <acronym>SIGKILL</acronym></title>
+    <para>
+      A unit gets stopped by running its
+      <link linkend="startstop">stopping command</link> if its
+      specified; then
+      sending the <acronym>SIGTERM</acronym> signal to the remaining
+      processes (subject to the settings below),
+      giving them a few seconds to wrap things up on their
+      own, and then immediately <acronym>SIGKILL</acronym>ing any
+      processes that remain.
+    </para>
+
+    <blockquote>
+      <informalexample>
+        <programlisting format="linespecific">
+Name: scheduler
+Description: "System Scheduler"
+Starting:
+    type: forking
+    command: "/usr/bin/scheduler start"
+Sigterm:
+    notify: parents
+version: 1
+</programlisting>
+      </informalexample>
+    </blockquote>
+    <para>
+      The <quote>Sigterm</quote> key in the unit specification file
+      specifies how processes in the container receive a
+      <acronym>SIGTERM</acronym> signal.
+    </para>
+    <variablelist>
+      <varlistentry>
+        <term>notify: all</term>
+        <listitem>
+          <para>
+            All processes in the unit's container get a
+            <acronym>SIGTERM</acronym>.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>notify: parents</term>
+        <listitem>
+          <para>
+            Processes that are children of other processes in the same
+            container and which run the same executable as their parent
+            process do not receive a <acronym>SIGTERM</acronym>, only
+            its parent process does. A child process that runs a
+            different executable does get a <acronym>SIGTERM</acronym>
+            normally.
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>
+      <quote>notify: parents</quote> is the default if the unit
+      specification file does not have a stopping command.
+      <quote>notify: all</quote> is the default if the unit
+      specification file has an explicit stopping command,
+      <acronym>SIGTERM</acronym> gets sent to all processes after
+      the stopping command finishes.
+    </para>
+  </refsect2>
+  <refsect2 id="alternativegroups">
+    <title>Alternative Groups</title>
+
+    <para>
+      An <quote>alternative-group</quote> names units which are not
+      meant to be started at the same time. Starting an
+      <quote>alternative-group</quote> unit automatically stops any
+      other unit in the same <quote>alternative-group</quote>.
+    </para>
+
+    <blockquote>
+      <informalexample>
+        <literallayout format="linespecific" class="normal">
+Name: http-apache
+Description: Apache web server
+Alternative-Group: webservers
+
+Version: 1
+---
+Name: http-nginx
+Description: Nginx web server
+Alternative-Group: webservers
+
+Version: 1
+              </literallayout>
+      </informalexample>
+    </blockquote>
+
+    <para>
+      A unit in an alternative group should not have a
+      <quote>Required-By</quote> dependency and other units should not
+      have a <quote>Requireds</quote> dependency of
+      an alternative group unit
+      (see <xref linkend="dependencies"/> for more information).
+    </para>
+
+    <para>
+      Names of alternative groups are arbitrary labels that generally
+      follow the same requirements as unit names (but are not unit
+      names and exist in their own namespace):
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          They follow the same requirements as unit filenames and names
+          (see <xref linkend="unitfilename"/> for more information).
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          They are resolved according to their unit's hierarchy.
+          If the above units are installed as
+          <filename>networking/http-apache</filename> and
+          <filename>networking/http-nginx</filename> then their
+          alternative group's name is really
+          <quote>networking/webservers</quote> (unless it's given as
+          <quote>/webservers</quote>).
+          See <xref linkend="hierarchy"/> for a description of
+          unit hierarchies.
+        </para>
+      </listitem>
+    </itemizedlist>
+  </refsect2>
+</refsect1>

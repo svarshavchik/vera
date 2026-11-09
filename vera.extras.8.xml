@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refentry id="vera.extras.8">
+  <refmeta>
+    <refentrytitle>vera extras</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo>S. Varshavchik</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>vera.extras</refname>
+    <refpurpose>Optional vera features</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad enable system/networkmanager-wait-online</command>
+    </cmdsynopsis>
+
+    <cmdsynopsis sepchar=" ">
+      <command>vlad enable system/v2-controllers</command>
+    </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad set-resource <replaceable>unit</replaceable> <replaceable>resource</replaceable> <replaceable>value</replaceable></command>
+      </cmdsynopsis>
+
+      <cmdsynopsis sepchar=" ">
+        <command>vlad delete-resource <replaceable>unit</replaceable> <replaceable>resource</replaceable></command>
+      </cmdsynopsis>
+
+    <cmdsynopsis sepchar=" ">
+      <command>vlad restart system/rc.M/rc.<replaceable>name</replaceable></command>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1 id="extras_description">
+    <title>DESCRIPTION</title>
+
+    <para>
+      This manual page describes additional <command>vera</command>
+      features.
+    </para>
+
+    <refsect2 id="networkmanager-wait-online">
+      <title><quote>system/network-online</quote> and
+      <quote>system/networkmanager-wait-online</quote></title>
+
+      <para>
+        The <command>inittab</command> command adds a
+        requirement for the <quote>system/network-online</quote>
+        target to every converted <filename>/etc/rc.d/rc.inet2</filename>
+        unit.
+      </para>
+
+      <para>
+        The installed <quote>system/networkmanager-wait-online</quote> unit
+        can be enabled; it is then enabled as a dependency of
+        <quote>system/network-online</quote>.
+        This unit runs <command>/usr/bin/nm-online</command>
+        when started.
+      </para>
+
+      <para>
+        If a system uses <filename>/etc/rc.d/rc.networkmanager</filename>
+        then enabling <quote>system/networkmanager-wait-online</quote>
+        delays system startup until NetworkManager initializes all
+        network interfaces (all network interfaces have an
+        active IP address). <quote>system/networkmanager-wait-online</quote>
+        should not be enabled unless
+        <quote>system/rc.M/rc.networkmanager</quote> is also enabled.
+      </para>
+    </refsect2>
+
+    <refsect2 id="v2-controllers">
+      <title>Enabling cgroup v2 controllers and setting resources</title>
+
+      <para>
+        Slackware's default <filename>/etc/rc.d/rc.S</filename> script
+        mounts all cgroup version 1 controllers in
+        <filename>/sys/fs/cgroup</filename>.
+      </para>
+
+      <para>
+        Enabling the <quote>system/v2-controllers</quote> unit
+        runs a script at system boot that enables cgroup v2
+        controllers after disabling the
+        cgroup v1 controllers. This makes the controllers
+        available to cgroup v2 containers. The cgroup
+        v2 controllers are enabled
+        for <command>vera</command>'s units.
+      </para>
+
+      <para>
+        If version 1 controllers are turned off via a kernel boot
+        parameter, the cgroup version 2 controllers are still enabled
+        for <command>vera</command>'s units.
+      </para>
+
+      <para>
+        With version 2 controllers enabled it is possible to set
+        controller-managed resources using the <quote>set-resource</quote>
+        command.
+      </para>
+
+      <para>
+        The <quote>set-resource</quote> command sets the given
+        <replaceable>unit</replaceable>'s
+        <replaceable>resource</replaceable> to a
+        <replaceable>value</replaceable>, as in the following example:
+      </para>
+
+      <para>
+        <command>vlad set-resource system/rc.M/rc.sshd pids.max 100</command>
+      </para>
+
+      <para>
+        This limits <quote>system/rc.M/rc.sshd</quote> to 100
+        processes.
+        The <quote>delete-resource</quote> command removes the
+        <replaceable>unit</replaceable>'s
+        <replaceable>resource</replaceable>, reverting it to the
+        Linux kernel's default.
+      </para>
+
+      <para>
+        The resources are actually set when a unit starts. The
+        <quote>set-resource</quote> and <quote>delete-resource</quote>
+        commands update the saved list of resources for each unit, and
+        they take effect when the unit starts. If the unit is already
+        running the new resources take effect the next time the unit
+        starts.
+      </para>
+
+      <para>
+        See the <ulink url="https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers">Linux kernel's control group V2 documentation</ulink>
+        for a list of settable resources.
+      </para>
+
+      <refsect3>
+        <title>Advanced resource control</title>
+        <para>
+          The <quote>set-resource</quote> command implements a generic
+          interface to control group resources.
+          <command>vlad</command> does not have any specific knowledge
+          of any specific resource and what it does.
+          <quote>set-resource</quote> performs a sanity check that only
+          verifies that the specified resource interface file exists, and
+          accepts any <replaceable>value</replaceable>.
+          When a unit starts, each resource is set to its value, one by
+          one.
+        </para>
+
+        <para>
+          Each resource is set by opening the interface file of the same
+          name, as described
+          in the Linux kernel's documentation, and writing the given
+          <replaceable>value</replaceable> to it. Note that not every
+          interface file described in the kernel's documentation is
+          settable.
+        </para>
+
+        <para>
+          <quote>set-resource</quote> accepts multiple values.
+          Multiple values are written to the interface file sequentially.
+          Whether or not this has any effect is up to the controller;
+          otherwise the last value becomes the effective one.
+          If values are already set for a resource,
+          <quote>set-resource</quote> replaces the values.
+          There's also an <quote>add-resource</quote> command that sets
+          additional values without removing any existing ones.
+        </para>
+
+        <para>
+          A newly-created container's resources are set
+          in the order they were set via <quote>set-resource</quote>. The
+          <command>status</command> command with the
+          <option>--resources</option> option lists a unit's resources
+          in the order they were set.
+        </para>
+      </refsect3>
+      <refsect3>
+        <title>Session resources</title>
+
+        <para>
+            Setting resources for a
+            <quote>&INSTALLED_SESSIONS_PREFIX;</quote> unit applies
+            those resources to every started session. The current
+            implementation
+            applies to all sessions uniformly.
+            The same resources are set for every session, for every
+            user, and every session type. There's currently no
+            mechanism to set different resources for different users
+            or session types.
+        </para>
+      </refsect3>
+      <refsect3>
+        <title>Summary of common resources</title>
+
+        <para>
+          This is a summary of the most common resources from the Linux
+          kernel documentation. Consult the kernel's documentation for
+          more information.
+        </para>
+
+        <variablelist>
+          <varlistentry>
+            <term>cpu.idle</term>
+            <listitem>
+              <para>
+                Setting <quote>cpu.idle</quote> to 1 schedules this
+                unit at the lowest possible priority.
+              </para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>memory.max</term>
+            <listitem>
+              <para>
+                <quote>memory.max</quote> is the maximum amount of memory
+                that can be used by the unit, in bytes.
+              </para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>memory.oom.group</term>
+            <listitem>
+              <para>
+                Setting <quote>memory.oom.group</quote> to 1 results
+                in all processes in the unit being killed by the OOM
+                killer, instead of individual processes.
+              </para>
+            </listitem>
+          </varlistentry>
+          <varlistentry>
+            <term>pids.max</term>
+            <listitem>
+              <para>
+                <quote>pids.max</quote> sets an upper limit on the
+                number of processes that can be created in the unit.
+              </para>
+            </listitem>
+          </varlistentry>
+        </variablelist>
+      </refsect3>
+    </refsect2>
+
+    <refsect2 id="rc-restart-and-reload">
+      <title><command>restart</command> and <command>reload</command>
+      commands for <filename>/etc/rc.d</filename> units</title>
+
+      <para>
+        The <command>inittab</command> command installs a unit for every
+        script in <filename>/etc/rc.d</filename> that gets started from
+        <filename>/etc/rc.d/rc.M</filename> and
+        <filename>/etc/rc.d/rc.inet2</filename>. Each unit is named
+        <filename>system/rc.M/<replaceable>name</replaceable></filename>.
+      </para>
+
+      <para>
+        Each <filename>/etc/rc.d</filename> script is scanned and
+        heuristically determined if it supports a
+        <quote>restart</quote> and/or a <quote>reload</quote> operation.
+        If so, then a <quote>restart</quote> and/or a <quote>reload</quote>
+        command is included in the corresponding unit specification
+        file.
+      </para>
+
+      <para>
+        For example: <quote>vlad restart system/rc.M/rc.sshd</quote>
+        executes <command>/etc/rc.d/rc.sshd restart</command> in this
+        unit's container.
+      </para>
+    </refsect2>
+  </refsect1>
+  <refsect1 id="extras_files">
+    <title>FILES</title>
+
+    <variablelist>
+      <varlistentry>
+        <term><filename>@CONFIGDIR@/cgroup.controllers</filename></term>
+
+        <listitem>
+          <para>
+            This configuration file lists which group version 2 controllers
+            get enabled, for <command>vera</command>, by the
+            <quote>system/v2-controllers</quote> unit.
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+  <refsect1 id="extras_seealso">
+    <title>SEE ALSO</title>
+
+    <para>
+      <link linkend="vera.units.8">
+        <citerefentry>
+          <refentrytitle>vera.units</refentrytitle>
+          <manvolnum>8</manvolnum>
+        </citerefentry>
+        </link>.
+    </para>
+  </refsect1>
+</refentry>

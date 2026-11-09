@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refentry id="vera.runlevels.8">
+  <refmeta>
+    <refentrytitle>vera runlevels</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo>S. Varshavchik</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>vera.runlevels</refname>
+    <refpurpose>Vera runlevels</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad</command>
+      <arg choice="opt" rep="norepeat">--wait</arg>
+      <arg choice="plain" rep="norepeat">switch</arg>
+      <arg choice="plain" rep="norepeat"><replaceable>runlevel</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad</command>
+      <arg choice="req" rep="norepeat"><replaceable>LETTER/DIGIT</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad</command>
+      <arg choice="opt" rep="norepeat">--override</arg>
+      <arg choice="plain" rep="norepeat">default</arg>
+      <arg choice="plain" rep="norepeat"><replaceable>runlevel</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis sepchar=" ">
+      <command>vlad</command>
+      <group choice="req" rep="norepeat">
+        <arg choice="plain" rep="norepeat">current</arg>
+        <arg choice="plain" rep="norepeat">default</arg>
+      </group>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+  <refsect1 id="runlevels_description">
+    <title>DESCRIPTION</title>
+    <para>
+      This manual page is an overview of how
+      <quote>runlevels</quote> are used with
+      <citerefentry>
+        <refentrytitle>vera</refentrytitle>
+        <manvolnum>8</manvolnum>
+        </citerefentry>.
+    </para>
+
+    <para>
+      The term <quote>runlevel</quote> dates back to the original UNIX
+      <command>init</command> process supervisor. At a given time the
+      system is in one of several pre-defined runlevels. The runlevels
+      determine which major system processes are running. The original
+      runlevels were single characters, <command>vera</command> uses
+      more descriptive labels and understands the legacy single-character
+      runlevels as their aliases:
+    </para>
+
+    <informaltable>
+      <tgroup cols="3">
+        <thead>
+          <row>
+            <entry><command>vera</command> runlevel</entry>
+            <entry><command>init</command> runlevel</entry>
+            <entry>Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>shutdown</entry><entry>0</entry><entry>System shutdown</entry>
+          </row>
+          <row>
+            <entry>single-user</entry><entry>1, S, s</entry><entry>Root login only</entry>
+          </row>
+          <row>
+            <entry>networking</entry><entry>2</entry><entry>Custom (same as multi-user), network enabled in some systems</entry>
+          </row>
+          <row>
+            <entry>multi-user</entry><entry>3</entry><entry>All logins</entry>
+          </row>
+          <row>
+            <entry>graphical</entry><entry>4</entry><entry>Networking and X</entry>
+          </row>
+          <row>
+            <entry>custom</entry><entry>5</entry><entry>Unused</entry>
+          </row>
+          <row>
+            <entry>reboot</entry><entry>6</entry><entry>reboot</entry>
+          </row>
+        </tbody>
+      </tgroup>
+      <tgroup cols="2">
+        <thead>
+          <row>
+            <entry>Additional <command>vera</command> target</entry>
+            <entry><filename>inittab</filename> entry</entry>
+            <entry>Description</entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>system/sigint</entry>
+            <entry>ctrlaltdel</entry>
+            <entry>Target started in response to <command>vera</command> receiving a <quote>SIGINT</quote> signal</entry>
+          </row>
+          <row>
+            <entry>system/powerfail, system/powerfailnow, system/powerok</entry>
+            <entry>powerfail, powerfailnow, powerok</entry>
+            <entry>Target started in response to <command>vera</command> receiving a <quote>SIGPWR</quote> signal, depending on the contents of <filename>/etc/powerstatus</filename></entry>
+          </row>
+          <row>
+            <entry>system/sighup</entry>
+            <entry>N/A</entry>
+            <entry>Target started in response to <command>vera</command> receiving a <quote>SIGHUP</quote> signal</entry>
+          </row>
+          <row>
+            <entry>system/sigwinch</entry>
+            <entry>kbrequest</entry>
+            <entry>Target started in response to <command>vera</command> receiving a <quote>SIGWINCH</quote> signal</entry>
+          </row>
+
+          <row>
+            <entry>system/a, system/b, and system/c</entry>
+            <entry>a, b, and c</entry>
+            <entry><quote>On-demand</quote> targets, start by <command>vlad start system/<replaceable>LETTER</replaceable></command></entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </informaltable>
+
+    <para>
+      The actual behavior and environment of each runlevel depends on
+      how the system is configured. It's also possible to define new
+      runlevels (see <xref linkend="runlevelconfig"/> for more
+      information).
+      The <quote>switch</quote> command takes an argument and changes
+      the system runlevel, for example:
+      <command>vlad switch reboot</command>
+      reboots the system. <command>vera</command> recognizes legacy
+      runlevel aliases, <command>vlad switch 6</command> has the same
+      result.
+    </para>
+
+    <para>
+      For compatibility with <command>init</command>,
+      a single parameter to <command>vlad</command> consisting of a
+      single letter or digit gets interpreted as a reference to an
+      <command>init</command> runlevel, an ondemand action, or an
+      inittab update, and triggers the equivalent command.
+      <command>vlad 6</command> also triggers a reboot.
+    </para>
+
+    <para>
+      <quote>switch</quote> does not wait for all processes to stop and
+      start and returns immediately. The <quote>--wait</quote> option
+      makes <quote>switch</quote> wait until the switch to the new
+      runlevel finishes.
+    </para>
+
+    <para>
+      <quote>current</quote> shows the current <quote>runlevel</quote>.
+      The <quote>default</quote> command shows the default runlevel when
+      the system starts. Passing a parameter to <quote>default</quote>
+      changes the default system startup runlevel.
+    </para>
+
+    <note>
+      <para>
+        <command>vlad default <replaceable>runlevel</replaceable></command>
+        sets the default runlevel for the next system boot.
+        <command>vera</command> does not read the default runlevel
+        until it gets started or restarted; but the default runlevel
+        has no other function except to set the runlevel when the system
+        boots.
+      </para>
+    </note>
+
+    <para>
+      The <quote>--override</quote> option sets a "temporary"
+      override for the default runlevel.
+      The override gets removed by the next set <quote>default</quote>.
+      The previous default gets restored by setting a default
+      of <quote>default</quote>:
+    </para>
+
+    <blockquote>
+      <informalexample>
+            <programlisting format="linespecific">
+# vlad default
+graphical                 # Current default runlevel is graphical
+# vlad default multi-user
+# vlad default
+multi-user                # New default
+# vlad --override default graphical
+# vlad default
+graphical
+# vlad default default
+# vlad default
+multi-user                # Reverts to the previous default runlevel
+            </programlisting>
+      </informalexample>
+    </blockquote>
+
+    <refsect2 id="runlevelconfig">
+      <title>System runlevels</title>
+
+      <para>
+        The file <filename>@RUNLEVELCONFIG@</filename> defines system
+        runlevels. A default one gets installed and it should only
+        be updated by <command>vlad</command>.
+      </para>
+
+      <para>
+        This file is a YAML document, a map. The map keys are the
+        canonical names
+        of predefined runlevels. The map values are lists of aliases for
+        each runlevel. Exactly one of the map keys have an alias called
+        <quote>default</quote>, this is the default system runlevel.
+        The <command>vlad default</command> command updates this alias
+        by rewriting the configuration file.
+      </para>
+
+      <para>
+        <command>vera</command> automatically creates internal
+        units for runlevels' canonical names. Additional unit specification
+        files get installed in
+        <filename>@INSTALLCONFIGDIR@/system</filename>, for each runlevel.
+        These system units,
+        like <quote>system/graphical</quote> and
+        <quote>system/multiuser</quote>,
+        are the ones that are referenced by
+        <quote>enabled</quote> dependencies (see
+        <xref linkend="dependencies"/>).
+      </para>
+    </refsect2>
+  </refsect1>
+  <refsect1 id="runlevels_files">
+    <title>FILES</title>
+
+    <variablelist>
+      <varlistentry>
+        <term><filename>@RUNLEVELCONFIG@</filename></term>
+        <listitem>
+          <para>
+            Runlevel configuration, for compatibility with sysvinit.
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+  <refsect1 id="runlevels_seealso">
+    <title>SEE ALSO</title>
+
+    <para>
+      <link linkend="vera.8">
+        <citerefentry>
+          <refentrytitle>vera</refentrytitle>
+          <manvolnum>8</manvolnum>
+        </citerefentry>
+        </link>.
+    </para>
+  </refsect1>
+</refentry>

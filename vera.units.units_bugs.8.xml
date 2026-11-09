@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refsect1 PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+ "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+  <!ENTITY % veraxmldefs SYSTEM "veraxmldefs.ent">
+  %veraxmldefs;
+]>
+<refsect1 id="units_bugs">
+  <title>BUGS</title>
+
+  <para>
+    After something gets installed or removed from the
+    <filename>@INSTALLCONFIGDIR@</filename> or
+    <filename>@LOCALCONFIGDIR@</filename> there's a brief delay before
+    the change takes effect. This is because some package managers
+    remove a file before putting an updated version there. If
+    <command>vera</command> manages to rescan
+    the directory the missing unit file gets processed as a removed
+    container and the unit gets stopped. A debounce delay of several
+    seconds must pass before the configuration directory gets rescanned.
+  </para>
+
+  <para>
+    The debounce delay may be insufficient on a very loaded system.
+    Do not install or update <command>vera</command> or any packages
+    that ship unit configuration files if the system is very loaded.
+  </para>
+</refsect1>
