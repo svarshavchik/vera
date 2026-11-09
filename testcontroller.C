@@ -3908,6 +3908,38 @@ void testsessionstartstop()
 				throw std::runtime_error{name};
 			}
 		);
+
+		std::string error;
+
+		proc_set_override(
+			overrideconfigdir(),
+			ACTIVE_SESSIONS_PREFIX,
+			o,
+			[&](const std::string &name)
+			{
+				error = name;
+			}
+		);
+
+		if (error != std::string{ACTIVE_SESSIONS_PREFIX}
+			+ _(": cannot be an active session"))
+			throw "unexpected error: " + error;
+
+		error.clear();
+
+		proc_set_override(
+			overrideconfigdir(),
+			"in//valid",
+			o,
+			[&](const std::string &name)
+			{
+				error = name;
+			}
+		);
+
+		if (error != "in//valid"s
+			+ _(": non-compliant filename"))
+			throw "unexpected error: " + error;
 	}
 	clear_logged_state_changes();
 

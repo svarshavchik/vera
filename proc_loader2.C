@@ -413,6 +413,12 @@ void proc_set_override(
 		return;
 	}
 
+	if (is_in_session_prefix(path) == ACTIVE_SESSIONS_PREFIX)
+	{
+		error(path + _(": cannot be an active session"));
+		return;
+	}
+
 	std::string contents;
 
 	{
