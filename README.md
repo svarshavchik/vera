@@ -29,14 +29,14 @@ entries to vera's container units
 on resources used by the container (memory limits, number of processes,
 and other resources)
 
-* A fully fleshed out mechanism for defining dependencies between containers,
+* A mechanism for defining dependencies between containers,
 which can be started at the same time, dependencies permitting
 
-* A basic management interface: a status command that lists all containers and
-all processes in each container, start and stop individual containers
+* A basic management interface with a status command to list all containers and
+their processes, and commands to start and stop individual containers
 
-* Provides commands for switching to vera, and switching back to sysvinit,
-every attempt is made to make this as foolproof as possible
+* Provides commands for switching to vera and switching back to sysvinit.
+Every attempt is made to make this as foolproof as possible
 
 * Manual pages with full documentation
 
@@ -45,10 +45,10 @@ every attempt is made to make this as foolproof as possible
 Download
 --------
 
-- [Download the latest release tarball](https://github.com/svarshavchik/vera/releases),
-see the INSTALL file in the tarball for build instructions
+- [Download the latest release tarball](https://github.com/svarshavchik/vera/releases).
+See the INSTALL file in the tarball for build instructions
 
-- Instead of compiling and building, a package for Slackware 15 is also
+- Instead of compiling, a package for Slackware 15 is also
 available, but see the INSTALL file as well for additional information
 
 - PGP verification keys: https://www.courier-mta.org/KEYS.bin

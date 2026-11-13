@@ -1,4 +1,9 @@
+1.5
+
 2026-11-09  Sam Varshavchik  <mrsam@courier-mta.com>
+
+	* Any prior versions must be unhooked and removed before installing
+	version 1.5, the fundamental changes are not upgrade-compatible.
 
 	* Reimplement sessions. A separate vera daemon runs as a session
 	manager in its own container, using PR_SET_CHILD_SUBREAPER to deal
@@ -15,7 +20,7 @@
 	that implements reexec. doinst.sh checks if it's an initial install
 	and handles the initial linking of staging binaries.
 
-	General refactoring, classes and fucntions sharing files with other
+	General refactoring, classes and functions sharing files with other
 	classes and functions get factored out into their own source files.
 
 	pam_vera reimplemented in C, a C++ PAM .so is unstable.
