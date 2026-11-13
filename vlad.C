@@ -1287,7 +1287,7 @@ static void vlad(std::vector<std::string> args)
 	}
 	if (args.size() == 2 && args[0] == "freeze")
 	{
-		auto ret=do_freeze(args[1]);
+		auto ret=do_freeze(session_flag, add_default_prefix(args[1]));
 		if (!ret.empty())
 		{
 			std::cerr << ret << std::endl;
@@ -1297,7 +1297,7 @@ static void vlad(std::vector<std::string> args)
 	}
 	if (args.size() == 2 && args[0] == "thaw")
 	{
-		auto ret=do_thaw(args[1]);
+		auto ret=do_thaw(session_flag, add_default_prefix(args[1]));
 		if (!ret.empty())
 		{
 			std::cerr << ret << std::endl;

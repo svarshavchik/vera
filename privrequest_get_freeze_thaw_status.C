@@ -4,6 +4,7 @@
 */
 #include "config.h"
 #include "connect_vera_priv.H"
+#include "connect_vera_priv_session.H"
 #include "messages.H"
 #include "privrequest.H"
 #include <fcntl.h>
@@ -28,30 +29,64 @@ bool request_thaw(const external_filedesc &efd,
 	return efd->write_all(std::string{"thaw\n"} + name + "\n");
 }
 
-std::string do_freeze(const std::string &name)
+std::string do_freeze(bool session, std::string name)
 {
-	auto cmdfd=connect_vera_priv();
 	std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 	if (!request_freeze(cmdfds[0], name))
 		return _("Failed to request freeze");
 
-	if (!request_send_fd(cmdfd, cmdfds))
-		return message_ftsfd();
+	external_filedesc cmdfd;
+
+	if (session)
+	{
+		auto [error, sesscmdfd] = connect_vera_priv_session(
+			cmdfds,
+			&connect_vera_priv
+		);
+
+		if (!error.empty())
+			return error;
+		cmdfd=std::move(sesscmdfd);
+	}
+	else
+	{
+		cmdfd=connect_vera_priv();
+
+		if (!request_send_fd(cmdfd, cmdfds))
+			return message_ftsfd();
+	}
 
 	return get_freeze_thaw_status(cmdfd);
 }
 
-std::string do_thaw(const std::string &name)
+std::string do_thaw(bool session, std::string name)
 {
-	auto cmdfd=connect_vera_priv();
 	std::vector<external_filedesc> cmdfds{tmpfile_filedesc()};
 
 	if (!request_thaw(cmdfds[0], name))
 		return _("Failed to request thaw");
 
-	if (!request_send_fd(cmdfd, cmdfds))
-		return message_ftsfd();
+	external_filedesc cmdfd;
+
+	if (session)
+	{
+		auto [error, sesscmdfd] = connect_vera_priv_session(
+			cmdfds,
+			&connect_vera_priv
+		);
+
+		if (!error.empty())
+			return error;
+		cmdfd=std::move(sesscmdfd);
+	}
+	else
+	{
+		cmdfd=connect_vera_priv();
+
+		if (!request_send_fd(cmdfd, cmdfds))
+			return message_ftsfd();
+	}
 
 	return get_freeze_thaw_status(cmdfd);
 }

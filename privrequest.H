@@ -422,7 +422,7 @@ Connects to the vera daemon, sends a freeze request, and returns the
 status. Returns an empty string on success or an error message on failure.
 
 */
-[[nodiscard]] std::string do_freeze(const std::string &name);
+[[nodiscard]] std::string do_freeze(bool session, std::string name);
 
 /*! Initiate a thaw for a container and wait for it to complete.
 
@@ -430,7 +430,7 @@ Connects to the vera daemon, sends a thaw request, and returns the
 status. Returns an empty string on success or an error message on failure.
 
 */
-[[nodiscard]] std::string do_thaw(const std::string &name);
+[[nodiscard]] std::string do_thaw(bool session, std::string name);
 
 /*! Executes execvp() in the child process.
 

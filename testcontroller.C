@@ -3201,7 +3201,7 @@ void testfreezethaw()
 		+ std::string{"/:a/cgroup.freeze"}
 	};
 
-	if (!do_freeze("a").empty())
+	if (!do_freeze(false, "a").empty())
 		throw "do_freeze failed";
 
 	{
@@ -3217,7 +3217,7 @@ void testfreezethaw()
 		}
 	}
 
-	if (!do_thaw("a").empty())
+	if (!do_thaw(false, "a").empty())
 		throw "thaw failed";
 
 	{
@@ -3488,7 +3488,7 @@ void test_uidsessionid_t()
 	}
 }
 
-static void testsessionsetup()
+static void testsessionhier()
 {
 	std::filesystem::create_directories(
 		installconfigdir() + "/" + INSTALLED_SESSIONS_PREFIX
@@ -3531,7 +3531,10 @@ static void testsessionsetup()
 			"version: 1\n";
 		out.close();
 	}
+}
 
+static void testsessionload()
+{
 	set_execvp_func([](const char *path, char **argv_ptrs) { _exit(0); });
 
 	proc_containers_load(
@@ -3550,7 +3553,10 @@ static void testsessionsetup()
 		),
 		container_install::update{}
 	);
+}
 
+static void testsessionvalidate()
+{
 	if (dump_unit_dependencies() != std::vector<unit_dependency_dump>{
 		{
 			INSTALLED_SESSIONS_PREFIX "/process1",
@@ -3619,6 +3625,13 @@ static void testsessionsetup()
 		}
 	})
 		throw "unexpected initial set of containers";
+}
+
+static void testsessionsetup()
+{
+	testsessionhier();
+	testsessionload();
+	testsessionvalidate();
 }
 
 void todo()
@@ -3957,7 +3970,10 @@ void testsessionstartstop()
 
 	{
 		std::ifstream i{
-			"testcgroup/:system:sessions:active:1:2/memory.max"
+			proc_container_group_data::cgroups_dir(
+				"testcgroup",
+				ACTIVE_SESSIONS_PREFIX "/1/2"
+			) + "/memory.max"
 		};
 
 		std::string s;
@@ -4254,6 +4270,220 @@ void testupdatebinlinks()
 
 	std::filesystem::remove_all("testbinlinks");
 }
+/*! Run a simulated session manager in a child process
+
+installconfigdir() must be created before instantiating session_forkproc.
+
+Instantiating session_forkproc will call testsessionload() in a forked
+child process, with the child process calling set_is_pid_1(false) first.
+The parent (pid 1) process then calls testsessionload(), invokes
+sim_request_session_start() to create a simulated session manager socket,
+and passes that socket to the child via the socketpair.
+
+This process will then instantiate a sim_proc_do_request_pid1 daemon thread.
+
+NOTE: the destructor calls test_reset() in order to reset the containers and
+sessions in this process, which will cause the forked process to terminate,
+and the destructor waitpid()s for the child process to terminate.
+
+*/
+class session_forkproc {
+
+	// The destructor logic needs to run after sim_proc_do_request_pid1
+	// has terminated, because it calls test_reset(), and as long
+	// as sim_proc_do_request_pid1 is running it owns the underlying
+	// container object. This is done by saving the started child pid
+	// in this struct, and put the logic in this struct's destructor,
+	// so child_pid gets destroyed after daemon gets destroyed.
+
+	struct started_child_process {
+		pid_t p;
+
+		~started_child_process();
+	};
+
+	started_child_process child_pid;
+
+	sim_proc_do_request_pid1 daemon;
+
+public:
+	session_forkproc();
+	~session_forkproc();
+};
+
+session_forkproc::session_forkproc() : child_pid{
+	({
+		/* Need a socket to solve a chicken-and-egg problem.
+
+		sim_request_session_start() simulated a session-start
+		command but this should be done after the forked process
+		started because, otherwise, the forked process will also
+		come up with an active session configured. So, what we do
+		is create a socketpair(), the forked process will receive
+		the socket from sim_request_session_start(), using the
+		socketpair socket to relay the file descriptors from the
+		parent to the child. The child process will then start a
+		sim_proc_do_request_session() in order to simulate a session
+		manager.
+
+		*/
+		auto opt_sp = create_vera_socketpair();
+		if (!opt_sp)
+			throw "create_vera_socketpair() failed";
+
+		// We need to manage the lifetime of the sockets carefully.
+		auto [a, b] = *opt_sp;
+		opt_sp.reset();
+
+		// Return the child PID via trailing expression (see the
+		// end of this block)
+		pid_t p=fork();
+
+		if (p < 0)
+			throw "fork failed";
+
+		if (p == 0)
+		{
+			// Switch to session manager mode, load the
+			// installconfigdir(), close the parent end of the
+			// socketpair.
+
+			set_is_pid_1(false);
+			testsessionload();
+
+			a.reset();
+
+			// Receive the session manager socket, then close
+			// our end of the socketpair.
+			auto ret = receive_fds(b);
+			b.reset();
+
+			auto &[vec, _] = *ret;
+
+			if (vec.empty()) // Didn't get session manager socket
+				exit(0);
+
+			// Start a simulated session manager, using the
+			// received socket, then clear this copy of the
+			// socket, it is now owned by the simulated session
+			// manager. Wait until the session manager stops
+			// naturally, which happens when the simulated pid 1
+			// manager closes the active session.
+
+			{
+				sim_proc_do_request_session session{{1,2}, vec[0]};
+
+				vec.clear();
+
+				session.wait_until_stopped();
+			}
+			exit(0);
+		}
+
+		// Meanwhile, the pid 1 process loads the config, creates
+		// a simulated session manager, and passes the session manager
+		// socket over the socket pair to the child process. All
+		// file descriptors are carefully closed, the only instance
+		// of the session manager socket now lives in the containers'
+		// active_sessions.
+
+		testsessionload();
+
+		auto [manager_socketa, err] = sim_request_session_start();
+
+		b.reset();
+		wrap_request_send_fd(a, {manager_socketa});
+		a.reset();
+		manager_socketa.reset();
+
+		if (!err.empty())
+		{
+			throw "unexpected error: " + err;
+		}
+
+		// Trailing expression, passed to the constructor of
+		// started_child_process, so this ends up value-initializing
+		// started_child_process.p
+
+		p;
+
+	})
+}, daemon{{1,2}}
+{
+}
+
+session_forkproc::~session_forkproc()=default;
+
+session_forkproc::started_child_process::~started_child_process()
+{
+	// The only thing we need to do, right now, is remove the active
+	// session, which closes the session manager socket, which causes
+	// the child process to terminate. test_reset() is the most convenient
+	// way to do this.
+
+	test_reset();
+	if (waitpid(p, nullptr, 0) != p)
+	{
+		std::cerr << "waitpid for child process "
+			<< p << " failed\n";
+		abort();
+	}
+}
+
+void testsessionfreezethaw()
+{
+	testsessionhier();
+
+	session_forkproc daemon;
+
+	auto err=do_start(true,
+		INSTALLED_SESSIONS_PREFIX "/process1",
+		false
+	);
+
+	if (!err.empty())
+		throw "Unexpected error starting process1: " + err;
+
+	err=do_freeze(true, INSTALLED_SESSIONS_PREFIX "/process1");
+
+	if (!err.empty())
+		throw "Error freezing process1: " + err;
+
+	auto freeze_filename = proc_container_group::cgroups_dir(
+		"testcgroup",
+		INSTALLED_SESSIONS_PREFIX "/process1"
+	)+"/cgroup.freeze";
+
+	std::ifstream f{freeze_filename};
+	if (!f.is_open())
+		throw "Cannot open freeze file: " + freeze_filename;
+
+	int frozen;
+	if (!(f >> frozen))
+		throw "Failed to read freeze file: " + freeze_filename;
+
+	if (!frozen)
+		throw "Process1 is not frozen";
+
+	f.close();
+
+	err=do_thaw(true, INSTALLED_SESSIONS_PREFIX "/process1");
+
+	if (!err.empty())
+		throw "Error thawing process1: " + err;
+
+	f.open(freeze_filename);
+	if (!f.is_open())
+		throw "Cannot open freeze file: " + freeze_filename;
+
+	if (!(f >> frozen))
+		throw "Failed to read freeze file: " + freeze_filename;
+
+	if (frozen)
+		throw "Process1 is frozen";
+
+	f.close();
+}
 
 int main(int argc, char **argv)
 {
@@ -4494,6 +4724,11 @@ int main(int argc, char **argv)
 		test_reset();
 		test="testupdatebinlinks";
 		testupdatebinlinks();
+
+		test_reset();
+		test="testsessionfreezethaw";
+		testsessionfreezethaw();
+
 		test_finished();
 
 	} catch (const char *e)

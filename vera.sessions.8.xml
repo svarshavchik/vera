@@ -30,6 +30,8 @@
         <arg choice="plain" rep="norepeat">stop</arg>
         <arg choice="plain" rep="norepeat">restart</arg>
         <arg choice="plain" rep="norepeat">reload</arg>
+        <arg choice="plain" rep="norepeat">freeze</arg>
+        <arg choice="plain" rep="norepeat">thaw</arg>
         <arg choice="plain" rep="norepeat">status</arg>
       </group>
       <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
@@ -96,7 +98,9 @@
       <command>start</command>,
       <command>stop</command>,
       <command>restart</command>,
-      <command>reload</command> or <command>status</command>
+      <command>reload</command>,
+      <command>freeze</command>,
+      <command>thaw</command> or <command>status</command>
       command to the session manager that's running the command.
       All other options for each command can be used together with
       the <option>--session</option> option.

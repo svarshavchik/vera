@@ -36,7 +36,8 @@
 
   <para>
     Running units may or may not have a <quote>restart</quote> or
-    a <quote>reload</quote> capability. <quote>restart</quote> the unit to
+    a <quote>reload</quote> capability. <quote>restart</quote>
+    requires the unit to
     define its <quote>restart</quote> command.
     <quote>reload</quote> requires the unit to
     define its <quote>reload</quote> command.

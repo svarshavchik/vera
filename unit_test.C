@@ -79,7 +79,7 @@ external_filedesc connect_vera_priv()
 
 external_filedesc sim_proc_do_request::connect_vera_priv()
 {
-	if (session_thread && session_thread->sess_socket2)
+	if (session_thread && session_thread->listening_socket)
 	{
 		auto opt_sp = create_vera_socketpair();
 		if (!opt_sp)
@@ -87,7 +87,7 @@ external_filedesc sim_proc_do_request::connect_vera_priv()
 		auto &[sock1, sock2]=*opt_sp;
 		std::vector<external_filedesc> cmdfds{sock1};
 
-		if (!request_send_fd(session_thread->sess_socket2, cmdfds))
+		if (!request_send_fd(session_thread->listening_socket, cmdfds))
 			throw std::runtime_error("request_send_fd failed");
 
 		return sock2;
@@ -1249,8 +1249,9 @@ void sim_proc_do_request_pid1::do_restart_clear_from_thread() {
 }
 
 sim_proc_do_request_session::sim_proc_do_request_session(
-	struct ucred uc
-) : sim_proc_do_request(uc)
+	struct ucred uc,
+	external_filedesc external_socket
+) : sim_proc_do_request(uc), external_socket{external_socket}
 {
 	restart();
 }
@@ -1265,11 +1266,23 @@ external_filedesc sim_proc_do_request_session::do_restart_socket() {
 		throw std::runtime_error{_("attempt to create "
 			"sim_proc_do_request twice\n")};
 	session_thread = this;
+	if (external_socket)
+	{
+		auto s=external_socket;
+
+		// This is a one-shot deal, when the simulated pid1
+		// process eventually closes its end of the socket,
+		// we need to close this socket too, so we can't keep
+		// a reference to the external_socket, it must be owned
+		// by the connection thread.
+		external_socket.reset();
+		return s;
+	}
 	auto opt_sp = create_vera_socketpair();
 	if (!opt_sp)
 		throw "create_vera_socketpair() failed";
 	auto &[socket_a, socket_b] = *opt_sp;
-	sess_socket2 = std::move(socket_b);
+	listening_socket = std::move(socket_b);
 	return socket_a;
 }
 
@@ -1280,7 +1293,7 @@ void sim_proc_do_request_session::do_restart_set_thread_local_env() {
 void sim_proc_do_request_session::do_stop_prepare_thread_exit() {
 	// Close the socket to the session manager, it gets an
 	// end-of-file condition, and the event loop returns.
-	sess_socket2 = {};
+	listening_socket = {};
 }
 
 void sim_proc_do_request_session::do_restart_clear_from_thread() {

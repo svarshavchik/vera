@@ -181,22 +181,29 @@ void check_logged_runners(const std::string &error_msg);
 
 
 
-// What kind of a daemon sim_proc_do_request simulates:
+// sim_proc_do_request simulates a daemon that:
 
 /* Simulate proc_do_request
 
-Starts a separate execution thread that listens for connections on
-PRIVCMDSOCKET.  The destructor stops this thread. Additionally, stop()
+sim_proc_do_request_pid1 starts a separate execution thread that listens
+for connections on PRIVCMDSOCKET. sim_proc_do_request_session starts
+a separate execution thread that reads from a socket, and receives file
+descriptors that represent connections to a session manager that pid1
+forwards to it, like a session manager does.
+
+The destructor stops this thread in both implementations. Additionally, stop()
 shuts down the execution thread immediately. restart() starts it back up.
 
-The execution thread listens for connections, accepts them, and calls
-proc_do_request(). Credential validation does not get carried out. The
-credentials get passed to the constructor.
+The execution thread either accepts connections and calls proc_do_request(),
+or reads connections from a socket and calls proc_do_request().
 
-This object is not copyable. It has limited move semantics only for the purpose
-of changing credentials. For example:
+sim_proc_do_request_pid1 does not do validation of credentials. The
+credentials of each connection get passed to the constructor.
 
-	sim_proc_do_request spr{ucred{1,1,1}};
+These objects are not copyable. They have limited move semantics only for the
+purpose of changing credentials. For example:
+
+	sim_proc_do_request_pid1 spr{ucred{1,1,1}};
 
 	spr=sim_proc_do_request_pid1{ucred{2,2,2}};
 
@@ -228,9 +235,13 @@ public:
  protected:
 	sim_proc_do_request(struct ucred uc);
 	~sim_proc_do_request();
+	// Returns the socket to use for restarting.
 	virtual external_filedesc do_restart_socket() = 0;
+	// Sets thread-local environment on restart.
 	virtual void do_restart_set_thread_local_env() = 0;
+	// Cleanup before thread exits during stop.
 	virtual void do_stop_prepare_thread_exit() = 0;
+	// Clears thread-local state on restart.
 	virtual void do_restart_clear_from_thread() = 0;
 
 	sim_proc_do_request(const sim_proc_do_request &)=delete;
@@ -285,10 +296,23 @@ public:
 };
 
 class sim_proc_do_request_session : public sim_proc_do_request {
-public:
-	external_filedesc sess_socket2;
 
-	sim_proc_do_request_session(struct ucred uc);
+	// A listening socket that was passed to the constructor
+	external_filedesc external_socket;
+public:
+	// If a listening socket was not passed to the constructor a new socket
+	// gets created when the connection thread gets created.
+	external_filedesc listening_socket;
+
+	// An optional second parameter is an externally-created listening
+	// socket. This is a one-shot deal, the externally-created listening
+	// socket is closed when the execution thread is stopped.
+	//
+	// Without this parameter each time the execution thread is started,
+	// a new listening socket is created.
+
+	sim_proc_do_request_session(struct ucred uc,
+		external_filedesc external_socket=external_filedesc{});
 	// Destroy must call stop() because start() is called in constructor.
 	// restart() and stop() are called in the subclass because calling
 	// these virtual methods in the base constructor/destructor causes
