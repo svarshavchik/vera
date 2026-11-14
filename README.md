@@ -42,6 +42,15 @@ Every attempt is made to make this as foolproof as possible
 
 * [Screen capture of booting and shutdown under vera](https://www.youtube.com/watch?v=ds0oprq-dEE)
 
+Open Issues
+-----------
+
+Proper handling of certain race conditions and the per-cgroup file descriptor
+overhead both require PID FD support (SO_PEERPIDFD/SO_PASSPIDFD), introduced in
+Linux kernel 6.5. Each active cgroup currently consumes two additional file
+descriptors because of that. Once Slackware ships kernel 6.5 or later, these
+issues can be resolved with an update.
+
 Download
 --------
 

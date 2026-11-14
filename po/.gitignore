@@ -11,5 +11,6 @@
 /*.pot
 /quot.sed
 /remove-potcdate.sed
+/remove-potcdate.sin
 /insert-header.sed
 /stamp-po

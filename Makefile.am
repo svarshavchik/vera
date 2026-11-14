@@ -33,7 +33,6 @@ EXTRA_DIST=							\
 	cgroup.controllers					\
 	packaging/slackware/doinst.sh				\
 	packaging/slackware/uninst.sh				\
-	packaging/slackware/shell				\
 	packaging/slackware/networkmanager-wait-online		\
 	rebuild-Makefile					\
 	slack-desc						\
@@ -426,10 +425,7 @@ install-data-local:
 		$(DESTDIR)$(ENVIRONCONFIG) && \
 		$(INSTALL_DATA) $(srcdir)/packaging/slackware/networkmanager-wait-online \
 			$(DESTDIR)$(INSTALLCONFIGDIR)/system && \
-		$(INSTALL_DATA) $(srcdir)/packaging/slackware/shell \
-			$(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed && \
-		chmod 644 $(DESTDIR)$(INSTALLCONFIGDIR)/system/networkmanager-wait-online \
-			$(DESTDIR)$(INSTALLCONFIGDIR)/system/sessions/installed/shell && \
+		chmod 644 $(DESTDIR)$(INSTALLCONFIGDIR)/system/networkmanager-wait-online && \
 		{ [ ! -f /etc/inittab ] || \
 		    ./testinittab -c $(DESTDIR)$(INSTALLCONFIGDIR) \
 			-l $(DESTDIR)$(LOCALCONFIGDIR) \

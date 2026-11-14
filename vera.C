@@ -482,7 +482,7 @@ private:
 			  << "\e[1;36m";
 			paren_pfix=", ";
 			o << (next_index_to_update+1)
-			  << "/" << (n+1)
+			  << "/" << n
 				// Normal colors
 			  << "\e[0m";
 		}
@@ -581,7 +581,7 @@ public:
 
 	/*! When the current index was shown.
 
-	  next_index_to_update gets increment on the next second.
+	  next_index_to_update gets incremented on the next second.
 	*/
 
 	time_t index_timestamp=log_current_time_sec();
@@ -973,17 +973,20 @@ void vera_init()
 void vera_loop(int argc, char **argv)
 {
 	// We'll monitor the config directory for changes.
+	//
+	// Session managers only care about INSTALLED_SESSIONS_PREFIX
 
+	const char *subdir=is_pid_1() ? "": "/" INSTALLED_SESSIONS_PREFIX;
 	monitor_hierarchy monitor_installconfigdir{
-		installconfigdir(),
+		installconfigdir() + subdir,
 		check_reload_config,
 		log_message,
 	}, monitor_localconfigdir{
-		localconfigdir(),
+		localconfigdir() + subdir,
 		check_reload_config,
 		log_message,
 	}, monitor_overrideconfigdir{
-		overrideconfigdir(),
+		overrideconfigdir() + subdir,
 		check_reload_config,
 		log_message,
 	};
@@ -991,6 +994,9 @@ void vera_loop(int argc, char **argv)
 	// Now, load the containers. We have little options in the case
 	// of any errors, so we just log them, on the initial load, and
 	// hope for the best.
+	//
+	// proc_containers_load() will take care of only reading
+	// INSTALLED_SESSIONS_PREFIX for a session manager.
 
 	proc_containers_load(
 		proc_load_all(
