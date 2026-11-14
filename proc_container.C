@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <limits.h>
 #include <locale>
 #include <set>
 #include <signal.h>

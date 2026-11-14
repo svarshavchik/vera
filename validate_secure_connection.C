@@ -9,10 +9,12 @@
 #include <charconv>
 #include <fstream>
 #include <limits>
+#include <signal.h>	// IWYU pragma: keep
 #include <stdlib.h>
 #include <string>
 #include <sys/auxv.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 [[nodiscard]] bool validate_secure_connection(

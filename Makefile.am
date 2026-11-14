@@ -513,7 +513,8 @@ vera.units.8: vera.units.8.in Makefile
 	$(MANEXPAND) <$(srcdir)/vera.units.8.in >vera.units.8.tmp
 	mv -f vera.units.8.tmp vera.units.8
 
-CLEANFILES += vera.8 vera.extras.8 vera.logs.8 vera.runlevels.8 vera.units.8
+CLEANFILES += vera.8 vera.extras.8 vera.logs.8 vera.runlevels.8 \
+    vera.sessions.8 vera.units.8
 
 EXTRA_DIST += INSTALL
 BUILT_SOURCES += INSTALL
