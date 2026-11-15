@@ -117,6 +117,7 @@ COMMON_LIB_SOURCES=\
 	proc_container2.C					\
 	proc_container_group2.C					\
 	proc_container_state.C					\
+	proc_find.C						\
 	proc_get_sessionid.C					\
 	proc_loader.C						\
 	proc_loader2.C						\
@@ -181,6 +182,7 @@ OTHER_LIB_SOURCES=\
 	proc_container_runner.C					\
 	proc_container_status.C					\
 	proc_container_timer.C					\
+	proc_gc.C						\
 	proc_loader3.C						\
 	proc_timer.C						\
 	switchlog.C						\
