@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "proc_loader.H"
+#include "proc_new_container.H"
 #include <set>
 
 bool proc_validate_and_dump(

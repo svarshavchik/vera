@@ -7,7 +7,7 @@
 
 #include "current_containers_infofwd.H"
 #include "proc_container_runnerfwd.H"
-#include "proc_container.H"
+#include "loaded_containers.H"
 #include "external_filedesc.H"
 #include "proc_loader.H"
 #include "proc_timerfwd.H"

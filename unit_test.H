@@ -13,7 +13,6 @@
 #include <mutex>
 #include <condition_variable>
 #include <functional>
-#include "proc_loader.H"
 #include "external_filedesc.H"
 #include "current_containers_info.H" // IWYU pragma: keep
 

@@ -15,8 +15,7 @@
 #include "external_filedesc.H"
 #include "proc_containerfwd.H"
 #include "proc_container_statefwd.H"
-#include "proc_loaderfwd.H"
-#include "uid_sessionid.H"
+#include "loaded_containers.H"
 #include "log.H"
 
 //! Container type
@@ -33,11 +32,6 @@ enum class sigterm {
 	all,		//!< All processes in the container
 	parents,	//!< All, except children of parents running same exe
 };
-
-//! A set of process containers.
-
-typedef std::unordered_set<proc_container, proc_container_hash,
-			   proc_container_equal> proc_container_set;
 
 //! Expose the currently installed process containers.
 
@@ -328,49 +322,18 @@ etc..
 
 typedef std::unordered_map<std::string, runlevel> runlevels;
 
-//! Container installation mode.
-
-struct container_install {
-
-	/*! Updated list of containers
-
-	 Replaces the current set of containers.
-	 */
-
-	struct update {};
-
-	/*! Initial list of containers
-
-	  This also checks if we have been re-execed, and if so restores
-	  the existing containers' state.
-	*/
-	struct initial {};
-
-	/*!
-	  Start a new session.
-	*/
-
-	struct new_session {
-		active_session_t new_active_session;
-	};
-};
-
 enum class container_install_kind {
 	update,
 	initial,
 	new_session
 };
 
-typedef std::variant<
-	container_install::update,
-	container_install::initial,
-	container_install::new_session
-> container_install_t;
-
 constexpr container_install_kind kind(const container_install_t &c)
 {
 	return static_cast<container_install_kind>(c.index());
 }
+
+struct loaded_containers;
 
 //! Install process containers
 

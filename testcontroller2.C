@@ -9,6 +9,7 @@
 #include "proc_container.H"
 #include "proc_container_statefwd.H"
 #include "proc_loader.H"
+#include "proc_new_container.H"
 #include "unit_test.H"
 
 pid_t set_next_pid(pid_t, proc_container_group &);

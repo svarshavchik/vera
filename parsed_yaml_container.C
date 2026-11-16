@@ -6,13 +6,12 @@
 #include "messages.H"
 #include "parsed_yaml.H"
 #include "parsed_yaml_container.H"
-#include "proc_new_container.H"
+#include "proc_new_container.H" // IWYU pragma: keep
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <sys/types.h>
 #include <time.h>
-#include <unordered_set>
 #include <yaml.h>
 
 // Parse a single container.

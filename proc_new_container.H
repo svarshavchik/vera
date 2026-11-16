@@ -11,11 +11,6 @@
 #include <string>
 #include <unordered_set>
 
-typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
-
-typedef std::unordered_set<proc_new_container, proc_container_hash,
-			   proc_container_equal> proc_new_container_set;
-
 //! Dependencies for a new container.
 
 //! Used when installing a new set of containers. Includes additional data

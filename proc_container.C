@@ -16,6 +16,7 @@
 #include "proc_container_timer.H"
 #include "proc_get_sessionid.H"
 #include "proc_loader.H"
+#include "proc_new_container.H"
 #include "switchlog.H"
 #include "uid_sessionid.H"
 #include "vera_socket_poller_and_connections.H"
@@ -923,46 +924,6 @@ void propagate_dependencies_t::doit2(
 #endif
 }
 
-void loaded_containers::recreate_new_sessions_from_installed(
-	const current_containers_info &installed_containers,
-	container_install_t mode,
-	const std::function<void (
-			const std::string_view &name,
-			const std::string_view &message
-		)> &callback)
-{
-	// We are rebuilding, so clear out any existing active sessions, and
-	// we will recreate them from the installed containers.
-	//
-	// proc_loader took care of populating installed_session_t, for
-	// all active sessions we call create_new_session().
-
-	auto installed_session=all_sessions[installed_session_t{}];
-	all_sessions.clear();
-	all_sessions.emplace(installed_session_t{}, installed_session);
-
-	for (auto &[uid, session_info] : installed_containers->active_sessions)
-	{
-		if (!std::holds_alternative<active_session_t>(uid))
-			continue;
-
-		auto &session=std::get<active_session_t>(uid);
-
-		if (!create_new_session(session, callback))
-			continue;
-
-		uid_sessionid_to_chars ssid_string{session};
-
-		callback(ssid_string.path(),
-			kind(mode) ==
-				container_install_kind::new_session &&
-				std::get<container_install::new_session>(
-					mode
-				).new_active_session == session ?
-				_("successfully created") :
-				_("successfully restored"));
-	}
-}
 
 void current_containers_infoObj::load(
 	loaded_containers lc,

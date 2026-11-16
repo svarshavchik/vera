@@ -14,6 +14,7 @@
 #include "proc_container_statefwd.H"
 #include "proc_container_status.H"
 #include "proc_loader.H"
+#include "proc_new_container.H"
 #include "uid_sessionid.H"
 #include "unit_test.H"
 #include "verac.h"

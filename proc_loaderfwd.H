@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include "messages.H"
 
-struct loaded_containers;
 
 //! Container overrides
 

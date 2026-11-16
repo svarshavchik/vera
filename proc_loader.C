@@ -7,9 +7,9 @@
 #include "parsed_yaml.H"
 #include "parsed_yaml_container.H"
 #include "proc_loader.H"
+#include "proc_new_container.H"
 #include "uid_sessionid.H"
 #include <algorithm>
-#include <array>
 #include <dirent.h>
 #include <errno.h>
 #include <filesystem>
@@ -367,41 +367,6 @@ void proc_loader::found(
 	newly_loaded_containers.containers.merge(std::move(results));
 }
 
-bool loaded_containers::create_new_session(
-	const active_session_t &active_session,
-	const std::function<void (
-		const std::string_view &container_name,
-		const std::string_view &error_message
-	)> &error)
-{
-	uid_sessionid_to_chars to_chars{active_session};
-
-	auto [iter, inserted]=all_sessions.emplace(
-		active_session,
-		proc_container_set{}
-	);
-
-	if (!inserted)
-	{
-		error(to_chars.path(),
-		      _("session already exists"));
-
-		return false;
-	}
-
-	auto session_container =
-		std::make_shared<proc_new_containerObj>(
-			to_chars.path()
-		);
-
-	// Best fit for its semantics:
-	session_container->new_container->meta->start_type=
-		start_type_t::oneshot;
-	session_container->new_container->meta->stop_type=stop_type_t::manual;
-	containers.insert(session_container);
-
-	return true;
-}
 
 void proc_loader::invalid(
 	const std::filesystem::path &path,

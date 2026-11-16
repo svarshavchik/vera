@@ -82,6 +82,7 @@ HEADERFILES = \
 	proc_container_timer.H					\
 	proc_container_timerfwd.H				\
 	proc_loader.H						\
+	loaded_containers.H					\
 	proc_loaderfwd.H					\
 	proc_new_container.H					\
 	proc_new_containerfwd.H					\
@@ -141,6 +142,7 @@ OTHER_LIB_SOURCES=\
 	external_filedesc_privcmdsocket.C			\
 	forward_carbon_copy.C					\
 	inittab.C						\
+	loaded_containers.C					\
 	log.C							\
 	log_current_time.C					\
 	message_ftsfd.C						\

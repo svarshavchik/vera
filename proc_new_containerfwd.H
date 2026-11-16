@@ -5,8 +5,10 @@
 #ifndef proc_new_containerfwd_h
 #define proc_new_containerfwd_h
 
+#include <memory>
 #include <string_view>
 #include <concepts>
+#include <unordered_set>
 #include "proc_containerfwd.H"
 
 class proc_new_containerObj;
@@ -37,5 +39,10 @@ struct get_name_for_comparator<T> {
 	}
 
 };
+
+typedef std::shared_ptr<proc_new_containerObj> proc_new_container;
+
+typedef std::unordered_set<proc_new_container, proc_container_hash,
+			   proc_container_equal> proc_new_container_set;
 
 #endif

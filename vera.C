@@ -8,13 +8,13 @@
 #include "create_default_vera_socket.H"
 #include "current_containers_info.H"
 #include "external_filedesc.H"
+#include "loaded_containers.H"
 #include "log.H"
 #include "messages.H"
 #include "parsed_yaml.H"
-#include "poller.H"
-#include "privrequest.H"
 #include "proc_container_group.H"
 #include "proc_loader.H"
+#include "proc_new_container.H" // IWYU pragma: keep
 #include "proc_timer.H"
 #include "proc_timerfwd.H"
 #include "switchlog.H"
@@ -62,7 +62,6 @@ struct winsize console_winsize;
 
 // Load the runlevelconfig file at startup. Returns the runlevels and an
 // indication if the default runlevel was overridden.
-
 
 
 /*! Override default constructor in unit tests, they do not load load

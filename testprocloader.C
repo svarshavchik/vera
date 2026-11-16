@@ -8,6 +8,7 @@
 #include "privrequest.H"
 #include "proc_loader.H"
 #include "proc_loader.H"
+#include "proc_new_container.H" // IWYU pragma: keep
 #include "unit_test.H"
 #include "unit_test.H"
 #include <fstream>
