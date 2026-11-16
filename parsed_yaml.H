@@ -6,7 +6,6 @@
 #define parsed_yaml_H
 
 #include "config.h"
-#include "proc_containerfwd.H"
 #include <yaml.h>
 #include <istream>
 #include <sstream>
@@ -443,18 +442,6 @@ struct parsed_yaml {
 			error
 		);
 	}
-	/* Parse starting/stopping section in a unit specification */
-	bool starting_or_stopping(
-		yaml_node_t *n,
-		const std::string &name,
-		const std::function<void (const std::string &)> &error,
-		const std::filesystem::path &hier_name,
-		std::string &command,
-		time_t &timeout,
-		std::unordered_set<std::string> &before,
-		std::unordered_set<std::string> &after,
-		proc_containerObj &new_container,
-		bool (proc_containerObj::*set_type)(const std::string &));
 };
 
 #endif

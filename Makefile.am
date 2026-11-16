@@ -65,6 +65,7 @@ HEADERFILES = \
 	log.H							\
 	messages.H						\
 	parsed_yaml.H						\
+	parsed_yaml_container.H					\
 	poller.H						\
 	polled_socket_connection_hash.H				\
 	polled_socket_connection.H				\
@@ -108,6 +109,7 @@ COMMON_LIB_SOURCES=\
 	hook.C							\
 	log2.C							\
 	parsed_yaml.C						\
+	parsed_yaml_container.C					\
 	privrequest_create_vera_socketpair.C			\
 	privrequest_get_pid_status.C				\
 	privrequest_runlevel.C					\
