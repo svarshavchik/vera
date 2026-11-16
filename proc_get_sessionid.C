@@ -3,11 +3,12 @@
 ** See COPYING for distribution information.
 */
 
+#include "config.h"
 #include "proc_get_sessionid.H"
-#include <fstream>
 #include <charconv>
-#include <string>
+#include <fstream>
 #include <limits>
+#include <string>
 
 std::optional<uid_sessionid_t> proc_get_sessionid(
 	pid_t pid,

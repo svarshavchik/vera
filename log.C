@@ -8,13 +8,13 @@
 #include "proc_container.H" // IWYU pragma: keep
 #include "proc_container_timer.H"
 #include "vvconfigdirs.H"
+#include <fstream>
 #include <functional>
 #include <iostream>
+#include <pwd.h>
 #include <sstream>
 #include <syslog.h>
 #include <unistd.h>
-#include <pwd.h>
-#include <fstream>
 #include <vector>
 
 void log_state_change(const proc_container &pc,

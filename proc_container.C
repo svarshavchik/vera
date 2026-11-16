@@ -11,15 +11,15 @@
 #include "poller.H"
 #include "privrequest.H"
 #include "proc_container.H"
-#include "proc_get_sessionid.H"
 #include "proc_container_runner.H"
 #include "proc_container_status.H"
 #include "proc_container_timer.H"
+#include "proc_get_sessionid.H"
 #include "proc_loader.H"
 #include "switchlog.H"
 #include "uid_sessionid.H"
-#include "verac.h"
 #include "vera_socket_poller_and_connections.H"
+#include "verac.h"
 #include "vvconfigdirs.H"
 #include <algorithm>
 #include <charconv>

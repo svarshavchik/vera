@@ -66,33 +66,6 @@ struct get_name_for_comparator<T> {
 
 };
 
-/*! Concept used by get_name_for_comparator specialization
-
-*/
-
-template <typename T> concept has_new_container_field = requires(T ptr) {
-	{ ptr->new_container->name } -> std::convertible_to<std::string_view>;
-};
-
-/*! Helper class used by proc_new_container_set
-
-Implements a transparent hash function and equality comparison.
-
-Allows proc_new_container_set to be looked up by a proc_new_container.
-
-*/
-
-template<has_new_container_field T>
-struct get_name_for_comparator<T> {
-
-	template<typename V>
-	static auto &name(V &&v) noexcept
-	{
-		return v->new_container->name;
-	}
-
-};
-
 //! Transparent comparator for proc_container objects.
 
 struct proc_container_equal {

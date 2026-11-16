@@ -9,6 +9,7 @@
 #include "parsed_yaml.H"
 #include "proc_container.H"
 #include "proc_loaderfwd.H"
+#include "proc_new_container.H"
 #include <yaml.h>
 #include <functional>
 #include <filesystem>

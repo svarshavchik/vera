@@ -7,6 +7,7 @@
 
 #include "proc_loaderfwd.H"
 #include "proc_container.H"
+#include "proc_new_container.H"
 #include "current_containers_infofwd.H"
 #include "uid_sessionid.H"
 #include <filesystem>

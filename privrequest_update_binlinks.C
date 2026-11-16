@@ -2,9 +2,9 @@
 ** Copyright 2026 S. Varshavchik
 ** See COPYING for distribution information.
 */
-#include "privrequest.H"
+#include "config.h"
 #include "log.H"
-
+#include "privrequest.H"
 #include <array>
 #include <cstring>
 #include <filesystem>

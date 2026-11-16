@@ -6,6 +6,7 @@
 #include "messages.H"
 #include "parsed_yaml.H"
 #include "parsed_yaml_container.H"
+#include "proc_new_container.H"
 #include <filesystem>
 #include <functional>
 #include <string>

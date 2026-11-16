@@ -13,32 +13,6 @@ proc_containerObj::proc_containerObj(const std::string &name)
 {
 }
 
-/*! Check that all container paths in the new container object are valid.
-*/
-bool proc_new_containerObj::is_valid(
-	const std::function<void (const std::string_view &container_name,
-		const std::string_view &error_message)
-	> &error) const
-{
-	for (const auto &dependency_list : all_dependencies)
-	{
-		for (auto &existing_dependency : this->*dependency_list)
-		{
-			if (!proc_validpath(existing_dependency))
-			{
-				error(
-					existing_dependency,
-					"invalid dependency"
-				);
-
-				return false;
-			}
-		}
-	}
-
-	return new_container->is_valid(error);
-}
-
 bool proc_containerObj::is_valid(
 	const std::function<void (
 		const std::string_view &container_name,

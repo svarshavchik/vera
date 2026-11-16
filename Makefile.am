@@ -83,6 +83,8 @@ HEADERFILES = \
 	proc_container_timerfwd.H				\
 	proc_loader.H						\
 	proc_loaderfwd.H					\
+	proc_new_container.H					\
+	proc_new_containerfwd.H					\
 	proc_timer.H						\
 	proc_timerfwd.H						\
 	switchlog.H						\
@@ -123,6 +125,7 @@ COMMON_LIB_SOURCES=\
 	proc_get_sessionid.C					\
 	proc_loader.C						\
 	proc_loader2.C						\
+	proc_new_container.C					\
 	proc_runlevel.C						\
 	proc_session.C						\
 	proc_validate.C						\
