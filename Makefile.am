@@ -138,6 +138,7 @@ OTHER_LIB_SOURCES=\
 	connect_vera_priv.C					\
 	connect_vera_priv_session.C				\
 	create_default_vera_socket.C				\
+	current_containers_info.C				\
 	export_fd_to_env.C					\
 	external_filedesc_privcmdsocket.C			\
 	forward_carbon_copy.C					\
@@ -184,7 +185,6 @@ OTHER_LIB_SOURCES=\
 	privrequest_wait_setunsetenv.C				\
 	privrequest_wait_stop.C					\
 	privrequest_wait_stop_all.C				\
-	proc_container.C					\
 	proc_container_group.C					\
 	proc_container_runner.C					\
 	proc_container_status.C					\

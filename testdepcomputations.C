@@ -4,7 +4,7 @@
 */
 
 #include "config.h"
-#include "proc_container.C"
+#include "current_containers_info.C"
 #include "unit_test.H"
 #include <algorithm>
 #include <iostream>
