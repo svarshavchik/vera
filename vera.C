@@ -222,6 +222,8 @@ console shows vera's progress.
 
  */
 
+#define ESC "\033"
+
 struct showing_verbose_progress_t {
 
 	// The separator row between the top and the bottom half
@@ -240,35 +242,35 @@ struct showing_verbose_progress_t {
 
 		o <<
 			// Just in case: column 1
-			"\e[1G" <<
+			ESC "[1G" <<
 			// cursor down, scroll existing content to the top
 			// half.
 			std::string(bottom_size+1, '\n') <<
 			// Move back up to the separator row
-			"\e[" << bottom_size << "A"
+			ESC "[" << bottom_size << "A"
 			// Save cursor position and attributes
-			"\e7"
+			ESC "7"
 			// Default graphic rendition
-			"\e[0m"
+			ESC "[0m"
 			// Erase to the end of the display
-			"\e[J"
+			ESC "[J"
 			// Bold
-			"\e[1m"
+			ESC "[1m"
 			// Reverse video
-			"\e[7m"
+			ESC "[7m"
 			// Disable autowrap
-			"\e[?7l" <<
+			ESC "[?7l" <<
 			std::string(console_winsize.ws_col, '-') <<
 			// Reverse video off
-			"\e[27m"
+			ESC "[27m"
 			// Enable autowrap
-			"\e[?7h"
+			ESC "[?7h"
 			// Column 1
-			"\e[1G"
+			ESC "[1G"
 			// Restore cursor position (to the separator row)
-			"\e8"
+			ESC "8"
 			// Up one row, to the last line before the separator row
-			"\e[1A"
+			ESC "[1A"
 			;
 
 		emit();
@@ -286,14 +288,14 @@ struct showing_verbose_progress_t {
 	{
 		o <<
 			// Save cursor position.
-			"\e[s"
-			"\e[" << (separator_row+1) << ";1f" <<
+			ESC "[s"
+			ESC "[" << (separator_row+1) << ";1f" <<
 			// Clear to end of display
-			"\e[J"
+			ESC "[J"
 			// Scrolling region entire console
-			"\e[1;" << console_winsize.ws_row << "r"
+			ESC "[1;" << console_winsize.ws_row << "r"
 			// Restore cursor position.
-			"\e[u"
+			ESC "[u"
 			;
 
 		emit();
@@ -303,26 +305,26 @@ struct showing_verbose_progress_t {
 	{
 		o <<
 			// Save cursor position.
-			"\e[s"
+			ESC "[s"
 
 			// Bottom half is the scrolling region
-			"\e[" << (separator_row+2) << ";"
+			ESC "[" << (separator_row+2) << ";"
 			      << (console_winsize.ws_row-1) << "r"
 			// First column of the last row in the bottom half
-			"\e[" << (console_winsize.ws_row-1) << ";1f"
+			ESC "[" << (console_winsize.ws_row-1) << ";1f"
 
 			// Bold, brown (yellow):
-			"\e[1;33m"
+			ESC "[1;33m"
 		  <<
 			program << ": "
 
 			// Reset colors to normal
-			"\e[0m"
+			ESC "[0m"
 		  << message << "\n"
 			// Restore scroll area to the top half
-			"\e[1;" << separator_row << "r"
+			ESC "[1;" << separator_row << "r"
 			// Restore cursor position
-			"\e[u";
+			ESC "[u";
 		emit();
 	}
 
@@ -344,17 +346,17 @@ struct showing_verbose_progress_t {
 	{
 		o <<
 			// Save cursor position.
-			"\e7"
+			ESC "7"
 			// Start of last row, column 1
-			"\e[" << console_winsize.ws_row << ";1f"
+			ESC "[" << console_winsize.ws_row << ";1f"
 
-			"\e[?7l"			// autowrap off
-			"\e[K" <<			// erase to EOL
+			ESC "[?7l"			// autowrap off
+			ESC "[K" <<			// erase to EOL
 			shown_progress <<
-			"\e[?7h"			// autowrap on
+			ESC "[?7h"			// autowrap on
 
 			// Restore cursor position
-			"\e8";
+			ESC "8";
 
 		emit();
 	}
@@ -448,11 +450,11 @@ private:
 
 				pid += " ["
 					// Red color
-					"\e[31m";
+					ESC "[31m";
 				pid += filename;
 				// Brown color, what we were originally,
 				// see below.
-				pid += "\e[33m"
+				pid += ESC "[33m"
 					"]";
 			}
 		}
@@ -466,11 +468,11 @@ private:
 		if (!pid.empty())
 		{
 			// Bold, brown (yellow):
-			o << "\e[1;33m"
+			o << ESC "[1;33m"
 				" pid " << pid
 
 				// Normal colors
-			  << "\e[0m"
+			  << ESC "[0m"
 				;
 		}
 
@@ -478,12 +480,12 @@ private:
 		{
 			o << paren_pfix
 				// Bold, cyan
-			  << "\e[1;36m";
+			  << ESC "[1;36m";
 			paren_pfix=", ";
 			o << (next_index_to_update+1)
 			  << "/" << n
 				// Normal colors
-			  << "\e[0m";
+			  << ESC "[0m";
 		}
 
 		auto current_time=log_current_time_sec();
@@ -500,7 +502,7 @@ private:
 
 		o << paren_pfix <<
 			// Bold, green
-			"\e[1;32m" <<
+			ESC "[1;32m" <<
 			log_elapsed(
 				current_time-container_info.time_start
 			);
@@ -512,7 +514,7 @@ private:
 				container_info.time_start);
 		}
 		// Normal colors
-		o << "\e[0m"
+		o << ESC "[0m"
 			")";
 
 		auto paren=o.str();
@@ -524,7 +526,7 @@ private:
 
 		for (auto b=paren.begin(), e=paren.end(); b != e; )
 		{
-			if (*b != '\e')
+			if (*b != ESC[0])
 			{
 				++b;
 				++paren_size;
@@ -541,14 +543,14 @@ private:
 			container_info.state <<
 
 			// Space, then bold.
-			" \e[1m" <<
+			" " ESC "[1m" <<
 			container_info.container->meta->description <<
 			// Reset colors to normal
-			"\e[0m"
+			ESC "[0m"
 			// Erase to EOL
-			"\e[K"
+			ESC "[K"
 			// Bottom right corner.
-			"\e[" << console_winsize.ws_col << "`" <<
+			ESC "[" << console_winsize.ws_col << "`" <<
 			// Then backspace back.
 			std::string(paren_size, '\x08') <<
 			paren;
@@ -660,12 +662,12 @@ void log_to_stdout(int level, const char *program,
 {
 	std::cout <<
 		// Bold, brown (yellow):
-		"\e[1;33m" <<
+		ESC "[1;33m" <<
 
 		program << ": "
 
 			// Reset colors to normal
-			"\e[0m"
+			ESC "[0m"
 
 		  << message << "\n" << std::flush;
 }

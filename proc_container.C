@@ -3169,7 +3169,7 @@ bool current_containers_infoObj::do_dependencies(
 					pc,
 					_("detected a circular dependency"
 					  " requirement: ")+
-					({
+					__extension__ ({
 						std::ostringstream o;
 
 						std::vector<std::string> n;

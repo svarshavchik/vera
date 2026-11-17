@@ -4313,7 +4313,7 @@ public:
 };
 
 session_forkproc::session_forkproc() : child_pid{
-	({
+	__extension__ ({
 		/* Need a socket to solve a chicken-and-egg problem.
 
 		sim_request_session_start() simulated a session-start
