@@ -4,7 +4,7 @@
 */
 #include "config.h"
 #include "messages.H"
-#include "proc_container_statefwd.H"
+#include "proc_container_state.H"
 
 static void set_scheduled(state_timeline &timeline,
 			  const elapsed_time &timestamp)
@@ -87,3 +87,58 @@ const STATE_LABEL STATE_REMOVING::label{
 
 const STATE_LABEL STATE_STOPPED::label{
 	set_stopped, _("stopped")};
+
+
+const STATE_LABEL &state_stopped::get_label() const
+{
+	return STATE_STOPPED::label;
+}
+
+const STATE_LABEL &state_starting::get_label() const
+{
+	if (starting_runner)
+	{
+		return dependency ? STATE_STARTING::label:
+			STATE_STARTING_MANUAL::label;
+	}
+
+	return dependency ? STATE_START_PENDING::label :
+		STATE_START_PENDING_MANUAL::label;
+}
+
+const STATE_LABEL &state_started::get_label() const
+{
+	return respawn_prepare_timer
+		? dependency ? STATE_RESPAWNING::label:
+		STATE_RESPAWNING_MANUAL::label
+		: dependency ? STATE_STARTED::label:STATE_STARTED_MANUAL::label;
+}
+
+const STATE_LABEL &state_stopping::get_label() const
+{
+	return *std::visit(
+		[&]
+		(const auto &phase)
+		{
+			return &phase.get_label();
+		}, phase);
+}
+
+
+const STATE_LABEL &stop_pending::get_label() const
+{
+	return STATE_STOP_PENDING::label;
+}
+
+const STATE_LABEL &stop_running::get_label() const
+{
+	return STATE_STOPPING::label;
+}
+
+const STATE_LABEL &stop_removing::get_label() const
+{
+	if (sigkill_sent)
+		return STATE_FORCE_REMOVING::label;
+
+	return STATE_REMOVING::label;
+}

@@ -185,6 +185,7 @@ OTHER_LIB_SOURCES=\
 	privrequest_wait_setunsetenv.C				\
 	privrequest_wait_stop.C					\
 	privrequest_wait_stop_all.C				\
+	proc_container.C					\
 	proc_container_group.C					\
 	proc_container_runner.C					\
 	proc_container_status.C					\
