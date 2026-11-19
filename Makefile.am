@@ -139,6 +139,10 @@ OTHER_LIB_SOURCES=\
 	connect_vera_priv_session.C				\
 	create_default_vera_socket.C				\
 	current_containers_info.C				\
+	current_containers_info/containers_install.C		\
+	current_containers_info/containers_start_stop.C		\
+	current_containers_info/start_and_stop.C		\
+	current_containers_info/stopped_restart_reload.C	\
 	export_fd_to_env.C					\
 	external_filedesc_privcmdsocket.C			\
 	forward_carbon_copy.C					\
@@ -203,9 +207,12 @@ OTHER_LIB_SOURCES=\
 ##ENDGEN
 
 ALL_LIB_SOURCES=\
-	${PAM_VERA_LIB_SOURCES} \
-	${COMMON_LIB_SOURCES} \
-	${OTHER_LIB_SOURCES}
+	$(sort ${PAM_VERA_LIB_SOURCES} \
+	       ${COMMON_LIB_SOURCES} \
+	       ${OTHER_LIB_SOURCES} \
+	)
+
+export ALL_LIB_SOURCES
 
 # SOVERSION is derived from the package version. It is used to version
 # the libpam_vera.so and libvera.so shared libraries, their soversion matches

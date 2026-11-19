@@ -6,10 +6,11 @@
 #define current_containers_info_h
 
 #include "current_containers_infofwd.H"
+#include "proc_container.H"
 #include "proc_container_runnerfwd.H"
+#include "proc_container_state.H"
 #include "loaded_containers.H"
 #include "external_filedesc.H"
-#include "proc_loader.H"
 #include "proc_timerfwd.H"
 #include <sys/wait.h>
 #include <functional>
@@ -178,6 +179,8 @@ public:
 	friend class proc_container_timerObj;
 	friend class proc_container_runnerObj;
 
+	static const char system_runlevel[];
+
 	//! All direct and indirect dependencies of a container.
 
 	typedef proc_container_set all_dependencies;
@@ -187,6 +190,30 @@ public:
 	typedef std::unordered_map<proc_container, current_container,
 				   proc_container_hash, proc_container_equal
 				   > current_container_lookup_t;
+
+	/*!
+	A visitor struct for use with std::visit that moves requesters
+	from the visited state into itself (inheriting from
+	std::list<external_filedesc>).
+
+	If the visited type has a requesters field, move the field into this
+	object.
+	*/
+
+	struct save_requesters : std::list<external_filedesc> {
+
+		void operator()(requesters_list &t)
+		{
+			list::operator=(std::move(t.requesters));
+		}
+
+		template<typename T>
+			requires (!std::is_base_of_v<requesters_list,
+					std::remove_cvref_t<T>>)
+		void operator()(T &)
+		{
+		}
+	};
 
 	//! Dependency information calculated by install()
 

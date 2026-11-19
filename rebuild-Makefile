@@ -13,35 +13,20 @@ use warnings;
 
 my $srcdir = shift // ".";
 
-# Read Makefile.am, all source files currently defined in COMMON_LIB_SOURCES
-# and OTHER_LIB_SOURCES. Store mapping of object filename to source filename.
+# Makefile.am exports ALL_LIB_SOURCES, read it to make the source map.
 
 my %sourcemap;
 
-my $fh = IO::File->new("$srcdir/Makefile.am", "r")
-    or die "Cannot read Makefile.am\n";
-
-my $reading_libsrc = 0;
-
-while (defined(my $l=<$fh>))
+foreach my $source_file (split(/\s+/, $ENV{ALL_LIB_SOURCES} // ''))
 {
-	chomp $l;
-	$reading_libsrc = 0 if $l eq "";
+	my $o = $source_file;
 
-	if ($reading_libsrc)
-	{
-		$l =~ s/\\$//;
-		$l =~ s/[ \t]//g;
-		my $o = $l;
-		die "Cannot parse source file: $l\n"
-			unless $o =~ s/\.[cC]$/.o/;
-		$sourcemap{$o} = $l;
-	}
+	die "Cannot parse source file $o\n"
+		unless $o =~ s/\.[Cc]$/.o/;
 
-	$reading_libsrc = 1 if $l =~ /^(COMMON|OTHER|PAM_VERA)_LIB_SOURCES\s*=/;
+	$o =~ s@.*/@@;
+	$sourcemap{$o} = $source_file;
 }
-
-$fh->close();
 
 # Read a linkmap file and return a hash keyed by source module.
 
@@ -94,7 +79,7 @@ delete $combined{$_} for keys %$pam_vera;
 # Print out the updated Makefile.am. First, copy everything up until
 # ##BEGINGEN, then skip until ##ENDGEN.
 
-$fh = IO::File->new("$srcdir/Makefile.am", "r")
+my $fh = IO::File->new("$srcdir/Makefile.am", "r")
     or die "Cannot read Makefile.am\n";
 
 while (defined(my $l=<$fh>))
