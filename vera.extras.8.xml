@@ -17,23 +17,23 @@
   </refnamediv>
 
   <refsynopsisdiv>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad enable system/networkmanager-wait-online</command>
     </cmdsynopsis>
 
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad enable system/v2-controllers</command>
     </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad set-resource <replaceable>unit</replaceable> <replaceable>resource</replaceable> <replaceable>value</replaceable></command>
       </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad delete-resource <replaceable>unit</replaceable> <replaceable>resource</replaceable></command>
       </cmdsynopsis>
 
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad restart system/rc.M/rc.<replaceable>name</replaceable></command>
     </cmdsynopsis>
   </refsynopsisdiv>

@@ -269,7 +269,7 @@ void do_override(const std::string &name,
 
 static std::string add_default_prefix(std::string unit)
 {
-	if (session_flag && unit.find('/') == std::string::npos)
+	if (session_flag && !unit.starts_with(INSTALLED_SESSIONS_PREFIX "/"))
 		unit=INSTALLED_SESSIONS_PREFIX "/" + unit;
 	return unit;
 }
@@ -1306,6 +1306,47 @@ static void vlad(std::vector<std::string> args)
 		exit(0);
 	}
 
+	if (args.size() >= 2 && args[0] == "hold")
+	{
+		std::string reason = args[1];
+		std::string name;
+
+		if (args.size() >= 3)
+		{
+			name = add_default_prefix(args[1]);
+			reason = args[2];
+		}
+
+		auto ret = do_hold(session_flag, name, reason);
+
+		if (!ret.empty())
+		{
+			std::cerr << _("Failed to hold: ") << ret
+				<< "\n" << std::flush;
+			exit(1);
+		}
+
+		exit(0);
+	}
+
+	if (args.size() >= 1 && args[0] == "release")
+	{
+		std::string name;
+
+		if (args.size() >= 2)
+			name=add_default_prefix(args[0]);
+
+		auto ret=do_release(session_flag, name);
+
+		if (!ret.empty())
+		{
+			std::cerr << _("Failed to release: ") << ret
+				<< "\n" << std::flush;
+			exit(1);
+		}
+
+		exit(0);
+	}
 	if ((args.size() >= 3 && args[0] == "set-resource") ||
 	    (args.size() == 3 && args[0] == "delete-resource"))
 	{

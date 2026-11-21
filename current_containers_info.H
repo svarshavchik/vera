@@ -316,6 +316,10 @@ private:
 		//! Next container, when switching alternates
 		proc_container upcoming;
 
+		//! Whether switching is held
+
+		std::string switching_holding_reason;
+
 		//! Whether a switch is in progress
 
 		bool in_progress() const
@@ -585,8 +589,19 @@ public:
 		    std::string name,
 		    external_filedesc requester_stdout);
 
+	void hold(const external_filedesc &efd,
+			const std::string &group,
+			const std::string &reason);
+
+	void release(const external_filedesc &efd,
+			 const std::string &group);
 
 private:
+	/// @brief Check whether an alternate runmode has a pending switch.
+	/// @param alt The alternate runmodes to inspect.
+	/// @return true if a switch to the given alternate runmode is pending.
+	bool pending_switch(const alternate_runmodes_t &);
+
 	void reload_or_restart(
 		const external_filedesc &requester,
 		std::string name,

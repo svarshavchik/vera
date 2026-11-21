@@ -17,11 +17,11 @@
   </refnamediv>
 
   <refsynopsisdiv>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="plain" rep="norepeat">logs</arg>
     </cmdsynopsis>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="plain" rep="norepeat">log</arg>
       <arg choice="opt" rep="norepeat">number</arg>

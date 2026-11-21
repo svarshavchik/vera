@@ -17,7 +17,7 @@
     </refnamediv>
 
     <refsynopsisdiv>
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <arg choice="opt" rep="norepeat">--nowait</arg>
         <group choice="req" rep="norepeat">
@@ -29,7 +29,7 @@
         <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
       </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <group choice="req" rep="norepeat">
           <arg choice="plain" rep="norepeat">mask</arg>
@@ -41,19 +41,19 @@
         <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
       </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <arg choice="plain" rep="norepeat">setenv</arg>
         <arg choice="req" rep="norepeat"><replaceable>name</replaceable></arg>
         <arg choice="req" rep="norepeat"><replaceable>value</replaceable></arg>
       </cmdsynopsis>
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <arg choice="plain" rep="norepeat">unsetenv</arg>
         <arg choice="req" rep="norepeat"><replaceable>name</replaceable></arg>
       </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <group choice="opt" rep="norepeat">
           <arg choice="plain" rep="norepeat">--all</arg>
@@ -68,14 +68,14 @@
         <arg choice="opt" rep="repeat">unit</arg>
       </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <arg choice="plain" rep="norepeat">validate</arg>
         <arg choice="req" rep="norepeat">filename</arg>
         <arg choice="opt" rep="norepeat">path</arg>
       </cmdsynopsis>
 
-      <cmdsynopsis sepchar=" ">
+      <cmdsynopsis>
         <command>vlad</command>
         <group choice="req" rep="norepeat">
           <arg choice="plain" rep="norepeat">edit</arg>

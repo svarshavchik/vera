@@ -17,12 +17,12 @@
   </refnamediv>
 
   <refsynopsisdiv>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="plain" rep="norepeat">session-start</arg>
       <arg choice="opt" rep="norepeat"><replaceable>unit</replaceable></arg>
     </cmdsynopsis>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="plain" rep="norepeat">--session</arg>
       <group choice="req" rep="norepeat">
@@ -36,9 +36,22 @@
       </group>
       <arg choice="plain" rep="norepeat"><replaceable>unit</replaceable></arg>
     </cmdsynopsis>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="plain" rep="norepeat">session-stop</arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">--session</arg>
+      <arg choice="plain" rep="norepeat">hold</arg>
+      <arg choice="plain" rep="norepeat"><replaceable>altgroup</replaceable></arg>
+      <arg choice="plain" rep="norepeat"><replaceable>reason</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">--session</arg>
+      <arg choice="plain" rep="norepeat">release</arg>
+      <arg choice="plain" rep="norepeat"><replaceable>altgroup</replaceable></arg>
     </cmdsynopsis>
   </refsynopsisdiv>
   <refsect1 id="sessions_description">
@@ -183,7 +196,7 @@ endif
     </blockquote>
 
     <para>
-      These scripts start units installed in
+      These script start units are installed in
       <quote>&INSTALLED_SESSIONS_PREFIX;</quote>.
       The <quote>ssh</quote> unit specification:
     </para>
@@ -226,6 +239,21 @@ Version: 1
         <refentrytitle>vera.units</refentrytitle>
         <manvolnum>8</manvolnum>
       </citerefentry>.
+    </para>
+  </refsect1>
+  <refsect1 id="sessionswitchholdrelease">
+    <title>SESSION ALTERNATIVE GROUP SWITCH, HOLD AND RELEASE</title>
+  
+    <para>
+      The <option>--session</option> option is also available with the
+      alternative group version of the
+      <command>hold</command> and <command>release</command>
+      commands. See <link linkend="switchholdrelease">
+        <citerefentry>
+          <refentrytitle>vera.runlevels</refentrytitle>
+          <manvolnum>8</manvolnum>
+        </citerefentry>
+      </link> for more information.
     </para>
   </refsect1>
   <refsect1 id="sessions_seealso">

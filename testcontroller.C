@@ -1188,11 +1188,13 @@ void test_runlevels()
 
 	call_install(container_install::update{}, c, d, e, f);
 
-	if (proc_container_runlevel("runlevel1prog").empty())
-		throw "Unexpected success of referencing something other than "
+	if (proc_container_runlevel("runlevel1prog")
+		!= std::string{_("No such run level: ")} + "runlevel1prog")
+		throw "Unexpected result of referencing something other than "
 			"a runlevel container";
-    check_logged_state_changes({},
-		    "Unexpected success of referencing something other than "
+
+	check_logged_state_changes({},
+		    "Unexpected result of referencing something other than "
 			"a runlevel container");
 	if (!proc_container_runlevel("graphical").empty())
 		throw "Unexpected error starting runlevel1";
@@ -1219,6 +1221,9 @@ void test_runlevels()
 		throw "Unexpected switchlog (1)";
 	}
 
+	if (proc_container_runlevel("graphical")
+		!= std::string{_("Already on runlevel ")} + "graphical")
+		throw "Unexpected resulting of switching to the same runlevel";
 	clear_logged_state_changes();
 
 	{
@@ -2453,7 +2458,7 @@ void testmultirunlevels()
 		throw "unable to request the first runlevel";
 
 	if (proc_container_runlevel("graphical") !=
-	    "Already switching to another runlevel")
+	    _("Already switching to another runlevel"))
 		throw "unexpected success requesting second runlevel";
 
 	check_logged_state_changes({
@@ -3527,6 +3532,7 @@ static void testsessionhier()
 			"/x11"
 		};
 		out << "name: x11\n"
+			"alternative-group: g\n"
 			"stopping:\n"
 			"    type: target\n"
 			"version: 1\n";
@@ -4486,6 +4492,111 @@ void testsessionfreezethaw()
 	f.close();
 }
 
+void testhold()
+{
+	auto a=std::make_shared<proc_new_containerObj>("a");
+	a->dep_required_by.insert(RUNLEVEL_PREFIX "graphical");
+	a->new_container->meta->starting_command="true";
+
+	auto b=std::make_shared<proc_new_containerObj>("b");
+	b->new_container->alternative_group="g";
+	b->new_container->meta->starting_command="true";
+	call_install(container_install::update{}, a, b);
+
+	sim_proc_do_request_pid1 daemon{{}};
+
+	auto ret=do_hold(false, "", "");
+
+	if (ret != _("Holding reason cannot be empty"))
+		throw "Expected holding reason empty error, got: " + ret;
+
+	ret=do_hold(false, "", "blocked");
+
+	if (!ret.empty())
+		throw "Expected success, got error: " + ret;
+
+	ret=do_hold(false, "", "blocked");
+
+	if (ret != std::string{"system/runlevel"} +
+		_(" switch already held: ") + "blocked")
+		throw "Expected switch already held error, got: " + ret;
+
+	ret=privrequest_switch_runlevel("graphical", false);
+	if (ret != std::string{_("Runlevel switch is held: ")} + "blocked")
+		throw "Expected switching held error, got: " + ret;
+
+	ret=do_release(false, "");
+	if (!ret.empty())
+		throw "Expected success (release 1), got error: " + ret;
+
+	ret=do_release(false, "");
+	if (!ret.empty())
+		throw "Expected success (release 2), got error: " + ret;
+
+	ret=privrequest_switch_runlevel("graphical", false);
+	if (!ret.empty())
+		throw "Expected success (switch after release), got error: "
+			+ ret;
+	ret=do_hold(false, "", "blocked");
+
+	if (ret != std::string{"system/runlevel"}
+		+ _(" switch already in progress"))
+		throw "Expected switch in progress error, got: " + ret;
+
+	ret=do_hold(false, "g", "blocked");
+
+	if (!ret.empty())
+		throw "Expected success (hold g), got error: " + ret;
+
+	ret=do_hold(false, "g", "blocked");
+
+	if (ret != std::string{"g"}
+		+ _(" alternative group switch already held: ")
+		+ "blocked")
+		throw "Expected switch already held error, got: " + ret;
+
+	ret=do_start(false, "b", false);
+	if (ret != "b: blocked")
+		throw "Expected b blocked error, got: " + ret;
+
+	ret=do_release(false, "g");
+	if (!ret.empty())
+		throw "Expected success, got error: " + ret;
+
+	ret=do_start(false, "b", true);
+	if (!ret.empty())
+		throw "Expected success, got error: " + ret;
+	ret=do_hold(false, "g", "blocked");
+
+	if (ret != std::string{"g"} +
+		_(" alternative group switch already in progress"))
+		throw "Expected switch already in progressm error, got: " + ret;
+}
+
+void testsessionhold()
+{
+	testsessionhier();
+
+	session_forkproc daemon;
+
+	auto ret=do_hold(true, INSTALLED_SESSIONS_PREFIX "/g", "blocked");
+
+	if (!ret.empty())
+		throw "Expected success (hold g), got error: " + ret;
+
+	ret=do_hold(true, INSTALLED_SESSIONS_PREFIX "/g", "blocked");
+
+	if (ret != std::string{INSTALLED_SESSIONS_PREFIX "/g"} +
+	    _(" alternative group switch already held: ") +
+	    "blocked")
+		throw "Expected switch already held error, got: " + ret;
+
+	ret=do_start(true, INSTALLED_SESSIONS_PREFIX "/x11", true);
+
+	if (ret != INSTALLED_SESSIONS_PREFIX "/x11: blocked")
+		throw "Expected x11 blocked error, got: " + ret;
+}
+
 int main(int argc, char **argv)
 {
 	alarm(60);
@@ -4729,6 +4840,14 @@ int main(int argc, char **argv)
 		test_reset();
 		test="testsessionfreezethaw";
 		testsessionfreezethaw();
+
+		test_reset();
+		test="testhold";
+		testhold();
+
+		test_reset();
+		test="testsessionhold";
+		testsessionhold();
 
 		test_finished();
 

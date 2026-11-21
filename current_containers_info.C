@@ -409,6 +409,121 @@ void current_containers_infoObj::status(const external_filedesc &efd)
 		; // IGNORE
 }
 
+void current_containers_infoObj::hold(const external_filedesc &efd,
+			 const std::string &group,
+			 const std::string &reason)
+{
+	auto runmode_iter=alternate_runmodes.find(group);
+
+	if (runmode_iter == alternate_runmodes.end())
+	{
+		if (!efd->write_all(group + _(" was not found")))
+			requester_socket_closed();
+
+		return;
+	}
+
+	if (reason.empty())
+	{
+		if (!efd->write_all(
+			_("Holding reason cannot be empty")
+		))
+			requester_socket_closed();
+
+		return;
+	}
+
+	if (pending_switch(runmode_iter->second))
+	{
+		if (!efd->write_all(
+			group + (group == system_runlevel ?
+				_(" switch already in progress") :
+				_(" alternative group switch "
+					"already in progress")) + "\n"))
+			requester_socket_closed();
+
+		return;
+	}
+	auto &switching_holding_reason =
+		runmode_iter->second.switching_holding_reason;
+
+	if (!switching_holding_reason.empty())
+	{
+		if (!efd->write_all(group +
+			(group == system_runlevel ?
+			_(" switch already held: ") :
+			_(" alternative group switch already held: ") ) +
+			switching_holding_reason + "\n"))
+			requester_socket_closed();
+
+		return;
+	}
+
+	runmode_iter->second.switching_holding_reason=reason;
+}
+
+namespace {
+
+struct check_pending_switch {
+	bool is_pending=false;
+
+	void operator()(const state_stopped &)
+	{
+	}
+
+	void operator()(const state_stopping &)
+	{
+		is_pending=true;
+	}
+
+	void operator()(const state_starting &)
+	{
+		is_pending=true;
+	}
+
+	void operator()(const state_started &)
+	{
+		is_pending=true;
+	}
+};
+
+}
+bool current_containers_infoObj::pending_switch(const alternate_runmodes_t &alt)
+{
+	if (alt.in_progress())
+		return true;
+
+	check_pending_switch checker;
+
+	for (auto &pc: alt.containers)
+	{
+		auto iter=containers.find(pc);
+
+		if (iter == containers.end())
+			continue; // Shouldn't happen
+
+		std::visit(checker, iter->second.state);
+	}
+
+	return checker.is_pending;
+}
+
+void current_containers_infoObj::release(const external_filedesc &efd,
+			 const std::string &group)
+{
+	auto runmode_iter=alternate_runmodes.find(group);
+
+	if (runmode_iter == alternate_runmodes.end())
+	{
+		if (!efd->write_all(group + _(" was not found")))
+			requester_socket_closed();
+
+		return;
+	}
+
+	runmode_iter->second.switching_holding_reason.clear();
+}
+
 std::string current_containers_infoObj::runlevel(
 	std::string new_runlevel,
 	const external_filedesc &requester)
@@ -419,6 +534,8 @@ std::string current_containers_infoObj::runlevel(
 		return "";
 
 	auto &global_runlevels=system_runlevel_iter->second;
+
+	auto orig_runlevel=new_runlevel;
 
 	// Check for aliases, first
 
@@ -453,12 +570,16 @@ std::string current_containers_infoObj::runlevel(
 	if (active_runlevel)
 	{
 		if (active_runlevel == *container_iter)
-			return _("Already on runlevel ")
-				+ active_runlevel->name;
+			return _("Already on runlevel ") + orig_runlevel;
 
 		log_message(_("Stopping ") + active_runlevel->name);
 	}
 
+	if (!global_runlevels.switching_holding_reason.empty())
+	{
+		return _("Runlevel switch is held: ") +
+			global_runlevels.switching_holding_reason;
+	}
 	global_runlevels.request_switch(*container_iter, requester);
 
 	find_start_or_stop_to_do();

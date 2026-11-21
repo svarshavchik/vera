@@ -159,6 +159,7 @@ OTHER_LIB_SOURCES=\
 	privrequest_execve_prep.C				\
 	privrequest_get_current_runlevel.C			\
 	privrequest_get_freeze_thaw_status.C			\
+	privrequest_get_hold_release_status.C			\
 	privrequest_get_reload_status.C				\
 	privrequest_get_restart_status.C			\
 	privrequest_get_runlevel_status.C			\
@@ -167,7 +168,9 @@ OTHER_LIB_SOURCES=\
 	privrequest_get_stop_all_status.C			\
 	privrequest_get_stop_status.C				\
 	privrequest_get_sysdown_status.C			\
+	privrequest_hold.C					\
 	privrequest_receive_fds.C				\
+	privrequest_release.C					\
 	privrequest_send_fd_wrap.C				\
 	privrequest_send_reload.C				\
 	privrequest_send_restart.C				\

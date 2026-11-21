@@ -432,6 +432,22 @@ status. Returns an empty string on success or an error message on failure.
 */
 [[nodiscard]] std::string do_thaw(bool session, std::string name);
 
+// Request an hold
+
+[[nodiscard]] bool request_hold(const external_filedesc &efd,
+				const std::string &group,
+				const std::string &reason);
+
+// Request an release
+
+[[nodiscard]] bool request_release(const external_filedesc &efd,
+				   const std::string &group);
+
+// Status of the hold/release command
+
+std::string get_hold_release_status(const external_filedesc &efd);
+
+
 /*! Executes execvp() in the child process.
 
  */
@@ -522,6 +538,20 @@ std::string do_reload(bool session, std::string unit, bool nowait);
 Uses do_ssrr() to process a "stop-all" command for all session containers.
 */
 std::string do_stop_all(bool nowait);
+
+/*! The hold command
+
+*/
+std::string do_hold(
+	bool session,
+	const std::string &group,
+	const std::string &reason
+);
+
+/*! The release command
+
+*/
+std::string do_release(bool session, const std::string &group);
 
 /*! Atomically update binary symlinks for vera/vlad.
 

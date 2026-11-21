@@ -17,28 +17,44 @@
   </refnamediv>
 
   <refsynopsisdiv>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="opt" rep="norepeat">--wait</arg>
       <arg choice="plain" rep="norepeat">switch</arg>
       <arg choice="plain" rep="norepeat"><replaceable>runlevel</replaceable></arg>
     </cmdsynopsis>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="req" rep="norepeat"><replaceable>LETTER/DIGIT</replaceable></arg>
     </cmdsynopsis>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <arg choice="opt" rep="norepeat">--override</arg>
       <arg choice="plain" rep="norepeat">default</arg>
       <arg choice="plain" rep="norepeat"><replaceable>runlevel</replaceable></arg>
     </cmdsynopsis>
-    <cmdsynopsis sepchar=" ">
+    <cmdsynopsis>
       <command>vlad</command>
       <group choice="req" rep="norepeat">
         <arg choice="plain" rep="norepeat">current</arg>
         <arg choice="plain" rep="norepeat">default</arg>
       </group>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">hold</arg>
+      <arg choice="plain" rep="norepeat"><replaceable>reason</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">hold</arg>
+      <arg choice="plain" rep="norepeat"><replaceable>altgroup</replaceable></arg>
+      <arg choice="plain" rep="norepeat"><replaceable>reason</replaceable></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>vlad</command>
+      <arg choice="plain" rep="norepeat">release</arg>
+      <arg choice="opt" rep="norepeat"><replaceable>altgroup</replaceable></arg>
     </cmdsynopsis>
   </refsynopsisdiv>
   <refsect1 id="runlevels_description">
@@ -157,6 +173,25 @@
     </para>
 
     <para>
+      The switching process consists of:
+    </para>
+
+    <itemizedlist>
+      <listitem>
+        <para>
+          Stopping processes that are running, are configured as required
+          by the current runlevel, but not required by the new runlevel.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          Starting processes that are required by the new runlevel and are
+          not already running.
+        </para>
+      </listitem>
+    </itemizedlist>
+
+    <para>
       <quote>switch</quote> does not wait for all processes to stop and
       start and returns immediately. The <quote>--wait</quote> option
       makes <quote>switch</quote> wait until the switch to the new
@@ -237,6 +272,82 @@ multi-user                # Reverts to the previous default runlevel
         are the ones that are referenced by
         <quote>enabled</quote> dependencies (see
         <xref linkend="dependencies"/>).
+      </para>
+    </refsect2>
+
+    <refsect2 id="switchholdrelease">
+      <title>Holding runlevel switches</title>
+
+      <para>
+        The <quote>hold</quote> command records the given reason as the reason
+        why switching runlevels is blocked. The reason is given as one
+        parameter, so it must be quoted if it contains spaces (which is common).
+        For example:
+      </para>
+
+      <blockquote>
+        <informalexample>
+          <programlisting format="linespecific">
+vlad hold "System is being updated"
+          </programlisting>
+        </informalexample>
+      </blockquote>
+
+      <para>
+        <command>vlad release</command> removes the hold. Until the hold is
+        released any attempt to switch runlevels fails and shows the hold
+        reason. This can be used to temporarily block switching
+        runlevels, for example during system updates.
+      </para>
+
+      <para>
+        The <quote>hold</quote> command itself may fail for the following
+        reasons:
+      </para>
+
+      <itemizedlist>
+        <listitem>
+          <para>
+            A hold is already set.
+          </para>
+        </listitem>
+
+        <listitem>
+          <para>
+            A runlevel switch is already in progress.
+          </para>
+        </listitem>
+      </itemizedlist>
+
+      <para>
+        The same holding mechanism is also available with
+        <link linkend="alternativegroups">alternative groups</link>
+        (see <link linkend="vera.units.8">
+          <citerefentry>
+            <refentrytitle>vera.units</refentrytitle>
+            <manvolnum>8</manvolnum>
+          </citerefentry>
+        </link>). This exists only because the same underlying code drives
+        alternative groups and runlevel switching. For clarity, the alternative
+        group is the first parameter to the <quote>hold</quote> command, and
+        the holding reason is a second parameter. Example:
+      </para>
+
+      <blockquote>
+        <informalexample>
+          <programlisting format="linespecific">
+vlad hold system/desktop "Desktop services are blocked"
+          </programlisting>
+        </informalexample>
+      </blockquote>
+
+      <para>
+        This prevents any unit with the given alternative group, and all
+        units that directly or indirectly depend on such a unit, from being
+        started. In the example above, it prevents any unit in the
+        <quote>system/desktop</quote> alternative, and all units that require
+        <quote>system/desktop</quote> from running. The <quote>hold</quote>
+        itself fails if any of those units are already started.
       </para>
     </refsect2>
   </refsect1>

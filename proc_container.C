@@ -543,6 +543,34 @@ void proc_do_request(
 		return;
 	}
 
+	if (ln == "hold")
+	{
+		auto group=efd->readln(NAME_MAX+1);
+		auto reason=efd->readln();
+
+		if (group.empty())
+			group=current_containers_infoObj::system_runlevel;
+
+		get_containers_info(nullptr)->hold(
+				socketfd,
+				group,
+				reason);
+		return;
+	}
+
+	if (ln == "release")
+	{
+		auto group=efd->readln(NAME_MAX+1);
+
+		if (group.empty())
+			group=current_containers_infoObj::system_runlevel;
+
+		get_containers_info(nullptr)->release(
+				socketfd,
+				group);
+		return;
+	}
+
 	if (ln == "sysdown")
 	{
 		auto runlevel=efd->readln();

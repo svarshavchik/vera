@@ -312,6 +312,20 @@ void current_containers_infoObj::start(
 
 		if (iter != alternate_runmodes.end())
 		{
+			auto &holding_reason =
+				iter->second.switching_holding_reason;
+
+			if (!holding_reason.empty())
+			{
+				if (!requester->write_all(
+					pc->name + ": " +
+					holding_reason +
+					"\n"
+				))
+					requester_socket_closed();
+				return;
+			}
+
 			stop_alternate_group should_stop{
 				*this,
 				iter->second,
